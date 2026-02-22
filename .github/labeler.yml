@@ -1,0 +1,15 @@
+ci:
+  - any:
+    - changed-files:
+      - any-glob-to-all-files: '.github/**'
+    - all-files-to-any-glob:
+      - '.github/**'
+      - '*.yml'
+      - '*.yaml'
+  - color: '#7c0bb2'
+
+documentation:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'docs/**'
+      - README.md

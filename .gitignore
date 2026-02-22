@@ -30,3 +30,15 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+/gh-secret-kit
+/gh-secret-kit.exe
+
+# temp
+[Tt]emp/
+
+# go.work paths
+go-gh-extension
+
+# vscode
+.vscode/
