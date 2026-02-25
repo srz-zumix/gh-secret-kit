@@ -2,8 +2,7 @@ package cmd
 
 import (
 	"github.com/spf13/cobra"
-	"github.com/srz-zumix/gh-secret-kit/cmd/migrate/runner"
-	"github.com/srz-zumix/gh-secret-kit/cmd/migrate/workflow"
+	"github.com/srz-zumix/gh-secret-kit/cmd/migrate"
 )
 
 // NewMigrateCmd creates the migrate command
@@ -20,8 +19,8 @@ secret values and sets them directly to the destination via API.`,
 	}
 
 	// Add subcommands
-	cmd.AddCommand(runner.NewRunnerCmd())
-	cmd.AddCommand(workflow.NewWorkflowCmd())
+	cmd.AddCommand(migrate.NewRunnerCmd())
+	cmd.AddCommand(migrate.NewWorkflowCmd())
 
 	return cmd
 }

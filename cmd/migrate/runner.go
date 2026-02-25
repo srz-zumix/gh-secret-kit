@@ -1,7 +1,8 @@
-package runner
+package migrate
 
 import (
 	"github.com/spf13/cobra"
+	"github.com/srz-zumix/gh-secret-kit/cmd/migrate/runner"
 )
 
 // NewRunnerCmd creates the runner command
@@ -13,8 +14,8 @@ func NewRunnerCmd() *cobra.Command {
 	}
 
 	// Add subcommands
-	cmd.AddCommand(NewSetupCmd())
-	cmd.AddCommand(NewTeardownCmd())
+	cmd.AddCommand(runner.NewSetupCmd())
+	cmd.AddCommand(runner.NewTeardownCmd())
 
 	return cmd
 }

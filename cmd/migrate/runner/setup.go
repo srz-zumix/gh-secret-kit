@@ -5,13 +5,15 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"github.com/srz-zumix/gh-secret-kit/cmd/migrate"
+	"github.com/srz-zumix/gh-secret-kit/cmd/migrate/types"
+	"github.com/srz-zumix/go-gh-extension/pkg/gh"
 	"github.com/srz-zumix/go-gh-extension/pkg/logger"
+	"github.com/srz-zumix/go-gh-extension/pkg/parser"
 )
 
 var (
-	setupCommonOpts migrate.CommonOptions
-	setupRunnerOpts migrate.RunnerOptions
+	setupCommonOpts types.CommonOptions
+	setupRunnerOpts types.RunnerOptions
 )
 
 // NewSetupCmd creates the runner setup command
@@ -53,16 +55,63 @@ func runSetup(cmd *cobra.Command, args []string) error {
 
 func verifyExistingRunner(ctx context.Context) error {
 	logger.Info("Verifying existing runner...")
-	// TODO: Implement existing runner verification
-	return fmt.Errorf("verifying existing runner is not yet implemented")
+
+	// Parse source repository
+	sourceRepo, err := parser.Repository(parser.RepositoryInput(setupCommonOpts.Source))
+	if err != nil {
+		return fmt.Errorf("failed to parse source repository: %w", err)
+	}
+
+	// Initialize GitHub client
+	client, err := gh.NewGitHubClientWithRepo(sourceRepo)
+	if err != nil {
+		return fmt.Errorf("failed to create GitHub client: %w", err)
+	}
+
+	// Get list of runners
+	runners, err := gh.ListRunners(ctx, client, sourceRepo)
+	if err != nil {
+		return fmt.Errorf("failed to list runners: %w", err)
+	}
+
+	// Find runner with matching label
+	var foundRunner bool
+	for _, runner := range runners {
+		if runner == nil || runner.Labels == nil {
+			continue
+		}
+		for _, label := range runner.Labels {
+			if label != nil && label.GetName() == setupRunnerOpts.RunnerLabel {
+				foundRunner = true
+				if runner.GetStatus() == "online" {
+					logger.Info(fmt.Sprintf("Found online runner with label '%s': %s (ID: %d)", setupRunnerOpts.RunnerLabel, runner.GetName(), runner.GetID()))
+					return nil
+				}
+				logger.Warn(fmt.Sprintf("Found runner with label '%s' but it is not online: %s (Status: %s)", setupRunnerOpts.RunnerLabel, runner.GetName(), runner.GetStatus()))
+			}
+		}
+	}
+
+	if !foundRunner {
+		return fmt.Errorf("no runner found with label '%s'", setupRunnerOpts.RunnerLabel)
+	}
+	return fmt.Errorf("no online runner found with label '%s'", setupRunnerOpts.RunnerLabel)
 }
 
 func setupNewRunner(ctx context.Context) error {
 	logger.Info("Setting up new runner...")
-	// TODO: Implement new runner setup
-	// 1. Download actions/scaleset runner
-	// 2. Register runner to source repo/org with specified label
-	// 3. Start runner process
-	// 4. Verify runner is online
-	return fmt.Errorf("setting up new runner is not yet implemented")
+	logger.Warn("Automatic runner setup is not yet implemented")
+	logger.Info("Please manually set up a self-hosted runner with the following label:")
+	logger.Info(fmt.Sprintf("  Label: %s", setupRunnerOpts.RunnerLabel))
+	logger.Info("")
+	logger.Info("Steps:")
+	logger.Info("1. Go to your repository/organization settings")
+	logger.Info("2. Navigate to Actions > Runners")
+	logger.Info("3. Click 'New self-hosted runner'")
+	logger.Info("4. Follow the instructions to download and configure the runner")
+	logger.Info(fmt.Sprintf("5. Add the label '%s' when configuring", setupRunnerOpts.RunnerLabel))
+	logger.Info("6. Start the runner")
+	logger.Info("")
+	logger.Info("Alternatively, use --existing-runner flag if you already have a runner set up")
+	return fmt.Errorf("automatic runner setup is not yet implemented. Please set up a runner manually")
 }
