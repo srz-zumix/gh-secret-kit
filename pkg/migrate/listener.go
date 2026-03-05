@@ -97,9 +97,13 @@ func RunListenerLoop(ctx context.Context, config *ListenerConfig) error {
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	defer signal.Stop(sigCh)
 	go func() {
-		sig := <-sigCh
-		logger.Info(fmt.Sprintf("Received signal %v, shutting down listener...", sig))
-		cancel()
+		select {
+		case sig := <-sigCh:
+			logger.Info(fmt.Sprintf("Received signal %v, shutting down listener...", sig))
+			cancel()
+		case <-ctx.Done():
+			// Context canceled, stop waiting for signals
+		}
 	}()
 
 	// Use hostname as session owner (per SDK convention)
