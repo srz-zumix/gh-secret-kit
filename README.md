@@ -1,6 +1,6 @@
 # gh-secret-kit
 
-gh extension of github secret api
+A gh extension for the GitHub Actions secrets API.
 
 ## Installation
 
