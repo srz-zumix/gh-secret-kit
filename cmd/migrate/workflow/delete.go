@@ -4,51 +4,41 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/google/go-github/v79/github"
 	"github.com/spf13/cobra"
-	"github.com/srz-zumix/gh-secret-kit/cmd/migrate/types"
 	"github.com/srz-zumix/go-gh-extension/pkg/gh"
 	"github.com/srz-zumix/go-gh-extension/pkg/logger"
 	"github.com/srz-zumix/go-gh-extension/pkg/parser"
 )
 
-var (
-	deleteCommonOpts   types.CommonOptions
-	deleteWorkflowOpts types.WorkflowOptions
-)
-
-// NewDeleteCmd creates the workflow delete command
+// NewDeleteCmd creates a reusable delete command (shared by org/repo/env)
 func NewDeleteCmd() *cobra.Command {
+	var config DeleteConfig
 	cmd := &cobra.Command{
 		Use:   "delete",
-		Short: "Remove the migration workflow YAML",
-		Long: `Remove the migration workflow YAML from the source repository.
-
-This command deletes the workflow file from the source repository and optionally
-cleans up any workflow run artifacts.`,
-		RunE: runDelete,
+		Short: "Clean up the migration workflow branch and PRs",
+		Long: `Close any open pull requests from the migration topic branch and then
+delete the branch. This removes the generated workflow file and all
+related resources from the source repository.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return RunDelete(context.Background(), &config)
+		},
 		Args: cobra.NoArgs,
 	}
 
-	// Common flags
-	cmd.Flags().StringVarP(&deleteCommonOpts.Source, "source", "s", "", "Source repository or organization (e.g., owner/repo or org)")
-	cmd.MarkFlagRequired("source")
-
-	// Workflow-specific flags
-	cmd.Flags().StringVar(&deleteWorkflowOpts.WorkflowName, "workflow-name", "gh-secret-kit-migrate", "Name of the workflow file to delete")
-	cmd.Flags().StringVar(&deleteWorkflowOpts.Branch, "branch", "", "Branch to delete the workflow YAML from (default: default branch)")
+	f := cmd.Flags()
+	f.StringVarP(&config.Source, "src", "s", "", "Source repository (e.g., owner/repo; defaults to current repository)")
+	f.StringVar(&config.WorkflowName, "workflow-name", "gh-secret-kit-migrate", "Name of the workflow file")
+	f.StringVar(&config.Branch, "branch", "gh-secret-kit-migrate", "Branch to delete")
 
 	return cmd
 }
 
-func runDelete(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	logger.Info("Deleting migration workflow")
-	logger.Debug(fmt.Sprintf("Source: %s", deleteCommonOpts.Source))
-	logger.Debug(fmt.Sprintf("Workflow Name: %s, Branch: %s", deleteWorkflowOpts.WorkflowName, deleteWorkflowOpts.Branch))
+// RunDelete cleans up the migration workflow by closing PRs and deleting the branch
+func RunDelete(ctx context.Context, config *DeleteConfig) error {
+	logger.Info("Deleting migration workflow resources")
 
 	// Parse source repository
-	sourceRepo, err := parser.Repository(parser.RepositoryInput(deleteCommonOpts.Source))
+	sourceRepo, err := parser.Repository(parser.RepositoryInput(config.Source))
 	if err != nil {
 		return fmt.Errorf("failed to parse source repository: %w", err)
 	}
@@ -59,35 +49,34 @@ func runDelete(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to create GitHub client: %w", err)
 	}
 
-	// Get workflow file path
-	workflowFilePath := fmt.Sprintf(".github/workflows/%s.yml", deleteWorkflowOpts.WorkflowName)
+	branch := config.Branch
 
-	// Get current file to retrieve SHA
-	logger.Info(fmt.Sprintf("Deleting workflow file: %s", workflowFilePath))
-
-	// Get ref parameter for branch
-	var ref *string
-	if deleteWorkflowOpts.Branch != "" {
-		ref = &deleteWorkflowOpts.Branch
-	}
-
-	file, err := gh.GetRepositoryFileContent(ctx, client, sourceRepo, workflowFilePath, ref)
+	// Close any open PRs from the topic branch
+	openPRs, err := gh.ListPullRequests(ctx, client, sourceRepo,
+		&gh.ListPullRequestsOptionHead{Head: fmt.Sprintf("%s:%s", sourceRepo.Owner, branch)},
+		gh.ListPullRequestsOptionStateOpen(),
+	)
 	if err != nil {
-		return fmt.Errorf("failed to get workflow file: %w", err)
+		return fmt.Errorf("failed to list pull requests: %w", err)
+	}
+	for _, pr := range openPRs {
+		prNumber := pr.GetNumber()
+		logger.Info(fmt.Sprintf("Closing PR #%d...", prNumber))
+		_, cerr := gh.ClosePullRequest(ctx, client, sourceRepo, prNumber)
+		if cerr != nil {
+			return fmt.Errorf("failed to close PR #%d: %w", prNumber, cerr)
+		}
+		logger.Info(fmt.Sprintf("PR #%d closed", prNumber))
 	}
 
-	// Delete the workflow file
-	message := fmt.Sprintf("Delete migration workflow %s", deleteWorkflowOpts.WorkflowName)
-	opts := &github.RepositoryContentFileOptions{
-		Message: &message,
-		SHA:     file.SHA,
-		Branch:  ref,
-	}
-	err = gh.DeleteFile(ctx, client, sourceRepo, workflowFilePath, opts)
+	// Delete the topic branch
+	logger.Info(fmt.Sprintf("Deleting branch %s...", branch))
+	err = gh.DeleteBranch(ctx, client, sourceRepo, branch)
 	if err != nil {
-		return fmt.Errorf("failed to delete workflow file: %w", err)
+		return fmt.Errorf("failed to delete branch %s: %w", branch, err)
 	}
+	logger.Info(fmt.Sprintf("Branch %s deleted", branch))
 
-	logger.Info("Workflow deleted successfully")
+	logger.Info("Migration workflow resources cleaned up successfully")
 	return nil
 }

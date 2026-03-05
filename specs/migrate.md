@@ -14,6 +14,8 @@ The following secret types are supported for migration:
 - **Organization secrets** (including visibility and selected repository settings)
 - **Environment secrets**
 
+The secret scope is explicitly determined by the subcommand used: `org`, `repo`, or `env`.
+
 ## Migration Directions
 
 | Source | Destination | Supported |
@@ -33,11 +35,13 @@ The following secret types are supported for migration:
 ```text
 User CLI (local)
   │
-  ├─ 1. runner setup   → Register scaleset runner on source repo/org
-  ├─ 2. workflow create → Push workflow YAML to source repo
-  ├─ 3. workflow run    → Dispatch workflow (runner reads secrets, sets them to destination via API)
-  ├─ 4. workflow delete → Remove workflow YAML from source repo
-  └─ 5. runner teardown → Unregister and stop the runner
+  ├─ 1. runner setup          → Register scaleset runner on source repo/org
+  ├─ 2. {org,repo,env} init   → Push stub workflow to topic branch, open draft PR
+  ├─ 3. {org,repo,env} create → Push migration workflow YAML to topic branch
+  ├─ 4. {org,repo,env} run    → Trigger workflow via label on the PR
+  ├─ 5. {org,repo,env} check  → Compare secrets between source and destination
+  ├─ 6. {org,repo,env} delete → Close PR and remove topic branch
+  └─ 7. runner teardown       → Unregister and stop the runner
 ```
 
 ### Security
@@ -50,96 +54,183 @@ User CLI (local)
 
 ### Subcommands
 
-`gh secret-kit migrate` has step-level subcommands for granular control:
+`gh secret-kit migrate` has scope-based subcommands with step-level operations for granular control:
 
 | Subcommand | Description |
 | --- | --- |
+| `gh secret-kit migrate list` | List repositories that have at least one repository secret registered |
 | `gh secret-kit migrate runner setup` | Register and start a scaleset runner on the source |
 | `gh secret-kit migrate runner teardown` | Unregister and stop the runner |
-| `gh secret-kit migrate workflow create` | Generate and push the migration workflow YAML to the source repo |
-| `gh secret-kit migrate workflow run` | Dispatch the migration workflow |
-| `gh secret-kit migrate workflow delete` | Remove the migration workflow YAML from the source repo |
+| `gh secret-kit migrate org init` | Push stub workflow to topic branch and open draft PR (org scope) |
+| `gh secret-kit migrate org create` | Generate and push the org secret migration workflow YAML |
+| `gh secret-kit migrate org run` | Trigger the org migration workflow via label |
+| `gh secret-kit migrate org delete` | Close PR and remove topic branch (org scope) |
+| `gh secret-kit migrate org check` | Compare org secrets between source and destination |
+| `gh secret-kit migrate repo init` | Push stub workflow to topic branch and open draft PR (repo scope) |
+| `gh secret-kit migrate repo create` | Generate and push the repo secret migration workflow YAML |
+| `gh secret-kit migrate repo run` | Trigger the repo migration workflow via label |
+| `gh secret-kit migrate repo delete` | Close PR and remove topic branch (repo scope) |
+| `gh secret-kit migrate repo check` | Compare repo secrets between source and destination |
+| `gh secret-kit migrate env init` | Push stub workflow to topic branch and open draft PR (env scope) |
+| `gh secret-kit migrate env create` | Generate and push the env secret migration workflow YAML |
+| `gh secret-kit migrate env run` | Trigger the env migration workflow via label |
+| `gh secret-kit migrate env delete` | Close PR and remove topic branch (env scope) |
+| `gh secret-kit migrate env check` | Compare env secrets between source and destination |
 
 > A combined "run all steps" command may be added in a future iteration.
 
-### Common Options
+### Common Options (create)
 
 | Option | Short | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- | --- |
-| `--source` | `-s` | string | Yes | - | Source repository or organization (e.g., `owner/repo` or `org`) |
-| `--destination` | `-d` | string | Yes | - | Destination repository or organization (e.g., `owner2/repo2` or `org2`) |
-| `--source-env` | - | string | No | - | Source environment name (for environment secrets) |
-| `--destination-env` | - | string | No | - | Destination environment name (for environment secrets) |
+| `--src` | `-s` | string | No | current repository | Source repository (e.g., `owner/repo`; defaults to current repository) |
+| `--dst` | `-d` | string | Yes | - | Destination repository or organization |
 | `--secrets` | - | []string | No | all | Specific secret names to migrate (comma-separated or repeated flag) |
 | `--rename` | - | []string | No | - | Rename mapping in `OLD_NAME=NEW_NAME` format (repeatable) |
 | `--overwrite` | - | bool | No | false | Overwrite existing secrets at the destination (default is skip) |
-| `--destination-token` | - | string | No | - | PAT or token for the destination (required if destination is a different owner/org) |
+| `--dst-token` | - | string | No | - | PAT or token for the destination (required if destination is on a different host) |
+| `--dst-host` | - | string | No | - | GitHub host for the destination (defaults to source repository host) |
+| `--branch` | - | string | No | `gh-secret-kit-migrate` | Topic branch to push the workflow YAML to |
+| `--label` | - | string | No | `gh-secret-kit-migrate` | Label name for triggering the migration workflow |
+| `--runner-label` | - | string | No | `self-hosted` | Runner label to use in the workflow `runs-on` |
+| `--workflow-name` | - | string | No | `gh-secret-kit-migrate` | Name of the generated workflow file |
+
+#### Environment-specific Options (env create / env check)
+
+| Option | Short | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- | --- |
+| `--src-env` | - | string | Yes (*) | - | Source environment name |
+| `--dst-env` | - | string | Yes (*) | - | Destination environment name |
+
+> (*) Required for `env create` and `env check` commands.
+
+### Common Options (check)
+
+| Option | Short | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- | --- |
+| `--src` | `-s` | string | Varies | current repository | Source repository or organization |
+| `--dst` | `-d` | string | Yes | - | Destination repository or organization |
+| `--secrets` | - | []string | No | all | Specific secret names to check |
+| `--rename` | - | []string | No | - | Rename mappings to apply when comparing |
+| `--dst-token` | - | string | No | - | PAT or token for the destination |
+| `--dst-host` | - | string | No | - | GitHub host for the destination |
+
+> For `org check`, `--src` is the source organization name. For `repo check` and `env check`, `--src` is the source repository.
+
+### migrate list Options
+
+| Option | Short | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- | --- |
+| `--repo` | `-R` | string | No | - | Check a single repository (e.g., owner/repo). When specified, org scan is skipped. |
+
+Positional argument: `[org]` — Organization name to scan (defaults to current repository owner).
 
 ### runner setup Options
 
 | Option | Short | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- | --- |
+| `--repo` | `-R` | string | No | - | Source repository (owner/repo); when omitted uses the first argument as org or falls back to the current repository |
 | `--runner-label` | - | string | No | `gh-secret-kit-migrate` | Custom label for the runner |
-| `--existing-runner` | - | bool | No | false | Use an existing self-hosted runner instead of setting up a new one |
 
 ### runner teardown Options
 
 | Option | Short | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- | --- |
+| `--repo` | `-R` | string | No | - | Source repository (owner/repo); when omitted uses the first argument as org or falls back to the current repository |
 | `--runner-label` | - | string | No | `gh-secret-kit-migrate` | Label of the runner to tear down |
 
-### workflow create Options
+### init Options (shared by org/repo/env)
 
 | Option | Short | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- | --- |
-| `--runner-label` | - | string | No | `gh-secret-kit-migrate` | Runner label to use in the workflow `runs-on` |
+| `--src` | `-s` | string | No | current repository | Source repository (e.g., owner/repo; defaults to current repository) |
+| `--branch` | - | string | No | `gh-secret-kit-migrate` | Branch to push the stub workflow to |
+| `--label` | - | string | No | `gh-secret-kit-migrate` | Label name to create for triggering the migration workflow |
 | `--workflow-name` | - | string | No | `gh-secret-kit-migrate` | Name of the generated workflow file |
-| `--branch` | - | string | No | default branch | Branch to push the workflow YAML to |
 
-### workflow run Options
-
-| Option | Short | Type | Required | Default | Description |
-| --- | --- | --- | --- | --- | --- |
-| `--workflow-name` | - | string | No | `gh-secret-kit-migrate` | Name of the workflow to dispatch |
-| `--wait` | - | bool | No | true | Wait for the workflow run to complete |
-| `--timeout` | - | duration | No | `10m` | Timeout for waiting for the workflow run |
-
-### workflow delete Options
+### run Options (shared by org/repo/env)
 
 | Option | Short | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- | --- |
+| `--src` | `-s` | string | No | current repository | Source repository (e.g., owner/repo; defaults to current repository) |
+| `--branch` | - | string | No | `gh-secret-kit-migrate` | Branch name for the migration PR |
+| `--label` | - | string | No | `gh-secret-kit-migrate` | Label name that triggers the migration workflow |
+| `--workflow-name` | - | string | No | `gh-secret-kit-migrate` | Name of the workflow file |
+| `--wait` | `-w` | bool | No | false | Wait for the workflow run to complete |
+| `--timeout` | - | string | No | `10m` | Timeout duration when waiting for workflow completion (e.g., 5m, 1h) |
+
+### delete Options (shared by org/repo/env)
+
+| Option | Short | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- | --- |
+| `--src` | `-s` | string | No | current repository | Source repository (e.g., owner/repo; defaults to current repository) |
+| `--branch` | - | string | No | `gh-secret-kit-migrate` | Branch to delete |
 | `--workflow-name` | - | string | No | `gh-secret-kit-migrate` | Name of the workflow file to delete |
-| `--branch` | - | string | No | default branch | Branch to delete the workflow YAML from |
 
 ## Detailed Behavior
 
+### 0. List Repositories with Secrets (`migrate list`)
+
+When called without arguments or with an org name:
+
+1. Determine the organization (positional arg or current repository owner).
+2. List all repositories in the organization (falls back to user repositories if not an org).
+3. For each repository, call the Secrets API to get the repository secret count.
+4. Output a table of repositories that have at least one repository secret, with the secret count.
+
+When `--repo` / `-R` is specified:
+
+1. Call the Secrets API for the single repository.
+2. Output the repository and its secret count if it has at least one secret.
+
 ### 1. Runner Setup (`migrate runner setup`)
 
-1. Download and configure [actions/scaleset](https://github.com/actions/scaleset) runner.
-2. Register the runner to the source repository/organization with the specified label.
-3. Start the runner process (background).
-4. Verify the runner is online and ready to accept jobs.
+1. Create a runner scale set using [actions/scaleset](https://github.com/actions/scaleset).
+2. Download the GitHub Actions runner binary for the current platform.
+3. Start a message session listener in the foreground.
+4. The listener polls for job assignments via `GetMessage`.
+5. When a job is assigned, automatically generate a JIT config and start an ephemeral runner.
+6. After the job completes, the listener loops and waits for the next job assignment.
 
-If `--existing-runner` is specified, skip steps 1-3 and only verify connectivity using the specified `--runner-label`.
+The command blocks until interrupted (Ctrl+C). Run the workflow dispatch command from another terminal while this command is running.
 
-### 2. Workflow Create (`migrate workflow create`)
+### 2. Init (`migrate {org,repo,env} init`)
+
+1. Generate a stub workflow YAML with `pull_request` and `workflow_dispatch` triggers.
+2. Create a topic branch (`gh-secret-kit-migrate` by default) from the default branch HEAD.
+3. Push the stub YAML to the topic branch with `[ci skip]` in the commit message.
+4. Open a draft PR from the topic branch to the default branch (causes GitHub to recognise the workflow).
+5. Create the trigger label on the repository.
+6. The PR and branch are kept open for later use by `run`.
+
+### 3. Create (`migrate {org,repo,env} create`)
 
 1. Generate a GitHub Actions workflow YAML that:
    - Runs on the self-hosted runner (using the specified label).
    - Uses `secrets.*` context to access each specified secret.
-   - Calls the GitHub API (or `gh secret-kit` CLI) to set each secret on the destination.
+   - Calls the GitHub API to set each secret on the destination.
    - Handles `--rename` mappings for secret name changes.
    - Respects `--overwrite` / skip behavior.
-2. Push the workflow file to the source repository (on the specified branch).
+2. Push the workflow file to the existing topic branch (created by `init`).
+
+The scope of secrets is determined by the subcommand:
+
+- `repo create`: migrates repository secrets
+- `org create`: migrates organization secrets
+- `env create`: migrates environment secrets (requires `--src-env` and `--dst-env`)
 
 #### Generated Workflow Behavior
 
-- The workflow uses `workflow_dispatch` trigger.
+- The workflow uses `pull_request` trigger with a label filter.
+- The destination is embedded in the generated workflow YAML at `create` time.
 - For each secret, it:
   1. Reads the value from `${{ secrets.SECRET_NAME }}`.
   2. Determines the destination secret name (applying `--rename` if specified).
   3. If `--overwrite` is false, checks if the destination secret already exists, and skips if so.
-  4. Sets the secret value on the destination via GitHub API using the provided `--destination-token`.
+  4. Sets the secret value on the destination via GitHub API using the provided `--dst-token`.
+     - Repository scope: `gh secret set NAME -R DESTINATION`
+     - Organization scope: `gh secret set NAME --org DESTINATION`
+     - Environment scope: `gh secret set NAME -R DESTINATION -e ENV`
 
 #### Organization Secret Migration
 
@@ -150,25 +241,30 @@ When migrating organization secrets, the workflow also:
 - Sets the same visibility and selected repositories on the destination organization secret.
 - For cross-organization migration, maps repository names (not IDs) to find corresponding repositories in the destination organization.
 
-### 3. Workflow Run (`migrate workflow run`)
+### 4. Run (`migrate {org,repo,env} run`)
 
-1. Dispatch the workflow via `workflow_dispatch` event.
-2. If `--wait` is true (default), poll until the workflow run completes.
+1. Remove and re-add the trigger label on the open PR to dispatch the workflow.
+2. If `--wait` is true, poll until the workflow run completes.
 3. Report success/failure for each secret migration.
 4. Return error if the workflow run fails or times out.
 
-### 4. Workflow Delete (`migrate workflow delete`)
+### 5. Check (`migrate {org,repo,env} check`)
 
-1. Delete the workflow YAML file from the source repository.
-2. Optionally clean up any workflow run artifacts.
+1. List secrets from the source (repo, org, or environment depending on scope).
+2. For each secret, apply any `--rename` mappings to determine the expected destination name.
+3. List secrets from the destination.
+4. Compare and report which secrets exist at the destination and which are missing.
+5. Exit with non-zero status if any secrets have not been migrated yet.
 
-### 5. Runner Teardown (`migrate runner teardown`)
+### 6. Delete (`migrate {org,repo,env} delete`)
 
-1. Stop the runner process.
-2. Unregister the runner from the source repository/organization.
-3. Clean up local runner files.
+1. Close any open pull requests from the migration topic branch.
+2. Delete the topic branch (which removes the migration workflow).
 
-Skipped if `--existing-runner` was used during setup.
+### 7. Runner Teardown (`migrate runner teardown`)
+
+1. Delete the runner scale set from the source repository/organization.
+2. Clean up local runner files and state.
 
 ## Error Handling
 
@@ -188,20 +284,58 @@ Skipped if `--existing-runner` was used during setup.
 ### Migrate all repository secrets between repos (same owner)
 
 ```sh
-gh secret-kit migrate runner setup --source owner/source-repo
-gh secret-kit migrate workflow create --source owner/source-repo --destination owner/dest-repo
-gh secret-kit migrate workflow run --source owner/source-repo --destination owner/dest-repo
-gh secret-kit migrate workflow delete --source owner/source-repo
-gh secret-kit migrate runner teardown --source owner/source-repo
+# Terminal 1: Start listener (blocks until interrupted)
+gh secret-kit migrate runner setup -R owner/source-repo
+
+# Terminal 2: Init, create, run, and clean up
+gh secret-kit migrate repo init -s owner/source-repo
+gh secret-kit migrate repo create -s owner/source-repo -d owner/dest-repo
+gh secret-kit migrate repo run -s owner/source-repo
+gh secret-kit migrate repo delete -s owner/source-repo
+
+# After done (Terminal 1), clean up runner
+gh secret-kit migrate runner teardown -R owner/source-repo
+```
+
+### Migrate all repository secrets (source defaults to current repo)
+
+```sh
+# Terminal 1: Start listener (blocks until interrupted)
+gh secret-kit migrate runner setup
+
+# Terminal 2: Init, create, run, and clean up
+gh secret-kit migrate repo init
+gh secret-kit migrate repo create -d owner/dest-repo
+gh secret-kit migrate repo run
+gh secret-kit migrate repo delete
+
+# After done (Terminal 1), clean up runner
+gh secret-kit migrate runner teardown
+```
+
+### Migrate organization secrets to another organization
+
+```sh
+# Terminal 1: Start listener
+gh secret-kit migrate runner setup -R org/some-repo
+
+# Terminal 2: Init, create, run, and clean up
+gh secret-kit migrate org init -s org/some-repo
+gh secret-kit migrate org create -s org/some-repo -d dest-org
+gh secret-kit migrate org run -s org/some-repo
+gh secret-kit migrate org delete -s org/some-repo
+
+# After done (Terminal 1), clean up runner
+gh secret-kit migrate runner teardown -R org/some-repo
 ```
 
 ### Migrate specific secrets with rename
 
 ```sh
-gh secret-kit migrate workflow create \
-  --source owner/source-repo \
-  --destination owner2/dest-repo \
-  --destination-token ghp_xxx \
+gh secret-kit migrate repo create \
+  -s owner/source-repo \
+  -d owner2/dest-repo \
+  --dst-token ghp_xxx \
   --secrets API_KEY,DB_PASSWORD \
   --rename API_KEY=PROD_API_KEY \
   --overwrite
@@ -210,34 +344,35 @@ gh secret-kit migrate workflow create \
 ### Migrate environment secrets
 
 ```sh
-gh secret-kit migrate workflow create \
-  --source owner/repo \
-  --destination owner/repo \
-  --source-env staging \
-  --destination-env production \
+gh secret-kit migrate env create \
+  -s owner/repo \
+  -d owner/repo \
+  --src-env staging \
+  --dst-env production \
   --secrets API_KEY
 ```
 
-### Use an existing self-hosted runner
+### Check migration status
 
 ```sh
-gh secret-kit migrate runner setup \
-  --source owner/repo \
-  --existing-runner \
-  --runner-label my-runner
+# Check repo secrets
+gh secret-kit migrate repo check -s owner/source-repo -d owner/dest-repo
 
-gh secret-kit migrate workflow create \
-  --source owner/repo \
-  --destination owner/repo2 \
-  --runner-label my-runner
+# Check org secrets
+gh secret-kit migrate org check -s source-org -d dest-org
+
+# Check env secrets
+gh secret-kit migrate env check \
+  -s owner/repo -d owner/repo \
+  --src-env staging --dst-env production
 ```
 
 ## Open Questions / Future Considerations
 
-- [ ] Combined "run all" command design (single command that executes all 5 steps sequentially)
+- [ ] Combined "run all" command design (single command that executes all steps sequentially)
 - [ ] Support for Dependabot secrets
 - [ ] Support for Codespaces secrets
 - [ ] Parallel migration of multiple secrets for performance
 - [ ] Interactive mode (prompt user to select secrets from a list)
 - [ ] Resume/retry capability for partial failures
-- [ ] Scope change migration (repo ↔ org)
+- [x] ~~Scope change migration (repo ↔ org)~~ — Scope is explicitly determined by the subcommand used (`org`, `repo`, `env`)

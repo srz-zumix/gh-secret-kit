@@ -4,6 +4,7 @@ package types
 type CommonOptions struct {
 Source           string
 Destination      string
+DestinationHost  string
 SourceEnv        string
 DestinationEnv   string
 Secrets          []string
@@ -14,8 +15,7 @@ DestinationToken string
 
 // RunnerOptions holds options for runner commands
 type RunnerOptions struct {
-RunnerLabel    string
-ExistingRunner bool
+RunnerLabel string
 }
 
 // WorkflowOptions holds options for workflow commands
@@ -23,6 +23,7 @@ type WorkflowOptions struct {
 RunnerLabel  string
 WorkflowName string
 Branch       string
+Label        string
 Wait         bool
 Timeout      string
 }

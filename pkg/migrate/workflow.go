@@ -8,18 +8,33 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// SecretScope indicates whether the migration targets repo or org secrets
+type SecretScope string
+
+const (
+	// SecretScopeRepo targets repository secrets
+	SecretScopeRepo SecretScope = "repo"
+	// SecretScopeOrg targets organization secrets
+	SecretScopeOrg SecretScope = "org"
+	// SecretScopeEnv targets environment secrets
+	SecretScopeEnv SecretScope = "env"
+)
+
 // WorkflowConfig holds configuration for generating migration workflow
 type WorkflowConfig struct {
 	WorkflowName     string
 	RunnerLabel      string
+	TriggerLabel     string
 	Source           string
 	Destination      string
+	DestinationHost  string
 	SourceEnv        string
 	DestinationEnv   string
 	Secrets          []string
 	Rename           map[string]string // OLD_NAME -> NEW_NAME
 	Overwrite        bool
 	DestinationToken string
+	Scope            SecretScope
 }
 
 // WorkflowYAML represents the structure of a GitHub Actions workflow
@@ -31,9 +46,11 @@ type WorkflowYAML struct {
 
 // Job represents a job in a workflow
 type Job struct {
-	RunsOn string            `yaml:"runs-on"`
-	Steps  []Step            `yaml:"steps"`
-	Env    map[string]string `yaml:"env,omitempty"`
+	If          string            `yaml:"if,omitempty"`
+	RunsOn      string            `yaml:"runs-on"`
+	Environment string            `yaml:"environment,omitempty"`
+	Steps       []Step            `yaml:"steps"`
+	Env         map[string]string `yaml:"env,omitempty"`
 }
 
 // Step represents a step in a job
@@ -47,19 +64,28 @@ type Step struct {
 
 // GenerateWorkflowYAML generates a GitHub Actions workflow YAML for secret migration
 func GenerateWorkflowYAML(config WorkflowConfig) (string, error) {
+	onTrigger := map[string]interface{}{
+		"pull_request": map[string]interface{}{
+			"types": []string{"labeled"},
+		},
+	}
 	workflow := WorkflowYAML{
 		Name: config.WorkflowName,
-		On: map[string]interface{}{
-			"workflow_dispatch": map[string]interface{}{},
-		},
+		On:   onTrigger,
 		Jobs: make(map[string]Job),
 	}
 
 	steps := []Step{
 		{
 			Name: "Checkout repository",
-			Uses: "actions/checkout@v4",
+			Uses: "actions/checkout@v6",
 		},
+	}
+
+	// Always set GH_HOST at job level so gh CLI commands target the correct host
+	ghHost := config.DestinationHost
+	if ghHost == "" {
+		ghHost = "github.com"
 	}
 
 	// Generate secrets migration steps
@@ -77,7 +103,11 @@ func GenerateWorkflowYAML(config WorkflowConfig) (string, error) {
 		}
 
 		if config.DestinationToken != "" {
-			stepEnv["GH_TOKEN"] = config.DestinationToken
+			if ghHost == "github.com" {
+				stepEnv["GH_TOKEN"] = config.DestinationToken
+			} else {
+				stepEnv["GH_ENTERPRISE_TOKEN"] = config.DestinationToken
+			}
 		}
 
 		if config.DestinationEnv != "" {
@@ -94,15 +124,22 @@ func GenerateWorkflowYAML(config WorkflowConfig) (string, error) {
 
 		if !config.Overwrite {
 			// Add check to skip if secret already exists
-			step.If = fmt.Sprintf("${{ env.SECRET_VALUE != '' }}")
+			step.If = "${{ env.SECRET_VALUE != '' }}"
 		}
 
 		steps = append(steps, step)
 	}
 
 	job := Job{
-		RunsOn: config.RunnerLabel,
-		Steps:  steps,
+		RunsOn:      config.RunnerLabel,
+		Environment: config.SourceEnv,
+		Steps:       steps,
+	}
+	if config.TriggerLabel != "" {
+		job.If = fmt.Sprintf("github.event.label.name == '%s'", config.TriggerLabel)
+	}
+	job.Env = map[string]string{
+		"GH_HOST": ghHost,
 	}
 
 	workflow.Jobs["migrate-secrets"] = job
@@ -120,6 +157,16 @@ func GenerateWorkflowYAML(config WorkflowConfig) (string, error) {
 func generateSecretMigrationScript(config WorkflowConfig, srcName, destName string) string {
 	var script strings.Builder
 
+	// Determine gh secret subcommand flags based on scope
+	// repo scope: gh secret set NAME -R owner/repo
+	// org scope:  gh secret set NAME --org org-name
+	scopeFlag := "-R $DESTINATION"
+	listScopeFlag := "-R $DESTINATION"
+	if config.Scope == SecretScopeOrg {
+		scopeFlag = "--org $DESTINATION"
+		listScopeFlag = "--org $DESTINATION"
+	}
+
 	// Check if secret value is empty
 	script.WriteString("if [ -z \"$SECRET_VALUE\" ]; then\n")
 	script.WriteString(fmt.Sprintf("  echo \"Secret %s is empty or does not exist, skipping...\"\n", srcName))
@@ -132,7 +179,7 @@ func generateSecretMigrationScript(config WorkflowConfig, srcName, destName stri
 		if config.DestinationEnv != "" {
 			script.WriteString(fmt.Sprintf("if gh secret list --env $DEST_ENV -R $DESTINATION | grep -q \"^%s\"; then\n", destName))
 		} else {
-			script.WriteString(fmt.Sprintf("if gh secret list -R $DESTINATION | grep -q \"^%s\"; then\n", destName))
+			script.WriteString(fmt.Sprintf("if gh secret list %s | grep -q \"^%s\"; then\n", listScopeFlag, destName))
 		}
 		script.WriteString(fmt.Sprintf("  echo \"Secret %s already exists at destination, skipping...\"\n", destName))
 		script.WriteString("  exit 0\n")
@@ -145,7 +192,7 @@ func generateSecretMigrationScript(config WorkflowConfig, srcName, destName stri
 	if config.DestinationEnv != "" {
 		script.WriteString(fmt.Sprintf("  gh secret set %s --env $DEST_ENV -R $DESTINATION\n", destName))
 	} else {
-		script.WriteString(fmt.Sprintf("  gh secret set %s -R $DESTINATION\n", destName))
+		script.WriteString(fmt.Sprintf("  gh secret set %s %s\n", destName, scopeFlag))
 	}
 
 	script.WriteString(fmt.Sprintf("echo \"Successfully migrated secret: %s -> %s\"\n", srcName, destName))
@@ -156,4 +203,23 @@ func generateSecretMigrationScript(config WorkflowConfig, srcName, destName stri
 // EncodeWorkflowContent encodes workflow content to base64 for GitHub API
 func EncodeWorkflowContent(content string) string {
 	return base64.StdEncoding.EncodeToString([]byte(content))
+}
+
+// GenerateStubWorkflowYAML generates a minimal workflow YAML with a pull_request trigger.
+// This stub is pushed to a temporary branch, then a PR is opened to fire the pull_request event so GitHub
+// recognizes the workflow. The PR is closed immediately and the branch is deleted afterwards.
+func GenerateStubWorkflowYAML(workflowName string) (string, error) {
+	const tmpl = `name: %s
+on:
+  pull_request:
+    types:
+      - labeled
+jobs:
+  placeholder:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Placeholder
+        run: echo "This is a stub workflow for gh-secret-kit migrate."
+`
+	return fmt.Sprintf(tmpl, workflowName), nil
 }

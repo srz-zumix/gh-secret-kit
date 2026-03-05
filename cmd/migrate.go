@@ -19,8 +19,11 @@ secret values and sets them directly to the destination via API.`,
 	}
 
 	// Add subcommands
+	cmd.AddCommand(migrate.NewEnvCmd())
+	cmd.AddCommand(migrate.NewListCmd())
+	cmd.AddCommand(migrate.NewOrgCmd())
+	cmd.AddCommand(migrate.NewRepoCmd())
 	cmd.AddCommand(migrate.NewRunnerCmd())
-	cmd.AddCommand(migrate.NewWorkflowCmd())
 
 	return cmd
 }

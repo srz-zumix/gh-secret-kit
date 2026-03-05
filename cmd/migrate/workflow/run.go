@@ -6,54 +6,43 @@ import (
 	"time"
 
 	"github.com/cli/go-gh/v2/pkg/repository"
-	"github.com/google/go-github/v79/github"
 	"github.com/spf13/cobra"
-	"github.com/srz-zumix/gh-secret-kit/cmd/migrate/types"
 	"github.com/srz-zumix/go-gh-extension/pkg/gh"
 	"github.com/srz-zumix/go-gh-extension/pkg/logger"
 	"github.com/srz-zumix/go-gh-extension/pkg/parser"
 )
 
-var (
-	runCommonOpts   types.CommonOptions
-	runWorkflowOpts types.WorkflowOptions
-)
-
-// NewRunCmd creates the workflow run command
+// NewRunCmd creates a reusable run command (shared by org/repo/env)
 func NewRunCmd() *cobra.Command {
+	var config RunConfig
 	cmd := &cobra.Command{
 		Use:   "run",
-		Short: "Dispatch the migration workflow",
-		Long: `Dispatch the migration workflow via workflow_dispatch event.
-
-This command dispatches the workflow and optionally waits for it to complete,
-reporting success/failure for each secret migration.`,
-		RunE: runWorkflow,
+		Short: "Trigger the migration workflow",
+		Long: `Trigger the migration workflow by removing and re-adding the trigger label
+on the open PR. Optionally wait for the workflow run to complete.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return RunWorkflow(context.Background(), &config)
+		},
 		Args: cobra.NoArgs,
 	}
 
-	// Common flags
-	cmd.Flags().StringVarP(&runCommonOpts.Source, "source", "s", "", "Source repository or organization (e.g., owner/repo or org)")
-	cmd.Flags().StringVarP(&runCommonOpts.Destination, "destination", "d", "", "Destination repository or organization (e.g., owner2/repo2 or org2)")
-	cmd.MarkFlagRequired("source")
-	cmd.MarkFlagRequired("destination")
-
-	// Workflow-specific flags
-	cmd.Flags().StringVar(&runWorkflowOpts.WorkflowName, "workflow-name", "gh-secret-kit-migrate", "Name of the workflow to dispatch")
-	cmd.Flags().BoolVar(&runWorkflowOpts.Wait, "wait", true, "Wait for the workflow run to complete")
-	cmd.Flags().StringVar(&runWorkflowOpts.Timeout, "timeout", "10m", "Timeout for waiting for the workflow run")
+	f := cmd.Flags()
+	f.StringVarP(&config.Source, "src", "s", "", "Source repository (e.g., owner/repo; defaults to current repository)")
+	f.StringVar(&config.WorkflowName, "workflow-name", "gh-secret-kit-migrate", "Name of the workflow file")
+	f.StringVar(&config.Branch, "branch", "gh-secret-kit-migrate", "Branch name for the migration PR")
+	f.StringVar(&config.Label, "label", "gh-secret-kit-migrate", "Label name that triggers the migration workflow")
+	f.BoolVarP(&config.Wait, "wait", "w", false, "Wait for the workflow run to complete")
+	f.StringVar(&config.Timeout, "timeout", "10m", "Timeout duration when waiting for workflow completion (e.g., 5m, 1h)")
 
 	return cmd
 }
 
-func runWorkflow(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
+// RunWorkflow triggers the migration workflow by toggling the trigger label
+func RunWorkflow(ctx context.Context, config *RunConfig) error {
 	logger.Info("Running migration workflow")
-	logger.Debug(fmt.Sprintf("Source: %s, Destination: %s", runCommonOpts.Source, runCommonOpts.Destination))
-	logger.Debug(fmt.Sprintf("Workflow Name: %s, Wait: %v, Timeout: %s", runWorkflowOpts.WorkflowName, runWorkflowOpts.Wait, runWorkflowOpts.Timeout))
 
 	// Parse source repository
-	sourceRepo, err := parser.Repository(parser.RepositoryInput(runCommonOpts.Source))
+	sourceRepo, err := parser.Repository(parser.RepositoryInput(config.Source))
 	if err != nil {
 		return fmt.Errorf("failed to parse source repository: %w", err)
 	}
@@ -64,84 +53,82 @@ func runWorkflow(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to create GitHub client: %w", err)
 	}
 
-	// Get workflow file name
-	workflowFileName := fmt.Sprintf(".github/workflows/%s.yml", runWorkflowOpts.WorkflowName)
+	branch := config.Branch
 
-	// Dispatch workflow
-	logger.Info(fmt.Sprintf("Dispatching workflow %s...", workflowFileName))
-	event := github.CreateWorkflowDispatchEventRequest{
-		Ref: "", // Use default branch
-		Inputs: map[string]interface{}{
-			"destination": runCommonOpts.Destination,
-		},
-	}
-	err = gh.CreateWorkflowDispatchEventByFileName(ctx, client, sourceRepo, workflowFileName, event)
+	// Find open PR from topic branch
+	existingPRs, err := gh.ListPullRequests(ctx, client, sourceRepo,
+		&gh.ListPullRequestsOptionHead{Head: fmt.Sprintf("%s:%s", sourceRepo.Owner, branch)},
+		gh.ListPullRequestsOptionStateOpen(),
+	)
 	if err != nil {
-		return fmt.Errorf("failed to dispatch workflow: %w", err)
+		return fmt.Errorf("failed to list pull requests: %w", err)
 	}
-
-	logger.Info("Workflow dispatched successfully")
-
-	// If wait is enabled, poll for workflow run completion
-	if runWorkflowOpts.Wait {
-		timeout, err := time.ParseDuration(runWorkflowOpts.Timeout)
-		if err != nil {
-			return fmt.Errorf("failed to parse timeout: %w", err)
-		}
-
-		logger.Info(fmt.Sprintf("Waiting for workflow to complete (timeout: %s)...", runWorkflowOpts.Timeout))
-		run, err := waitForWorkflowRun(ctx, client, sourceRepo, workflowFileName, timeout)
-		if err != nil {
-			return fmt.Errorf("workflow run failed: %w", err)
-		}
-
-		logger.Info(fmt.Sprintf("Workflow run completed: %s", run.GetConclusion()))
-		if run.GetConclusion() != "success" {
-			return fmt.Errorf("workflow run failed with conclusion: %s", run.GetConclusion())
-		}
+	if len(existingPRs) == 0 {
+		return fmt.Errorf("no open PR found from branch %s; run init first", branch)
 	}
+	pr := existingPRs[0]
+	prNumber := pr.GetNumber()
+	logger.Info(fmt.Sprintf("Found open PR #%d", prNumber))
 
+	// Remove label (if present) then add label to trigger the workflow
+	labelName := config.Label
+	logger.Info(fmt.Sprintf("Removing label %s from PR #%d (if present)...", labelName, prNumber))
+	_ = gh.RemoveIssueLabel(ctx, client, sourceRepo, prNumber, labelName)
+
+	logger.Info(fmt.Sprintf("Adding label %s to PR #%d to trigger workflow...", labelName, prNumber))
+	_, err = gh.AddIssueLabels(ctx, client, sourceRepo, prNumber, []string{labelName})
+	if err != nil {
+		return fmt.Errorf("failed to add label %s to PR #%d: %w", labelName, prNumber, err)
+	}
+	logger.Info("Migration workflow triggered!")
+
+	if config.Wait {
+		return waitForWorkflowRun(ctx, client, sourceRepo, config)
+	}
 	return nil
 }
 
-// waitForWorkflowRun waits for the latest workflow run to complete
-func waitForWorkflowRun(ctx context.Context, client *gh.GitHubClient, repo repository.Repository, workflowFileName string, timeout time.Duration) (*github.WorkflowRun, error) {
-	startTime := time.Now()
-	pollInterval := 5 * time.Second
+// waitForWorkflowRun polls for workflow completion until the run finishes or timeout expires
+func waitForWorkflowRun(ctx context.Context, client *gh.GitHubClient, sourceRepo repository.Repository, config *RunConfig) error {
+	timeout, err := time.ParseDuration(config.Timeout)
+	if err != nil {
+		return fmt.Errorf("invalid timeout duration %q: %w", config.Timeout, err)
+	}
 
-	// Wait a bit for the workflow run to be created
-	time.Sleep(2 * time.Second)
+	workflowFileName := config.WorkflowName + ".yml"
+	logger.Info(fmt.Sprintf("Waiting for workflow run to complete (timeout: %s)...", timeout))
+	deadline := time.Now().Add(timeout)
+	pollInterval := 10 * time.Second
 
-	var latestRun *github.WorkflowRun
+	// Wait a bit for the workflow to start
+	time.Sleep(5 * time.Second)
 
 	for {
-		// Check timeout
-		if time.Since(startTime) > timeout {
-			return nil, fmt.Errorf("timeout waiting for workflow run to complete")
+		if time.Now().After(deadline) {
+			return fmt.Errorf("timeout waiting for workflow run to complete")
 		}
 
-		// Get latest workflow run
-		runs, err := gh.ListWorkflowRunsByFileName(ctx, client, repo, workflowFileName, &gh.ListWorkflowRunsOptions{})
+		runs, err := gh.ListWorkflowRunsByFileName(ctx, client, sourceRepo, workflowFileName, &gh.ListWorkflowRunsOptions{
+			Branch: config.Branch,
+		})
 		if err != nil {
-			return nil, fmt.Errorf("failed to list workflow runs: %w", err)
+			return fmt.Errorf("failed to list workflow runs: %w", err)
+		}
+		if len(runs) > 0 {
+			latestRun := runs[0]
+			status := latestRun.GetStatus()
+			conclusion := latestRun.GetConclusion()
+			logger.Info(fmt.Sprintf("Workflow run #%d: status=%s, conclusion=%s", latestRun.GetID(), status, conclusion))
+
+			if status == "completed" {
+				if conclusion == "success" {
+					logger.Info("Workflow run completed successfully!")
+					return nil
+				}
+				return fmt.Errorf("workflow run completed with conclusion: %s", conclusion)
+			}
 		}
 
-		if len(runs) == 0 {
-			logger.Debug("No workflow runs found yet, waiting...")
-			time.Sleep(pollInterval)
-			continue
-		}
-
-		// Get the latest run
-		latestRun = runs[0]
-		logger.Debug(fmt.Sprintf("Latest workflow run status: %s, conclusion: %s", latestRun.GetStatus(), latestRun.GetConclusion()))
-
-		// Check if run is completed
-		if latestRun.GetStatus() == "completed" {
-			return latestRun, nil
-		}
-
-		// Wait before polling again
 		time.Sleep(pollInterval)
 	}
 }
