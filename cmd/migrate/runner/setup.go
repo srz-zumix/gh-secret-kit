@@ -166,7 +166,7 @@ func setupNewRunner(ctx context.Context, sourceRepo repository.Repository) error
 		sourceString = sourceRepo.Owner + "/" + sourceRepo.Name
 	}
 	state := &migrate.MigrateState{
-		Source:        sourceString,
+		Source:       sourceString,
 		ScaleSetID:   scaleSet.ID,
 		ScaleSetName: scaleSet.Name,
 		RunnerDir:    runnerDir,
@@ -235,7 +235,9 @@ func setupNewRunner(ctx context.Context, sourceRepo repository.Repository) error
 }
 
 // cleanupScaleSet deletes the scale set on failure, logging any errors
-func cleanupScaleSet(ctx context.Context, client interface{ DeleteRunnerScaleSet(context.Context, int) error }, scaleSetID int) {
+func cleanupScaleSet(ctx context.Context, client interface {
+	DeleteRunnerScaleSet(context.Context, int) error
+}, scaleSetID int) {
 	logger.Warn(fmt.Sprintf("Cleaning up scale set (ID=%d) due to setup failure...", scaleSetID))
 	if err := client.DeleteRunnerScaleSet(ctx, scaleSetID); err != nil {
 		logger.Error(fmt.Sprintf("Failed to clean up scale set: %v", err))

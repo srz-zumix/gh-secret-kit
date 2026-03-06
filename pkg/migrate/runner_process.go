@@ -2,6 +2,7 @@ package migrate
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"compress/gzip"
 	"context"
 	"crypto/rand"
@@ -172,20 +173,27 @@ func DownloadRunnerBinary(ctx context.Context, downloadURL, destDir string) erro
 	}
 
 	// Extract the archive
-	if strings.HasSuffix(downloadURL, ".tar.gz") {
+	switch {
+	case strings.HasSuffix(downloadURL, ".tar.gz"):
 		return extractTarGz(resp.Body, destDir)
+	case strings.HasSuffix(downloadURL, ".zip"):
+		return extractZipFromReader(resp.Body, destDir)
+	default:
+		return fmt.Errorf("unsupported archive format for URL: %s (only .tar.gz and .zip are supported)", downloadURL)
 	}
-
-	return fmt.Errorf("unsupported archive format for URL: %s", downloadURL)
 }
 
 // extractTarGz extracts a tar.gz archive to a destination directory
-func extractTarGz(r io.Reader, destDir string) error {
-	gzr, err := gzip.NewReader(r)
-	if err != nil {
-		return fmt.Errorf("failed to create gzip reader: %w", err)
+func extractTarGz(r io.Reader, destDir string) (err error) {
+	gzr, gzrErr := gzip.NewReader(r)
+	if gzrErr != nil {
+		return fmt.Errorf("failed to create gzip reader: %w", gzrErr)
 	}
-	defer gzr.Close()
+	defer func() {
+		if cerr := gzr.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("failed to close gzip reader: %w", cerr)
+		}
+	}()
 
 	tr := tar.NewReader(gzr)
 	cleanDest := filepath.Clean(destDir)
@@ -220,14 +228,91 @@ func extractTarGz(r io.Reader, destDir string) error {
 				return fmt.Errorf("failed to create file %s: %w", target, err)
 			}
 			if _, err := io.Copy(f, tr); err != nil {
-				f.Close()
+				_ = f.Close()
 				return fmt.Errorf("failed to write file %s: %w", target, err)
 			}
-			f.Close()
+			if err := f.Close(); err != nil {
+				return fmt.Errorf("failed to close file %s: %w", target, err)
+			}
 		case tar.TypeSymlink:
 			if err := os.Symlink(header.Linkname, target); err != nil {
 				return fmt.Errorf("failed to create symlink %s: %w", target, err)
 			}
+		}
+	}
+
+	return nil
+}
+
+// extractZipFromReader writes the reader contents to a temporary file and then extracts the ZIP archive.
+// archive/zip requires io.ReaderAt, so the response body must be buffered to disk first.
+func extractZipFromReader(r io.Reader, destDir string) error {
+	tmpFile, err := os.CreateTemp("", "runner-*.zip")
+	if err != nil {
+		return fmt.Errorf("failed to create temp file for zip: %w", err)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	if _, err := io.Copy(tmpFile, r); err != nil {
+		_ = tmpFile.Close()
+		return fmt.Errorf("failed to write zip to temp file: %w", err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("failed to close temp file: %w", err)
+	}
+
+	return extractZip(tmpFile.Name(), destDir)
+}
+
+// extractZip extracts a ZIP archive to a destination directory
+func extractZip(zipPath, destDir string) error {
+	zr, err := zip.OpenReader(zipPath)
+	if err != nil {
+		return fmt.Errorf("failed to open zip archive: %w", err)
+	}
+	defer zr.Close()
+
+	cleanDest := filepath.Clean(destDir)
+
+	for _, f := range zr.File {
+		target := filepath.Join(destDir, f.Name)
+
+		// Security check: prevent path traversal
+		if !strings.HasPrefix(filepath.Clean(target), cleanDest) {
+			return fmt.Errorf("invalid file path in archive: %s", f.Name)
+		}
+
+		if f.FileInfo().IsDir() {
+			if err := os.MkdirAll(target, f.Mode()); err != nil {
+				return fmt.Errorf("failed to create directory %s: %w", target, err)
+			}
+			continue
+		}
+
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return fmt.Errorf("failed to create parent directory for %s: %w", target, err)
+		}
+
+		src, err := f.Open()
+		if err != nil {
+			return fmt.Errorf("failed to open zip entry %s: %w", f.Name, err)
+		}
+
+		dst, err := os.OpenFile(target, os.O_CREATE|os.O_RDWR, f.Mode())
+		if err != nil {
+			_ = src.Close()
+			return fmt.Errorf("failed to create file %s: %w", target, err)
+		}
+
+		if _, err := io.Copy(dst, src); err != nil {
+			_ = src.Close()
+			_ = dst.Close()
+			return fmt.Errorf("failed to write file %s: %w", target, err)
+		}
+
+		_ = src.Close()
+		if err := dst.Close(); err != nil {
+			return fmt.Errorf("failed to close file %s: %w", target, err)
 		}
 	}
 
@@ -291,7 +376,7 @@ func StartRunner(runnerDir, jitConfig string) (*os.Process, error) {
 	cmd.Stderr = logFile
 
 	if err := cmd.Start(); err != nil {
-		logFile.Close()
+		_ = logFile.Close()
 		return nil, fmt.Errorf("failed to start runner process: %w", err)
 	}
 

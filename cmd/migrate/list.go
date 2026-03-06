@@ -11,25 +11,32 @@ import (
 	"github.com/srz-zumix/go-gh-extension/pkg/render"
 )
 
-var listRepo string
+var (
+	listRepo     string
+	listPlain    bool
+)
 
 // NewListCmd creates the migrate list command
 func NewListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list [org]",
 		Short: "List repositories that have secrets registered",
-		Long: `List repositories that have at least one repository secret registered.
+		Long: `List repositories that have at least one secret registered (repository-level or environment-level).
 
 When called without arguments, the current repository's owner is used as the
 organization. You can pass an explicit org name (or HOST/ORG) as the first argument.
 
-Use -R/--repo to check a single specific repository instead of scanning an organization.`,
+Use -R/--repo to check a single specific repository instead of scanning an organization.
+
+The output shows the scope of each secret group: "repository" for repository-level secrets,
+or "env:<name>" for environment-level secrets.`,
 		RunE: runMigrateList,
 		Args: cobra.MaximumNArgs(1),
 	}
 
 	f := cmd.Flags()
 	f.StringVarP(&listRepo, "repo", "R", "", "Check a single repository (e.g., owner/repo). When specified, org scan is skipped.")
+	f.BoolVar(&listPlain, "plain", false, "Print tab-separated repository name and scope, one per line")
 
 	return cmd
 }
@@ -87,16 +94,21 @@ func runMigrateListOrg(ctx context.Context, source string) error {
 			logger.Warn(fmt.Sprintf("Skipping %s: failed to list secrets: %v", repo.GetFullName(), err))
 			continue
 		}
-		if len(secrets) > 0 {
+
+		envSecrets, err := gh.CollectEnvSecrets(ctx, client, repoRef, int(repo.GetID()))
+		if err != nil {
+			logger.Warn(fmt.Sprintf("Skipping environments for %s: %v", repo.GetFullName(), err))
+		}
+		if len(secrets) > 0 || len(envSecrets) > 0 {
 			results = append(results, gh.RepoWithSecrets{
 				Repository: repo,
 				Secrets:    secrets,
+				EnvSecrets: envSecrets,
 			})
 		}
 	}
 
-	r := render.NewRenderer(nil)
-	r.RenderRepositoriesWithSecretCount(results)
+	renderResults(results)
 	return nil
 }
 
@@ -121,15 +133,37 @@ func runMigrateListRepo(ctx context.Context, source string) error {
 		return fmt.Errorf("failed to list secrets for %s/%s: %w", repoRef.Owner, repoRef.Name, err)
 	}
 
+	envSecrets, err := gh.CollectEnvSecrets(ctx, client, repoRef, int(repoInfo.GetID()))
+	if err != nil {
+		logger.Warn(fmt.Sprintf("Skipping environments for %s/%s: %v", repoRef.Owner, repoRef.Name, err))
+	}
+
 	var results []gh.RepoWithSecrets
-	if len(secrets) > 0 {
+	if len(secrets) > 0 || len(envSecrets) > 0 {
 		results = append(results, gh.RepoWithSecrets{
 			Repository: repoInfo,
 			Secrets:    secrets,
+			EnvSecrets: envSecrets,
 		})
 	}
 
-	r := render.NewRenderer(nil)
-	r.RenderRepositoriesWithSecretCount(results)
+	renderResults(results)
 	return nil
+}
+
+func renderResults(results []gh.RepoWithSecrets) {
+	if listPlain {
+		for _, r := range results {
+			name := r.Repository.GetFullName()
+			if r.SecretCount() > 0 {
+				fmt.Printf("%s\t%s\n", name, "repository")
+			}
+			for envName := range r.EnvSecrets {
+				fmt.Printf("%s\t%s\n", name, "env:"+envName)
+			}
+		}
+		return
+	}
+	r := render.NewRenderer(nil)
+	r.RenderRepositoriesWithScopedSecretCount(results)
 }

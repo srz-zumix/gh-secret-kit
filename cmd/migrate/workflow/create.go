@@ -74,19 +74,19 @@ func RunCreate(ctx context.Context, config *CreateConfig) error {
 
 	// Build workflow configuration
 	workflowConfig := migratePackage.WorkflowConfig{
-		WorkflowName:     config.WorkflowName,
-		RunnerLabel:      config.RunnerLabel,
-		TriggerLabel:     config.Label,
-		Source:           config.Source,
-		Destination:      config.Destination,
-		DestinationHost:  destHost,
-		SourceEnv:        config.SourceEnv,
-		DestinationEnv:   config.DestinationEnv,
-		Secrets:          secrets,
-		Rename:           renameMap,
-		Overwrite:        config.Overwrite,
-		DestinationToken: config.DestinationToken,
-		Scope:            scope,
+		WorkflowName:           config.WorkflowName,
+		RunnerLabel:            config.RunnerLabel,
+		TriggerLabel:           config.Label,
+		Source:                 config.Source,
+		Destination:            config.Destination,
+		DestinationHost:        destHost,
+		SourceEnv:              config.SourceEnv,
+		DestinationEnv:         config.DestinationEnv,
+		Secrets:                secrets,
+		Rename:                 renameMap,
+		Overwrite:              config.Overwrite,
+		DestinationTokenSecret: config.DestinationTokenSecret,
+		Scope:                  scope,
 	}
 
 	// Generate workflow YAML

@@ -168,4 +168,3 @@ func RunInit(ctx context.Context, config *InitConfig) error {
 	logger.Info(fmt.Sprintf("Stub workflow initialized for: %s/%s/.github/workflows/%s.yml", sourceRepo.Owner, sourceRepo.Name, config.WorkflowName))
 	return nil
 }
-

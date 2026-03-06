@@ -32,9 +32,9 @@ type WorkflowConfig struct {
 	DestinationEnv   string
 	Secrets          []string
 	Rename           map[string]string // OLD_NAME -> NEW_NAME
-	Overwrite        bool
-	DestinationToken string
-	Scope            SecretScope
+	Overwrite             bool
+	DestinationTokenSecret string
+	Scope                  SecretScope
 }
 
 // WorkflowYAML represents the structure of a GitHub Actions workflow
@@ -102,11 +102,12 @@ func GenerateWorkflowYAML(config WorkflowConfig) (string, error) {
 			"DESTINATION":  config.Destination,
 		}
 
-		if config.DestinationToken != "" {
+		if config.DestinationTokenSecret != "" {
+			secretRef := fmt.Sprintf("${{ secrets.%s }}", config.DestinationTokenSecret)
 			if ghHost == "github.com" {
-				stepEnv["GH_TOKEN"] = config.DestinationToken
+				stepEnv["GH_TOKEN"] = secretRef
 			} else {
-				stepEnv["GH_ENTERPRISE_TOKEN"] = config.DestinationToken
+				stepEnv["GH_ENTERPRISE_TOKEN"] = secretRef
 			}
 		}
 
@@ -120,11 +121,6 @@ func GenerateWorkflowYAML(config WorkflowConfig) (string, error) {
 			Name: fmt.Sprintf("Migrate secret: %s", secretName),
 			Run:  runScript,
 			Env:  stepEnv,
-		}
-
-		if !config.Overwrite {
-			// Add check to skip if secret already exists
-			step.If = "${{ env.SECRET_VALUE != '' }}"
 		}
 
 		steps = append(steps, step)
@@ -169,7 +165,7 @@ func generateSecretMigrationScript(config WorkflowConfig, srcName, destName stri
 
 	// Check if secret value is empty
 	script.WriteString("if [ -z \"$SECRET_VALUE\" ]; then\n")
-	script.WriteString(fmt.Sprintf("  echo \"Secret %s is empty or does not exist, skipping...\"\n", srcName))
+	fmt.Fprintf(&script, "  echo \"Secret %s is empty or does not exist, skipping...\"\n", srcName)
 	script.WriteString("  exit 0\n")
 	script.WriteString("fi\n\n")
 
@@ -177,25 +173,25 @@ func generateSecretMigrationScript(config WorkflowConfig, srcName, destName stri
 		// Check if destination secret already exists
 		script.WriteString("# Check if secret already exists at destination\n")
 		if config.DestinationEnv != "" {
-			script.WriteString(fmt.Sprintf("if gh secret list --env $DEST_ENV -R $DESTINATION | grep -q \"^%s\"; then\n", destName))
+			fmt.Fprintf(&script, "if gh secret list --env $DEST_ENV -R $DESTINATION | grep -q \"^%s\"; then\n", destName)
 		} else {
-			script.WriteString(fmt.Sprintf("if gh secret list %s | grep -q \"^%s\"; then\n", listScopeFlag, destName))
+			fmt.Fprintf(&script, "if gh secret list %s | grep -q \"^%s\"; then\n", listScopeFlag, destName)
 		}
-		script.WriteString(fmt.Sprintf("  echo \"Secret %s already exists at destination, skipping...\"\n", destName))
+		fmt.Fprintf(&script, "  echo \"Secret %s already exists at destination, skipping...\"\n", destName)
 		script.WriteString("  exit 0\n")
 		script.WriteString("fi\n\n")
 	}
 
 	// Set the secret at destination
-	script.WriteString(fmt.Sprintf("# Set secret %s at destination\n", destName))
+	fmt.Fprintf(&script, "# Set secret %s at destination\n", destName)
 	script.WriteString("echo \"$SECRET_VALUE\" | \\\n")
 	if config.DestinationEnv != "" {
-		script.WriteString(fmt.Sprintf("  gh secret set %s --env $DEST_ENV -R $DESTINATION\n", destName))
+		fmt.Fprintf(&script, "  gh secret set %s --env $DEST_ENV -R $DESTINATION\n", destName)
 	} else {
-		script.WriteString(fmt.Sprintf("  gh secret set %s %s\n", destName, scopeFlag))
+		fmt.Fprintf(&script, "  gh secret set %s %s\n", destName, scopeFlag)
 	}
 
-	script.WriteString(fmt.Sprintf("echo \"Successfully migrated secret: %s -> %s\"\n", srcName, destName))
+	fmt.Fprintf(&script, "echo \"Successfully migrated secret: %s -> %s\"\n", srcName, destName)
 
 	return script.String()
 }

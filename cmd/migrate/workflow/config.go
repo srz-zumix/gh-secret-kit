@@ -14,20 +14,20 @@ type InitConfig struct {
 
 // CreateConfig holds configuration for the create operation
 type CreateConfig struct {
-	Source           string
-	Destination      string
-	DestinationHost  string
-	SourceEnv        string
-	DestinationEnv   string
-	Secrets          []string
-	Rename           []string
-	Overwrite        bool
-	DestinationToken string
-	Scope            migrate.SecretScope
-	RunnerLabel      string
-	WorkflowName     string
-	Branch           string
-	Label            string
+	Source                 string
+	Destination            string
+	DestinationHost        string
+	SourceEnv              string
+	DestinationEnv         string
+	Secrets                []string
+	Rename                 []string
+	Overwrite              bool
+	DestinationTokenSecret string
+	Scope                  migrate.SecretScope
+	RunnerLabel            string
+	WorkflowName           string
+	Branch                 string
+	Label                  string
 }
 
 // RunConfig holds configuration for the run operation
