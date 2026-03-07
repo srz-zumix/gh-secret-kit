@@ -52,7 +52,7 @@ func FetchLatestRunnerVersion(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch latest runner version: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("GitHub API returned HTTP %d", resp.StatusCode)
@@ -166,7 +166,7 @@ func DownloadRunnerBinary(ctx context.Context, downloadURL, destDir string) erro
 	if err != nil {
 		return fmt.Errorf("failed to download runner binary: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("failed to download runner binary: HTTP %d", resp.StatusCode)
@@ -251,7 +251,7 @@ func extractZipFromReader(r io.Reader, destDir string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create temp file for zip: %w", err)
 	}
-	defer os.Remove(tmpFile.Name())
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
 
 	if _, err := io.Copy(tmpFile, r); err != nil {
 		_ = tmpFile.Close()
@@ -264,13 +264,17 @@ func extractZipFromReader(r io.Reader, destDir string) error {
 	return extractZip(tmpFile.Name(), destDir)
 }
 
-// extractZip extracts a ZIP archive to a destination directory
-func extractZip(zipPath, destDir string) error {
+// extractZip extracts a ZIP archive to a destination directory.
+func extractZip(zipPath, destDir string) (err error) {
 	zr, err := zip.OpenReader(zipPath)
 	if err != nil {
 		return fmt.Errorf("failed to open zip archive: %w", err)
 	}
-	defer zr.Close()
+	defer func() {
+		if cerr := zr.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("failed to close zip archive: %w", cerr)
+		}
+	}()
 
 	cleanDest := filepath.Clean(destDir)
 
