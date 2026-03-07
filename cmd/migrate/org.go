@@ -19,6 +19,7 @@ func NewOrgCmd() *cobra.Command {
 	cmd.AddCommand(workflow.NewRunCmd())
 	cmd.AddCommand(workflow.NewDeleteCmd())
 	cmd.AddCommand(org.NewCheckCmd())
+	cmd.AddCommand(org.NewAllCmd())
 
 	return cmd
 }

@@ -55,20 +55,22 @@ func RunWorkflow(ctx context.Context, config *RunConfig) error {
 
 	branch := config.Branch
 
-	// Find open PR from topic branch
-	existingPRs, err := gh.ListPullRequests(ctx, client, sourceRepo,
-		&gh.ListPullRequestsOptionHead{Head: fmt.Sprintf("%s:%s", sourceRepo.Owner, branch)},
-		gh.ListPullRequestsOptionStateOpen(),
-	)
-	if err != nil {
-		return fmt.Errorf("failed to list pull requests: %w", err)
+	// Determine PR number: use explicitly provided value or search for it
+	prNumber := config.PRNumber
+	if prNumber == 0 {
+		existingPRs, err := gh.ListPullRequests(ctx, client, sourceRepo,
+			&gh.ListPullRequestsOptionHead{Head: fmt.Sprintf("%s:%s", sourceRepo.Owner, branch)},
+			gh.ListPullRequestsOptionStateOpen(),
+		)
+		if err != nil {
+			return fmt.Errorf("failed to list pull requests: %w", err)
+		}
+		if len(existingPRs) == 0 {
+			return fmt.Errorf("no open PR found from branch %s; run init first", branch)
+		}
+		prNumber = existingPRs[0].GetNumber()
 	}
-	if len(existingPRs) == 0 {
-		return fmt.Errorf("no open PR found from branch %s; run init first", branch)
-	}
-	pr := existingPRs[0]
-	prNumber := pr.GetNumber()
-	logger.Info(fmt.Sprintf("Found open PR #%d", prNumber))
+	logger.Info(fmt.Sprintf("Using PR #%d", prNumber))
 
 	// Remove label (if present) then add label to trigger the workflow
 	labelName := config.Label

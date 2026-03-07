@@ -133,7 +133,7 @@ func RunCreate(ctx context.Context, config *CreateConfig) error {
 	// Check if file already exists
 	existingContent, _, gerr := client.GetRepositoryContent(ctx, sourceRepo.Owner, sourceRepo.Name, workflowPath, &branch)
 
-	commitMessage := fmt.Sprintf("Add workflow for secret migration: %s [ci skip]", config.WorkflowName)
+	commitMessage := fmt.Sprintf("Add workflow for secret migration: %s", config.WorkflowName)
 	fileOptions := &gh.RepositoryContentFileOptions{
 		Message: commitMessage,
 		Content: []byte(workflowYAML),
@@ -159,6 +159,25 @@ func RunCreate(ctx context.Context, config *CreateConfig) error {
 	}
 
 	logger.Info(fmt.Sprintf("Migration workflow created at: %s/%s/.github/workflows/%s.yml", sourceRepo.Owner, sourceRepo.Name, config.WorkflowName))
+
+	// Remove the trigger label from the PR (if present) so that "run" can add it
+	// fresh and reliably fire a new "labeled" event. Without this, a leftover
+	// label from a previous run could prevent the workflow from being triggered.
+	labelName := config.Label
+	if labelName != "" {
+		openPRs, lerr := gh.ListPullRequests(ctx, client, sourceRepo,
+			&gh.ListPullRequestsOptionHead{Head: fmt.Sprintf("%s:%s", sourceRepo.Owner, branch)},
+			gh.ListPullRequestsOptionStateOpen(),
+		)
+		if lerr == nil {
+			for _, pr := range openPRs {
+				prNumber := pr.GetNumber()
+				logger.Debug(fmt.Sprintf("Removing stale trigger label %s from PR #%d (if present)...", labelName, prNumber))
+				_ = gh.RemoveIssueLabel(ctx, client, sourceRepo, prNumber, labelName)
+			}
+		}
+	}
+
 	return nil
 }
 

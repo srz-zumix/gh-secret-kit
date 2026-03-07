@@ -146,7 +146,11 @@ func GenerateWorkflowYAML(config WorkflowConfig) (string, error) {
 		return "", fmt.Errorf("failed to marshal workflow to YAML: %w", err)
 	}
 
-	return string(yamlBytes), nil
+	// "on" is a YAML reserved keyword (boolean true), so the marshaler quotes it.
+	// Replace the quoted key with the unquoted form for valid GitHub Actions syntax.
+	result := strings.Replace(string(yamlBytes), "\"on\":", "on:", 1)
+
+	return result, nil
 }
 
 // generateSecretMigrationScript generates the script to migrate a single secret

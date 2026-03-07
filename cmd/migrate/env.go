@@ -19,6 +19,7 @@ func NewEnvCmd() *cobra.Command {
 	cmd.AddCommand(workflow.NewRunCmd())
 	cmd.AddCommand(workflow.NewDeleteCmd())
 	cmd.AddCommand(env.NewCheckCmd())
+	cmd.AddCommand(env.NewAllCmd())
 
 	return cmd
 }

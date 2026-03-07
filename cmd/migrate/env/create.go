@@ -35,7 +35,7 @@ The workflow is pushed to the source repository on a topic branch.`,
 	f.BoolVar(&config.Overwrite, "overwrite", false, "Overwrite existing secrets at destination")
 	f.StringVar(&config.DestinationTokenSecret, "dst-token", "", "Secret variable name that holds the PAT for the destination (e.g. DST_PAT; referenced as ${{ secrets.<name> }} in the workflow)")
 	f.StringVar(&config.DestinationHost, "dst-host", "", "GitHub host for the destination (defaults to source repository host)")
-	f.StringVar(&config.RunnerLabel, "runner-label", "self-hosted", "Runner label for the workflow")
+	f.StringVar(&config.RunnerLabel, "runner-label", "gh-secret-kit-migrate", "Runner label for the workflow")
 	_ = cmd.Flags().MarkHidden("dst-token")
 	f.StringVar(&config.WorkflowName, "workflow-name", "gh-secret-kit-migrate", "Name of the generated workflow file")
 	f.StringVar(&config.Branch, "branch", "gh-secret-kit-migrate", "Branch to push the workflow to")

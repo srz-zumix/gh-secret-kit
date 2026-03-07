@@ -36,10 +36,13 @@ func RunCheck(ctx context.Context, config *CheckConfig) error {
 		return fmt.Errorf("failed to create source GitHub client: %w", err)
 	}
 
-	// Determine destination host
-	destHostStr := config.DestinationHost
-	if destHostStr == "" {
-		destHostStr = sourceRepo.Host
+	// Determine destination host: use explicit flag, fall back to source host
+	destHost := config.DestinationHost
+	if destHost == "" {
+		destHost = sourceRepo.Host
+	}
+	if destHost == "" {
+		destHost = "github.com"
 	}
 
 	// Parse destination based on scope
@@ -53,12 +56,8 @@ func RunCheck(ctx context.Context, config *CheckConfig) error {
 	if err != nil {
 		return fmt.Errorf("failed to parse destination: %w", err)
 	}
-	// Override host if explicitly specified
-	if config.DestinationHost != "" {
-		destRepo.Host = config.DestinationHost
-	} else if destRepo.Host == "" {
-		destRepo.Host = destHostStr
-	}
+	// Always apply the resolved destination host
+	destRepo.Host = destHost
 
 	// Initialize destination GitHub client
 	var destClient *gh.GitHubClient

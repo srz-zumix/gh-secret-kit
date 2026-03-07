@@ -38,6 +38,9 @@ type RunConfig struct {
 	Label        string
 	Wait         bool
 	Timeout      string
+	// PRNumber is an optional PR number to use directly, skipping the search.
+	// Set by RunAll to avoid API race conditions between init and run.
+	PRNumber     int
 }
 
 // DeleteConfig holds configuration for the delete operation
@@ -58,4 +61,26 @@ type CheckConfig struct {
 	Rename           []string
 	DestinationToken string
 	Scope            migrate.SecretScope
+}
+
+// AllConfig holds configuration for the all-in-one operation that runs
+// init, create, run, check, and delete in sequence.
+type AllConfig struct {
+	// Common fields
+	Source                 string
+	Destination            string
+	DestinationHost        string
+	SourceEnv              string
+	DestinationEnv         string
+	Secrets                []string
+	Rename                 []string
+	Overwrite              bool
+	DestinationTokenSecret string
+	DestinationToken       string
+	Scope                  migrate.SecretScope
+	RunnerLabel            string
+	WorkflowName           string
+	Branch                 string
+	Label                  string
+	Timeout                string
 }

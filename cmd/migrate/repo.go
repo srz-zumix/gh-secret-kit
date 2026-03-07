@@ -19,6 +19,7 @@ func NewRepoCmd() *cobra.Command {
 	cmd.AddCommand(workflow.NewRunCmd())
 	cmd.AddCommand(workflow.NewDeleteCmd())
 	cmd.AddCommand(repo.NewCheckCmd())
+	cmd.AddCommand(repo.NewAllCmd())
 
 	return cmd
 }
