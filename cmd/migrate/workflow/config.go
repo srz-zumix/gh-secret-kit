@@ -10,6 +10,7 @@ type InitConfig struct {
 	WorkflowName string
 	Branch       string
 	Label        string
+	Unarchive    bool
 }
 
 // CreateConfig holds configuration for the create operation
@@ -28,6 +29,7 @@ type CreateConfig struct {
 	WorkflowName           string
 	Branch                 string
 	Label                  string
+	Unarchive              bool
 }
 
 // RunConfig holds configuration for the run operation
@@ -38,6 +40,7 @@ type RunConfig struct {
 	Label        string
 	Wait         bool
 	Timeout      string
+	Unarchive    bool
 	// PRNumber is an optional PR number to use directly, skipping the search.
 	// Set by RunAll to avoid API race conditions between init and run.
 	PRNumber     int
@@ -83,4 +86,5 @@ type AllConfig struct {
 	Branch                 string
 	Label                  string
 	Timeout                string
+	Unarchive              bool
 }

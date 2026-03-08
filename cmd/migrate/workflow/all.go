@@ -4,16 +4,41 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/srz-zumix/go-gh-extension/pkg/gh"
 	"github.com/srz-zumix/go-gh-extension/pkg/logger"
+	"github.com/srz-zumix/go-gh-extension/pkg/parser"
 )
 
 // RunAll executes the full migration pipeline: init → create → run → check → delete.
 func RunAll(ctx context.Context, config *AllConfig) error {
+	// Handle unarchive at the top level to avoid repeated archive/unarchive cycles
+	if config.Unarchive {
+		sourceRepo, err := parser.Repository(parser.RepositoryInput(config.Source))
+		if err != nil {
+			return fmt.Errorf("failed to parse source repository: %w", err)
+		}
+		client, err := gh.NewGitHubClientWithRepo(sourceRepo)
+		if err != nil {
+			return fmt.Errorf("failed to create GitHub client: %w", err)
+		}
+		repo, err := gh.GetRepository(ctx, client, sourceRepo)
+		if err != nil {
+			return fmt.Errorf("failed to get repository: %w", err)
+		}
+		cleanup, err := handleUnarchiveIfNeeded(ctx, client, sourceRepo, repo, config.Unarchive)
+		if err != nil {
+			return err
+		}
+		defer cleanup()
+	}
+
+	// Sub-configs do not need to handle unarchive since we handle it at this level
 	initConfig := &InitConfig{
 		Source:       config.Source,
 		WorkflowName: config.WorkflowName,
 		Branch:       config.Branch,
 		Label:        config.Label,
+		Unarchive:    false,
 	}
 	createConfig := &CreateConfig{
 		Source:                 config.Source,
@@ -30,6 +55,7 @@ func RunAll(ctx context.Context, config *AllConfig) error {
 		WorkflowName:           config.WorkflowName,
 		Branch:                 config.Branch,
 		Label:                  config.Label,
+		Unarchive:              false,
 	}
 	runConfig := &RunConfig{
 		Source:       config.Source,
@@ -38,6 +64,7 @@ func RunAll(ctx context.Context, config *AllConfig) error {
 		Label:        config.Label,
 		Wait:         true,
 		Timeout:      config.Timeout,
+		Unarchive:    false,
 	}
 	checkConfig := &CheckConfig{
 		Source:           config.Source,

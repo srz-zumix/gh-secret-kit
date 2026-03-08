@@ -33,6 +33,7 @@ on the open PR. Optionally wait for the workflow run to complete.`,
 	f.StringVar(&config.Label, "label", "gh-secret-kit-migrate", "Label name that triggers the migration workflow")
 	f.BoolVarP(&config.Wait, "wait", "w", false, "Wait for the workflow run to complete")
 	f.StringVar(&config.Timeout, "timeout", "10m", "Timeout duration when waiting for workflow completion (e.g., 5m, 1h)")
+	f.BoolVar(&config.Unarchive, "unarchive", false, "Temporarily unarchive the repository if it is archived, then re-archive after the workflow run")
 
 	return cmd
 }
@@ -51,6 +52,19 @@ func RunWorkflow(ctx context.Context, config *RunConfig) error {
 	client, err := gh.NewGitHubClientWithRepo(sourceRepo)
 	if err != nil {
 		return fmt.Errorf("failed to create GitHub client: %w", err)
+	}
+
+	// Check if the repository is archived and handle unarchive if requested
+	if config.Unarchive {
+		repo, err := gh.GetRepository(ctx, client, sourceRepo)
+		if err != nil {
+			return fmt.Errorf("failed to get repository info: %w", err)
+		}
+		cleanup, err := handleUnarchiveIfNeeded(ctx, client, sourceRepo, repo, config.Unarchive)
+		if err != nil {
+			return err
+		}
+		defer cleanup()
 	}
 
 	branch := config.Branch
