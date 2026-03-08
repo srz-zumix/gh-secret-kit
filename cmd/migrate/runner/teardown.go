@@ -20,12 +20,16 @@ var (
 // NewTeardownCmd creates the runner teardown command
 func NewTeardownCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "teardown",
+		Use:   "teardown [org]",
 		Short: "Unregister and stop the self-hosted runner",
 		Long: `Unregister and stop the self-hosted runner for secret migration.
 
 This command stops the runner process, deletes the runner scale set from the
-source repository/organization, and cleans up local runner files.`,
+source repository/organization, and cleans up local runner files.
+
+Arguments:
+  org   Organization name for organization-scoped runner (optional).
+        When omitted, uses the current repository's owner.`,
 		RunE: runTeardown,
 		Args: cobra.MaximumNArgs(1),
 	}

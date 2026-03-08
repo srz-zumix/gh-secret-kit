@@ -22,7 +22,7 @@ var (
 // NewSetupCmd creates the runner setup command
 func NewSetupCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "setup [owner]",
+		Use:   "setup [org]",
 		Short: "Register and start a self-hosted runner",
 		Long: `Register and start a self-hosted runner for secret migration.
 
@@ -37,8 +37,8 @@ completes or the process is interrupted (Ctrl+C). Run the workflow
 dispatch command from another terminal while this command is running.
 
 Arguments:
-  owner   Organization name for organization-scoped runner (optional).
-          When omitted, uses the current repository's owner.`,
+  org   Organization name for organization-scoped runner (optional).
+        When omitted, uses the current repository's owner.`,
 		RunE: runSetup,
 		Args: cobra.MaximumNArgs(1),
 	}
