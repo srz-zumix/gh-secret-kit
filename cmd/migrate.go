@@ -22,6 +22,7 @@ secret values and sets them directly to the destination via API.`,
 	cmd.AddCommand(migrate.NewEnvCmd())
 	cmd.AddCommand(migrate.NewListCmd())
 	cmd.AddCommand(migrate.NewOrgCmd())
+	cmd.AddCommand(migrate.NewPlanCmd())
 	cmd.AddCommand(migrate.NewRepoCmd())
 	cmd.AddCommand(migrate.NewRunnerCmd())
 

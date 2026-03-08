@@ -159,7 +159,7 @@ func listSecretNamesByScope(ctx context.Context, client *gh.GitHubClient, repo r
 		if err != nil {
 			return nil, fmt.Errorf("failed to get repository info: %w", err)
 		}
-		secrets, err := gh.ListEnvSecrets(ctx, client, int(repoInfo.GetID()), env)
+		secrets, err := gh.ListEnvSecrets(ctx, client, repoInfo, env)
 		if err != nil {
 			return nil, err
 		}

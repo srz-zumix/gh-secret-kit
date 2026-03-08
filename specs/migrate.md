@@ -16,6 +16,8 @@ The following secret types are supported for migration:
 
 The secret scope is explicitly determined by the subcommand used: `org`, `repo`, or `env`.
 
+> **Note**: Dependabot secrets are NOT supported. Dependabot secrets can only be accessed by workflows triggered by Dependabot, so user-triggered migration is not possible.
+
 ## Migration Directions
 
 | Source | Destination | Supported |
@@ -59,6 +61,7 @@ User CLI (local)
 | Subcommand | Description |
 | --- | --- |
 | `gh secret-kit migrate list` | List repositories that have at least one repository secret registered |
+| `gh secret-kit migrate plan` | Generate migration commands for matching repositories between source and destination organizations |
 | `gh secret-kit migrate runner setup [org]` | Register and start a scaleset runner on the source |
 | `gh secret-kit migrate runner teardown [org]` | Unregister and stop the runner |
 | `gh secret-kit migrate org all` | Run the full migration pipeline for org secrets (init → create → run → check → delete) |
@@ -118,6 +121,15 @@ User CLI (local)
 | `--dst-host` | - | string | No | - | GitHub host for the destination |
 
 > For `org check`, `--src` is the source organization name. For `repo check` and `env check`, `--src` is the source repository.
+
+### plan Options
+
+| Option | Short | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- | --- |
+| `--dst` | `-d` | string | Yes | - | Destination organization (e.g., org or HOST/org) |
+| `--runner-label` | - | string | No | `gh-secret-kit-migrate` | Runner label for the workflow |
+
+Positional argument: `[org]` — Source organization name (e.g., org or HOST/org). Defaults to current repository owner.
 
 ### migrate list Options
 
@@ -396,7 +408,7 @@ gh secret-kit migrate env check \
 ## Open Questions / Future Considerations
 
 - [x] Combined "run all" command design (single command that executes all steps sequentially) — **Implemented as `all` subcommand**
-- [ ] Support for Dependabot secrets
+- [x] ~~Support for Dependabot secrets~~ — **Not supported**: Dependabot secrets can only be accessed by workflows triggered by Dependabot
 - [ ] Support for Codespaces secrets
 - [ ] Parallel migration of multiple secrets for performance
 - [ ] Interactive mode (prompt user to select secrets from a list)

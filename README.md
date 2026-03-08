@@ -8,6 +8,14 @@ A gh extension for the GitHub Actions secrets API.
 gh extension install srz-zumix/gh-secret-kit
 ```
 
+## Shell Completion
+
+**Workaround Available!** While gh CLI doesn't natively support extension completion, we provide a patch script that enables it.
+
+**Prerequisites:** Before setting up gh-secret-kit completion, ensure gh CLI completion is configured for your shell. See [gh completion documentation](https://cli.github.com/manual/gh_completion) for setup instructions.
+
+For detailed installation instructions and setup for each shell, see the [Shell Completion Guide](docs/shell-completion.md).
+
 ## Commands
 
 ### Migrate GitHub Actions Secrets
@@ -21,6 +29,8 @@ gh secret-kit migrate [command]
 Since the GitHub API does not expose secret values, this command uses a self-hosted runner to read secret values and set them to the destination via API.
 
 The secret scope is determined by the subcommand: `org` for organization secrets, `repo` for repository secrets, and `env` for environment secrets.
+
+> **Note**: Dependabot secrets are NOT supported. Dependabot secrets can only be accessed by workflows triggered by Dependabot, so user-triggered migration is not possible.
 
 #### migrate env
 
@@ -161,6 +171,25 @@ When called without arguments, the current repository's owner is used as the org
 **Options:**
 
 - `--repo string` / `-R`: Check a single repository (e.g., owner/repo). When specified, org scan is skipped.
+
+#### migrate plan
+
+```sh
+gh secret-kit migrate plan [org] [flags]
+```
+
+Scan source organization for repositories with secrets, check if matching repositories exist in the destination organization, and output the migration commands for all matching pairs.
+
+This command does not perform any migration; it only outputs the commands that would be needed to migrate secrets from source to destination.
+
+**Arguments:**
+
+- `[org]`: Source organization name (e.g., org or HOST/org). Defaults to current repository owner.
+
+**Options:**
+
+- `--dst string` / `-d`: Destination organization (e.g., org or HOST/org) (required)
+- `--runner-label string`: Runner label for the workflow (default: "gh-secret-kit-migrate")
 
 #### migrate org
 
