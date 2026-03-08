@@ -29,7 +29,7 @@ related resources from the source repository.`,
 	f.StringVarP(&config.Source, "src", "s", "", "Source repository (e.g., owner/repo; defaults to current repository)")
 	f.StringVar(&config.WorkflowName, "workflow-name", "gh-secret-kit-migrate", "Name of the workflow file")
 	f.StringVar(&config.Branch, "branch", "gh-secret-kit-migrate", "Branch to delete")
-	f.BoolVar(&config.Unarchive, "unarchive", false, "Temporarily unarchive the repository if it is archived")
+	f.BoolVar(&config.Unarchive, "unarchive", false, "Temporarily unarchive the repository if it is archived, then re-archive after completion")
 
 	return cmd
 }
