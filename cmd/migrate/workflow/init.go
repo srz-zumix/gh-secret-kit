@@ -64,9 +64,15 @@ func RunInit(ctx context.Context, config *InitConfig) (int, error) {
 	}
 
 	// Check if the repository is archived and handle unarchive if requested
-	cleanup, err := handleUnarchiveIfNeeded(ctx, client, sourceRepo, repo, config.Unarchive)
-	if err != nil {
-		return 0, err
+	cleanup := func() {}
+	if repo.GetArchived() {
+		if !config.Unarchive {
+			return 0, fmt.Errorf("repository %s/%s is archived; use --unarchive to temporarily unarchive it", sourceRepo.Owner, sourceRepo.Name)
+		}
+		cleanup, err = handleUnarchive(ctx, client, sourceRepo)
+		if err != nil {
+			return 0, err
+		}
 	}
 	defer cleanup()
 

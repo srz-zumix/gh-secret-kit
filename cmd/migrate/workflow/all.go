@@ -12,25 +12,19 @@ import (
 // RunAll executes the full migration pipeline: init → create → run → check → delete.
 func RunAll(ctx context.Context, config *AllConfig) error {
 	// Handle unarchive at the top level to avoid repeated archive/unarchive cycles
-	if config.Unarchive {
-		sourceRepo, err := parser.Repository(parser.RepositoryInput(config.Source))
-		if err != nil {
-			return fmt.Errorf("failed to parse source repository: %w", err)
-		}
-		client, err := gh.NewGitHubClientWithRepo(sourceRepo)
-		if err != nil {
-			return fmt.Errorf("failed to create GitHub client: %w", err)
-		}
-		repo, err := gh.GetRepository(ctx, client, sourceRepo)
-		if err != nil {
-			return fmt.Errorf("failed to get repository: %w", err)
-		}
-		cleanup, err := handleUnarchiveIfNeeded(ctx, client, sourceRepo, repo, config.Unarchive)
-		if err != nil {
-			return err
-		}
-		defer cleanup()
+	sourceRepo, err := parser.Repository(parser.RepositoryInput(config.Source))
+	if err != nil {
+		return fmt.Errorf("failed to parse source repository: %w", err)
 	}
+	client, err := gh.NewGitHubClientWithRepo(sourceRepo)
+	if err != nil {
+		return fmt.Errorf("failed to create GitHub client: %w", err)
+	}
+	cleanup, err := handleUnarchiveWithCheck(ctx, client, sourceRepo, config.Unarchive)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
 
 	// Sub-configs do not need to handle unarchive since we handle it at this level
 	initConfig := &InitConfig{
@@ -81,6 +75,7 @@ func RunAll(ctx context.Context, config *AllConfig) error {
 		Source:       config.Source,
 		WorkflowName: config.WorkflowName,
 		Branch:       config.Branch,
+		Unarchive:    false,
 	}
 
 	// Step 1: init

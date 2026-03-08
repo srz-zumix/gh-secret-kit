@@ -51,6 +51,7 @@ type DeleteConfig struct {
 	Source       string
 	WorkflowName string
 	Branch       string
+	Unarchive    bool
 }
 
 // CheckConfig holds configuration for the check operation

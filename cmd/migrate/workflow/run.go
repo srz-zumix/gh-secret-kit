@@ -55,17 +55,11 @@ func RunWorkflow(ctx context.Context, config *RunConfig) error {
 	}
 
 	// Check if the repository is archived and handle unarchive if requested
-	if config.Unarchive {
-		repo, err := gh.GetRepository(ctx, client, sourceRepo)
-		if err != nil {
-			return fmt.Errorf("failed to get repository info: %w", err)
-		}
-		cleanup, err := handleUnarchiveIfNeeded(ctx, client, sourceRepo, repo, config.Unarchive)
-		if err != nil {
-			return err
-		}
-		defer cleanup()
+	cleanup, err := handleUnarchiveWithCheck(ctx, client, sourceRepo, config.Unarchive)
+	if err != nil {
+		return err
 	}
+	defer cleanup()
 
 	branch := config.Branch
 
