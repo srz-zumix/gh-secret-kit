@@ -42,12 +42,13 @@ func handleUnarchiveWithCheck(
 	repo repository.Repository,
 	unarchive bool,
 ) (cleanup func(), err error) {
+	cleanup = func() {}
+
 	repoInfo, err := gh.GetRepository(ctx, client, repo)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get repository info: %w", err)
 	}
 
-	cleanup = func() {}
 	if repoInfo.GetArchived() {
 		if !unarchive {
 			return nil, fmt.Errorf("repository %s/%s is archived; use --unarchive to temporarily unarchive it", repo.Owner, repo.Name)

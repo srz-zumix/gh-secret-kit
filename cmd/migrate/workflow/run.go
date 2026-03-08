@@ -55,11 +55,13 @@ func RunWorkflow(ctx context.Context, config *RunConfig) error {
 	}
 
 	// Check if the repository is archived and handle unarchive if requested
-	cleanup, err := handleUnarchiveWithCheck(ctx, client, sourceRepo, config.Unarchive)
-	if err != nil {
-		return err
+	if !config.SkipArchiveCheck {
+		cleanup, err := handleUnarchiveWithCheck(ctx, client, sourceRepo, config.Unarchive)
+		if err != nil {
+			return err
+		}
+		defer cleanup()
 	}
-	defer cleanup()
 
 	branch := config.Branch
 

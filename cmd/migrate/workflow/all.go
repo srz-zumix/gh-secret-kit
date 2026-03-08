@@ -28,11 +28,12 @@ func RunAll(ctx context.Context, config *AllConfig) error {
 
 	// Sub-configs do not need to handle unarchive since we handle it at this level
 	initConfig := &InitConfig{
-		Source:       config.Source,
-		WorkflowName: config.WorkflowName,
-		Branch:       config.Branch,
-		Label:        config.Label,
-		Unarchive:    false,
+		Source:           config.Source,
+		WorkflowName:     config.WorkflowName,
+		Branch:           config.Branch,
+		Label:            config.Label,
+		Unarchive:        false,
+		SkipArchiveCheck: true,
 	}
 	createConfig := &CreateConfig{
 		Source:                 config.Source,
@@ -50,15 +51,17 @@ func RunAll(ctx context.Context, config *AllConfig) error {
 		Branch:                 config.Branch,
 		Label:                  config.Label,
 		Unarchive:              false,
+		SkipArchiveCheck:       true,
 	}
 	runConfig := &RunConfig{
-		Source:       config.Source,
-		WorkflowName: config.WorkflowName,
-		Branch:       config.Branch,
-		Label:        config.Label,
-		Wait:         true,
-		Timeout:      config.Timeout,
-		Unarchive:    false,
+		Source:           config.Source,
+		WorkflowName:     config.WorkflowName,
+		Branch:           config.Branch,
+		Label:            config.Label,
+		Wait:             true,
+		Timeout:          config.Timeout,
+		Unarchive:        false,
+		SkipArchiveCheck: true,
 	}
 	checkConfig := &CheckConfig{
 		Source:           config.Source,
@@ -72,10 +75,11 @@ func RunAll(ctx context.Context, config *AllConfig) error {
 		Scope:            config.Scope,
 	}
 	deleteConfig := &DeleteConfig{
-		Source:       config.Source,
-		WorkflowName: config.WorkflowName,
-		Branch:       config.Branch,
-		Unarchive:    false,
+		Source:           config.Source,
+		WorkflowName:     config.WorkflowName,
+		Branch:           config.Branch,
+		Unarchive:        false,
+		SkipArchiveCheck: true,
 	}
 
 	// Step 1: init

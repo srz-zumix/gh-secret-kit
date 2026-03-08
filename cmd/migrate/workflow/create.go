@@ -36,7 +36,7 @@ func RunCreate(ctx context.Context, config *CreateConfig) error {
 		return fmt.Errorf("failed to get repository: %w", err)
 	}
 	cleanup := func() {}
-	if repoInfo.GetArchived() {
+	if !config.SkipArchiveCheck && repoInfo.GetArchived() {
 		if !config.Unarchive {
 			return fmt.Errorf("repository %s/%s is archived; use --unarchive to temporarily unarchive it", sourceRepo.Owner, sourceRepo.Name)
 		}

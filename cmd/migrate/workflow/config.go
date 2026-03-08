@@ -6,11 +6,12 @@ import (
 
 // InitConfig holds configuration for the init operation
 type InitConfig struct {
-	Source       string
-	WorkflowName string
-	Branch       string
-	Label        string
-	Unarchive    bool
+	Source           string
+	WorkflowName     string
+	Branch           string
+	Label            string
+	Unarchive        bool
+	SkipArchiveCheck bool
 }
 
 // CreateConfig holds configuration for the create operation
@@ -30,28 +31,31 @@ type CreateConfig struct {
 	Branch                 string
 	Label                  string
 	Unarchive              bool
+	SkipArchiveCheck       bool
 }
 
 // RunConfig holds configuration for the run operation
 type RunConfig struct {
-	Source       string
-	WorkflowName string
-	Branch       string
-	Label        string
-	Wait         bool
-	Timeout      string
-	Unarchive    bool
+	Source           string
+	WorkflowName     string
+	Branch           string
+	Label            string
+	Wait             bool
+	Timeout          string
+	Unarchive        bool
+	SkipArchiveCheck bool
 	// PRNumber is an optional PR number to use directly, skipping the search.
 	// Set by RunAll to avoid API race conditions between init and run.
-	PRNumber     int
+	PRNumber         int
 }
 
 // DeleteConfig holds configuration for the delete operation
 type DeleteConfig struct {
-	Source       string
-	WorkflowName string
-	Branch       string
-	Unarchive    bool
+	Source           string
+	WorkflowName     string
+	Branch           string
+	Unarchive        bool
+	SkipArchiveCheck bool
 }
 
 // CheckConfig holds configuration for the check operation
