@@ -26,7 +26,34 @@ The secret scope is determined by the subcommand: `org` for organization secrets
 
 Migrate environment secrets between repositories.
 
-Each subcommand (`init`, `create`, `run`, `delete`, `check`) operates on environment-scoped secrets.
+Each subcommand (`all`, `init`, `create`, `run`, `delete`, `check`) operates on environment-scoped secrets.
+
+#### migrate env all
+
+```sh
+gh secret-kit migrate env all [flags]
+```
+
+Execute all migration steps in sequence: init, create, run, check, and delete.
+
+This command initializes the stub workflow, generates and pushes the migration workflow, triggers it, waits for completion, verifies the results, and cleans up.
+
+**Options:**
+
+- `--branch string`: Branch to push the workflow to (default: "gh-secret-kit-migrate")
+- `--dst string` / `-d`: Destination repository (e.g., owner/repo) (required)
+- `--dst-env string`: Destination environment name (required)
+- `--dst-host string`: GitHub host for the destination (defaults to source repository host)
+- `--label string`: Label name for triggering the migration workflow (default: "gh-secret-kit-migrate")
+- `--overwrite`: Overwrite existing secrets at destination
+- `--rename strings`: Rename mapping in OLD\_NAME=NEW\_NAME format (repeatable)
+- `--runner-label string`: Runner label for the workflow (default: "gh-secret-kit-migrate")
+- `--secrets strings`: Specific secret names to migrate (comma-separated or repeated flag; defaults to all)
+- `--src string` / `-s`: Source repository (e.g., owner/repo; defaults to current repository)
+- `--src-env string`: Source environment name (required)
+- `--timeout string`: Timeout duration when waiting for workflow completion (e.g., 5m, 1h) (default: "10m")
+- `--unarchive`: Temporarily unarchive the repository if it is archived, then re-archive after completion
+- `--workflow-name string`: Name of the generated workflow file (default: "gh-secret-kit-migrate")
 
 #### migrate env check
 
@@ -69,6 +96,7 @@ Generate a GitHub Actions workflow that migrates environment secrets from the so
 - `--secrets strings`: Specific secret names to migrate (comma-separated or repeated flag; defaults to all)
 - `--src string` / `-s`: Source repository (e.g., owner/repo; defaults to current repository)
 - `--src-env string`: Source environment name
+- `--unarchive`: Temporarily unarchive the repository if it is archived
 - `--workflow-name string`: Name of the generated workflow file (default: "gh-secret-kit-migrate")
 
 #### migrate env delete
@@ -83,6 +111,7 @@ Close any open pull requests from the migration topic branch and then delete the
 
 - `--branch string`: Branch to delete (default: "gh-secret-kit-migrate")
 - `--src string` / `-s`: Source repository (e.g., owner/repo; defaults to current repository)
+- `--unarchive`: Temporarily unarchive the repository if it is archived
 - `--workflow-name string`: Name of the workflow file (default: "gh-secret-kit-migrate")
 
 #### migrate env init
@@ -98,6 +127,7 @@ Push a stub workflow file (with `[ci skip]` in the commit message) to a topic br
 - `--branch string`: Branch to push the stub workflow to (default: "gh-secret-kit-migrate")
 - `--label string`: Label name to create for triggering the migration workflow (default: "gh-secret-kit-migrate")
 - `--src string` / `-s`: Source repository (e.g., owner/repo; defaults to current repository)
+- `--unarchive`: Temporarily unarchive the repository if it is archived
 - `--workflow-name string`: Name of the generated workflow file (default: "gh-secret-kit-migrate")
 
 #### migrate env run
@@ -114,6 +144,7 @@ Trigger the migration workflow by removing and re-adding the trigger label on th
 - `--label string`: Label name that triggers the migration workflow (default: "gh-secret-kit-migrate")
 - `--src string` / `-s`: Source repository (e.g., owner/repo; defaults to current repository)
 - `--timeout string`: Timeout duration when waiting for workflow completion (e.g., 5m, 1h) (default: "10m")
+- `--unarchive`: Temporarily unarchive the repository if it is archived
 - `--wait` / `-w`: Wait for the workflow run to complete
 - `--workflow-name string`: Name of the workflow file (default: "gh-secret-kit-migrate")
 
@@ -135,7 +166,32 @@ When called without arguments, the current repository's owner is used as the org
 
 Migrate organization secrets between organizations.
 
-Each subcommand (`init`, `create`, `run`, `delete`, `check`) operates on organization-scoped secrets.
+Each subcommand (`all`, `init`, `create`, `run`, `delete`, `check`) operates on organization-scoped secrets.
+
+#### migrate org all
+
+```sh
+gh secret-kit migrate org all [flags]
+```
+
+Execute all migration steps in sequence: init, create, run, check, and delete.
+
+This command initializes the stub workflow, generates and pushes the migration workflow, triggers it, waits for completion, verifies the results, and cleans up.
+
+**Options:**
+
+- `--branch string`: Branch to push the workflow to (default: "gh-secret-kit-migrate")
+- `--dst string` / `-d`: Destination organization name (required)
+- `--dst-host string`: GitHub host for the destination (defaults to source repository host)
+- `--label string`: Label name for triggering the migration workflow (default: "gh-secret-kit-migrate")
+- `--overwrite`: Overwrite existing secrets at destination
+- `--rename strings`: Rename mapping in OLD\_NAME=NEW\_NAME format (repeatable)
+- `--runner-label string`: Runner label for the workflow (default: "gh-secret-kit-migrate")
+- `--secrets strings`: Specific secret names to migrate (comma-separated or repeated flag; defaults to all)
+- `--src string` / `-s`: Source repository (e.g., owner/repo; defaults to current repository)
+- `--timeout string`: Timeout duration when waiting for workflow completion (e.g., 5m, 1h) (default: "10m")
+- `--unarchive`: Temporarily unarchive the repository if it is archived, then re-archive after completion
+- `--workflow-name string`: Name of the generated workflow file (default: "gh-secret-kit-migrate")
 
 #### migrate org check
 
@@ -174,6 +230,7 @@ Generate a GitHub Actions workflow that migrates organization secrets from the s
 - `--runner-label string`: Runner label for the workflow (default: "self-hosted")
 - `--secrets strings`: Specific secret names to migrate (comma-separated or repeated flag; defaults to all)
 - `--src string` / `-s`: Source repository (e.g., owner/repo; defaults to current repository)
+- `--unarchive`: Temporarily unarchive the repository if it is archived
 - `--workflow-name string`: Name of the generated workflow file (default: "gh-secret-kit-migrate")
 
 #### migrate org delete
@@ -188,6 +245,7 @@ Close any open pull requests from the migration topic branch and then delete the
 
 - `--branch string`: Branch to delete (default: "gh-secret-kit-migrate")
 - `--src string` / `-s`: Source repository (e.g., owner/repo; defaults to current repository)
+- `--unarchive`: Temporarily unarchive the repository if it is archived
 - `--workflow-name string`: Name of the workflow file (default: "gh-secret-kit-migrate")
 
 #### migrate org init
@@ -203,6 +261,7 @@ Push a stub workflow file (with `[ci skip]` in the commit message) to a topic br
 - `--branch string`: Branch to push the stub workflow to (default: "gh-secret-kit-migrate")
 - `--label string`: Label name to create for triggering the migration workflow (default: "gh-secret-kit-migrate")
 - `--src string` / `-s`: Source repository (e.g., owner/repo; defaults to current repository)
+- `--unarchive`: Temporarily unarchive the repository if it is archived
 - `--workflow-name string`: Name of the generated workflow file (default: "gh-secret-kit-migrate")
 
 #### migrate org run
@@ -219,6 +278,7 @@ Trigger the migration workflow by removing and re-adding the trigger label on th
 - `--label string`: Label name that triggers the migration workflow (default: "gh-secret-kit-migrate")
 - `--src string` / `-s`: Source repository (e.g., owner/repo; defaults to current repository)
 - `--timeout string`: Timeout duration when waiting for workflow completion (e.g., 5m, 1h) (default: "10m")
+- `--unarchive`: Temporarily unarchive the repository if it is archived
 - `--wait` / `-w`: Wait for the workflow run to complete
 - `--workflow-name string`: Name of the workflow file (default: "gh-secret-kit-migrate")
 
@@ -226,7 +286,32 @@ Trigger the migration workflow by removing and re-adding the trigger label on th
 
 Migrate repository secrets between repositories.
 
-Each subcommand (`init`, `create`, `run`, `delete`, `check`) operates on repository-scoped secrets.
+Each subcommand (`all`, `init`, `create`, `run`, `delete`, `check`) operates on repository-scoped secrets.
+
+#### migrate repo all
+
+```sh
+gh secret-kit migrate repo all [flags]
+```
+
+Execute all migration steps in sequence: init, create, run, check, and delete.
+
+This command initializes the stub workflow, generates and pushes the migration workflow, triggers it, waits for completion, verifies the results, and cleans up.
+
+**Options:**
+
+- `--branch string`: Branch to push the workflow to (default: "gh-secret-kit-migrate")
+- `--dst string` / `-d`: Destination repository (e.g., owner/repo) (required)
+- `--dst-host string`: GitHub host for the destination (defaults to source repository host)
+- `--label string`: Label name for triggering the migration workflow (default: "gh-secret-kit-migrate")
+- `--overwrite`: Overwrite existing secrets at destination
+- `--rename strings`: Rename mapping in OLD\_NAME=NEW\_NAME format (repeatable)
+- `--runner-label string`: Runner label for the workflow (default: "gh-secret-kit-migrate")
+- `--secrets strings`: Specific secret names to migrate (comma-separated or repeated flag; defaults to all)
+- `--src string` / `-s`: Source repository (e.g., owner/repo; defaults to current repository)
+- `--timeout string`: Timeout duration when waiting for workflow completion (e.g., 5m, 1h) (default: "10m")
+- `--unarchive`: Temporarily unarchive the repository if it is archived, then re-archive after completion
+- `--workflow-name string`: Name of the generated workflow file (default: "gh-secret-kit-migrate")
 
 #### migrate repo check
 
@@ -265,6 +350,7 @@ Generate a GitHub Actions workflow that migrates repository secrets from the sou
 - `--runner-label string`: Runner label for the workflow (default: "self-hosted")
 - `--secrets strings`: Specific secret names to migrate (comma-separated or repeated flag; defaults to all)
 - `--src string` / `-s`: Source repository (e.g., owner/repo; defaults to current repository)
+- `--unarchive`: Temporarily unarchive the repository if it is archived
 - `--workflow-name string`: Name of the generated workflow file (default: "gh-secret-kit-migrate")
 
 #### migrate repo delete
@@ -279,6 +365,7 @@ Close any open pull requests from the migration topic branch and then delete the
 
 - `--branch string`: Branch to delete (default: "gh-secret-kit-migrate")
 - `--src string` / `-s`: Source repository (e.g., owner/repo; defaults to current repository)
+- `--unarchive`: Temporarily unarchive the repository if it is archived
 - `--workflow-name string`: Name of the workflow file (default: "gh-secret-kit-migrate")
 
 #### migrate repo init
@@ -294,6 +381,7 @@ Push a stub workflow file (with `[ci skip]` in the commit message) to a topic br
 - `--branch string`: Branch to push the stub workflow to (default: "gh-secret-kit-migrate")
 - `--label string`: Label name to create for triggering the migration workflow (default: "gh-secret-kit-migrate")
 - `--src string` / `-s`: Source repository (e.g., owner/repo; defaults to current repository)
+- `--unarchive`: Temporarily unarchive the repository if it is archived
 - `--workflow-name string`: Name of the generated workflow file (default: "gh-secret-kit-migrate")
 
 #### migrate repo run
@@ -310,6 +398,7 @@ Trigger the migration workflow by removing and re-adding the trigger label on th
 - `--label string`: Label name that triggers the migration workflow (default: "gh-secret-kit-migrate")
 - `--src string` / `-s`: Source repository (e.g., owner/repo; defaults to current repository)
 - `--timeout string`: Timeout duration when waiting for workflow completion (e.g., 5m, 1h) (default: "10m")
+- `--unarchive`: Temporarily unarchive the repository if it is archived
 - `--wait` / `-w`: Wait for the workflow run to complete
 - `--workflow-name string`: Name of the workflow file (default: "gh-secret-kit-migrate")
 

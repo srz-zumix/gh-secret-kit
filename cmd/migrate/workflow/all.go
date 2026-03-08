@@ -4,16 +4,36 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/srz-zumix/go-gh-extension/pkg/gh"
 	"github.com/srz-zumix/go-gh-extension/pkg/logger"
+	"github.com/srz-zumix/go-gh-extension/pkg/parser"
 )
 
 // RunAll executes the full migration pipeline: init → create → run → check → delete.
 func RunAll(ctx context.Context, config *AllConfig) error {
+	// Handle unarchive at the top level to avoid repeated archive/unarchive cycles
+	sourceRepo, err := parser.Repository(parser.RepositoryInput(config.Source))
+	if err != nil {
+		return fmt.Errorf("failed to parse source repository: %w", err)
+	}
+	client, err := gh.NewGitHubClientWithRepo(sourceRepo)
+	if err != nil {
+		return fmt.Errorf("failed to create GitHub client: %w", err)
+	}
+	cleanup, err := handleUnarchiveWithCheck(ctx, client, sourceRepo, config.Unarchive)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	// Sub-configs do not need to handle unarchive since we handle it at this level
 	initConfig := &InitConfig{
-		Source:       config.Source,
-		WorkflowName: config.WorkflowName,
-		Branch:       config.Branch,
-		Label:        config.Label,
+		Source:           config.Source,
+		WorkflowName:     config.WorkflowName,
+		Branch:           config.Branch,
+		Label:            config.Label,
+		Unarchive:        false,
+		SkipArchiveCheck: true,
 	}
 	createConfig := &CreateConfig{
 		Source:                 config.Source,
@@ -30,14 +50,18 @@ func RunAll(ctx context.Context, config *AllConfig) error {
 		WorkflowName:           config.WorkflowName,
 		Branch:                 config.Branch,
 		Label:                  config.Label,
+		Unarchive:              false,
+		SkipArchiveCheck:       true,
 	}
 	runConfig := &RunConfig{
-		Source:       config.Source,
-		WorkflowName: config.WorkflowName,
-		Branch:       config.Branch,
-		Label:        config.Label,
-		Wait:         true,
-		Timeout:      config.Timeout,
+		Source:           config.Source,
+		WorkflowName:     config.WorkflowName,
+		Branch:           config.Branch,
+		Label:            config.Label,
+		Wait:             true,
+		Timeout:          config.Timeout,
+		Unarchive:        false,
+		SkipArchiveCheck: true,
 	}
 	checkConfig := &CheckConfig{
 		Source:           config.Source,
@@ -51,9 +75,11 @@ func RunAll(ctx context.Context, config *AllConfig) error {
 		Scope:            config.Scope,
 	}
 	deleteConfig := &DeleteConfig{
-		Source:       config.Source,
-		WorkflowName: config.WorkflowName,
-		Branch:       config.Branch,
+		Source:           config.Source,
+		WorkflowName:     config.WorkflowName,
+		Branch:           config.Branch,
+		Unarchive:        false,
+		SkipArchiveCheck: true,
 	}
 
 	// Step 1: init

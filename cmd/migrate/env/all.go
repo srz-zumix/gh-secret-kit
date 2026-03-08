@@ -42,6 +42,7 @@ workflow, triggers it, waits for completion, verifies the results, and cleans up
 	f.StringVar(&config.Branch, "branch", "gh-secret-kit-migrate", "Branch to push the workflow to")
 	f.StringVar(&config.Label, "label", "gh-secret-kit-migrate", "Label name for triggering the migration workflow")
 	f.StringVar(&config.Timeout, "timeout", "10m", "Timeout duration when waiting for workflow completion (e.g., 5m, 1h)")
+	f.BoolVar(&config.Unarchive, "unarchive", false, "Temporarily unarchive the repository if it is archived, then re-archive after completion")
 
 	_ = cmd.MarkFlagRequired("dst")
 	_ = cmd.MarkFlagRequired("src-env")

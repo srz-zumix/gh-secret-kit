@@ -40,6 +40,7 @@ The workflow is pushed to the source repository on a topic branch.`,
 	f.StringVar(&config.WorkflowName, "workflow-name", "gh-secret-kit-migrate", "Name of the generated workflow file")
 	f.StringVar(&config.Branch, "branch", "gh-secret-kit-migrate", "Branch to push the workflow to")
 	f.StringVar(&config.Label, "label", "gh-secret-kit-migrate", "Label name for triggering the migration workflow")
+	f.BoolVar(&config.Unarchive, "unarchive", false, "Temporarily unarchive the repository if it is archived, then re-archive after completion")
 
 	_ = cmd.MarkFlagRequired("dst")
 	_ = cmd.MarkFlagRequired("src-env")

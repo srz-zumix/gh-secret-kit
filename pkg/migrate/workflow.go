@@ -1,6 +1,7 @@
 package migrate
 
 import (
+	"bytes"
 	"encoding/base64"
 	"fmt"
 	"strings"
@@ -140,15 +141,20 @@ func GenerateWorkflowYAML(config WorkflowConfig) (string, error) {
 
 	workflow.Jobs["migrate-secrets"] = job
 
-	// Marshal to YAML
-	yamlBytes, err := yaml.Marshal(&workflow)
-	if err != nil {
+	// Marshal to YAML with 2-space indent
+	var buf bytes.Buffer
+	encoder := yaml.NewEncoder(&buf)
+	encoder.SetIndent(2)
+	if err := encoder.Encode(&workflow); err != nil {
 		return "", fmt.Errorf("failed to marshal workflow to YAML: %w", err)
+	}
+	if err := encoder.Close(); err != nil {
+		return "", fmt.Errorf("failed to close YAML encoder: %w", err)
 	}
 
 	// "on" is a YAML reserved keyword (boolean true), so the marshaler quotes it.
 	// Replace the quoted key with the unquoted form for valid GitHub Actions syntax.
-	result := strings.Replace(string(yamlBytes), "\"on\":", "on:", 1)
+	result := strings.Replace(buf.String(), "\"on\":", "on:", 1)
 
 	return result, nil
 }
@@ -160,15 +166,15 @@ func generateSecretMigrationScript(config WorkflowConfig, srcName, destName stri
 	// Determine gh secret subcommand flags based on scope
 	// repo scope: gh secret set NAME -R owner/repo
 	// org scope:  gh secret set NAME --org org-name
-	scopeFlag := "-R $DESTINATION"
-	listScopeFlag := "-R $DESTINATION"
+	scopeFlag := "-R \"${DESTINATION}\""
+	listScopeFlag := "-R \"${DESTINATION}\""
 	if config.Scope == SecretScopeOrg {
-		scopeFlag = "--org $DESTINATION"
-		listScopeFlag = "--org $DESTINATION"
+		scopeFlag = "--org \"${DESTINATION}\""
+		listScopeFlag = "--org \"${DESTINATION}\""
 	}
 
 	// Check if secret value is empty
-	script.WriteString("if [ -z \"$SECRET_VALUE\" ]; then\n")
+	script.WriteString("if [ -z \"${SECRET_VALUE}\" ]; then\n")
 	fmt.Fprintf(&script, "  echo \"Secret %s is empty or does not exist, skipping...\"\n", srcName)
 	script.WriteString("  exit 0\n")
 	script.WriteString("fi\n\n")
@@ -177,7 +183,7 @@ func generateSecretMigrationScript(config WorkflowConfig, srcName, destName stri
 		// Check if destination secret already exists
 		script.WriteString("# Check if secret already exists at destination\n")
 		if config.DestinationEnv != "" {
-			fmt.Fprintf(&script, "if gh secret list --env $DEST_ENV -R $DESTINATION | grep -q \"^%s\"; then\n", destName)
+			fmt.Fprintf(&script, "if gh secret list --env \"${DEST_ENV}\" -R \"${DESTINATION}\" | grep -q \"^%s\"; then\n", destName)
 		} else {
 			fmt.Fprintf(&script, "if gh secret list %s | grep -q \"^%s\"; then\n", listScopeFlag, destName)
 		}
@@ -188,9 +194,9 @@ func generateSecretMigrationScript(config WorkflowConfig, srcName, destName stri
 
 	// Set the secret at destination
 	fmt.Fprintf(&script, "# Set secret %s at destination\n", destName)
-	script.WriteString("echo \"$SECRET_VALUE\" | \\\n")
+	script.WriteString("echo \"${SECRET_VALUE}\" | \\\n")
 	if config.DestinationEnv != "" {
-		fmt.Fprintf(&script, "  gh secret set %s --env $DEST_ENV -R $DESTINATION\n", destName)
+		fmt.Fprintf(&script, "  gh secret set %s --env \"${DEST_ENV}\" -R \"${DESTINATION}\"\n", destName)
 	} else {
 		fmt.Fprintf(&script, "  gh secret set %s %s\n", destName, scopeFlag)
 	}

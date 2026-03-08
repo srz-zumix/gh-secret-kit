@@ -30,6 +30,23 @@ func RunCreate(ctx context.Context, config *CreateConfig) error {
 		return fmt.Errorf("failed to create GitHub client: %w", err)
 	}
 
+	// Check if the repository is archived and handle unarchive if requested
+	repoInfo, err := gh.GetRepository(ctx, client, sourceRepo)
+	if err != nil {
+		return fmt.Errorf("failed to get repository: %w", err)
+	}
+	cleanup := func() {}
+	if !config.SkipArchiveCheck && repoInfo.GetArchived() {
+		if !config.Unarchive {
+			return fmt.Errorf("repository %s/%s is archived; use --unarchive to temporarily unarchive it", sourceRepo.Owner, sourceRepo.Name)
+		}
+		cleanup, err = handleUnarchive(ctx, client, sourceRepo)
+		if err != nil {
+			return err
+		}
+	}
+	defer cleanup()
+
 	scope := config.Scope
 	logger.Info(fmt.Sprintf("Secret scope: %s (destination: %s)", scope, config.Destination))
 
@@ -99,12 +116,7 @@ func RunCreate(ctx context.Context, config *CreateConfig) error {
 	// Determine topic branch
 	branch := config.Branch
 
-	// Get default branch to create topic branch from
-	logger.Debug("Fetching default branch...")
-	repoInfo, err := gh.GetRepository(ctx, client, sourceRepo)
-	if err != nil {
-		return fmt.Errorf("failed to get repository to determine default branch: %w", err)
-	}
+	// Get default branch from already-fetched repository info
 	defaultBranch := repoInfo.GetDefaultBranch()
 	logger.Debug(fmt.Sprintf("Default branch: %s, Topic branch: %s", defaultBranch, branch))
 

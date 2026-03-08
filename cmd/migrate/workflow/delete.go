@@ -29,6 +29,7 @@ related resources from the source repository.`,
 	f.StringVarP(&config.Source, "src", "s", "", "Source repository (e.g., owner/repo; defaults to current repository)")
 	f.StringVar(&config.WorkflowName, "workflow-name", "gh-secret-kit-migrate", "Name of the workflow file")
 	f.StringVar(&config.Branch, "branch", "gh-secret-kit-migrate", "Branch to delete")
+	f.BoolVar(&config.Unarchive, "unarchive", false, "Temporarily unarchive the repository if it is archived, then re-archive after completion")
 
 	return cmd
 }
@@ -47,6 +48,15 @@ func RunDelete(ctx context.Context, config *DeleteConfig) error {
 	client, err := gh.NewGitHubClientWithRepo(sourceRepo)
 	if err != nil {
 		return fmt.Errorf("failed to create GitHub client: %w", err)
+	}
+
+	// Check if the repository is archived and handle unarchive if requested
+	if !config.SkipArchiveCheck {
+		cleanup, err := handleUnarchiveWithCheck(ctx, client, sourceRepo, config.Unarchive)
+		if err != nil {
+			return err
+		}
+		defer cleanup()
 	}
 
 	branch := config.Branch

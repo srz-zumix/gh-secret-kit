@@ -34,6 +34,7 @@ The branch can be cleaned up later with "delete".`,
 	f.StringVar(&config.WorkflowName, "workflow-name", "gh-secret-kit-migrate", "Name of the generated workflow file")
 	f.StringVar(&config.Branch, "branch", "gh-secret-kit-migrate", "Branch to push the stub workflow to")
 	f.StringVar(&config.Label, "label", "gh-secret-kit-migrate", "Label name to create for triggering the migration workflow")
+	f.BoolVar(&config.Unarchive, "unarchive", false, "Temporarily unarchive the repository if it is archived, then re-archive after completion")
 
 	return cmd
 }
@@ -61,6 +62,20 @@ func RunInit(ctx context.Context, config *InitConfig) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("failed to get repository: %w", err)
 	}
+
+	// Check if the repository is archived and handle unarchive if requested
+	cleanup := func() {}
+	if !config.SkipArchiveCheck && repo.GetArchived() {
+		if !config.Unarchive {
+			return 0, fmt.Errorf("repository %s/%s is archived; use --unarchive to temporarily unarchive it", sourceRepo.Owner, sourceRepo.Name)
+		}
+		cleanup, err = handleUnarchive(ctx, client, sourceRepo)
+		if err != nil {
+			return 0, err
+		}
+	}
+	defer cleanup()
+
 	defaultBranch := repo.GetDefaultBranch()
 	logger.Debug(fmt.Sprintf("Default branch: %s", defaultBranch))
 
@@ -81,44 +96,42 @@ func RunInit(ctx context.Context, config *InitConfig) (int, error) {
 	}
 	headSHA := defaultBranchInfo.GetCommit().GetSHA()
 
-	// Create (or recreate) topic branch from the latest default branch HEAD.
-	// If the branch already exists it may be stale or conflict with merged
-	// changes, so we close any associated PRs and recreate it.
-	_, err = gh.GetBranch(ctx, client, sourceRepo, branch)
+	// Check for existing open PR first to decide whether to reuse branch or recreate
+	existingPRs, err := gh.ListPullRequests(ctx, client, sourceRepo,
+		&gh.ListPullRequestsOptionHead{Head: fmt.Sprintf("%s:%s", sourceRepo.Owner, branch)},
+		gh.ListPullRequestsOptionStateOpen(),
+	)
 	if err != nil {
-		logger.Info(fmt.Sprintf("Creating topic branch %s from %s...", branch, defaultBranch))
-		_, err = gh.CreateBranch(ctx, client, sourceRepo, branch, headSHA)
-		if err != nil {
-			return 0, fmt.Errorf("failed to create topic branch %s: %w", branch, err)
-		}
+		return 0, fmt.Errorf("failed to check existing pull requests: %w", err)
+	}
+
+	var prNumber int
+	if len(existingPRs) > 0 {
+		// Reuse existing PR and branch - don't recreate to avoid closing the PR
+		prNumber = existingPRs[0].GetNumber()
+		logger.Info(fmt.Sprintf("Reusing existing PR #%d and topic branch %s", prNumber, branch))
 	} else {
-		logger.Info(fmt.Sprintf("Topic branch %s already exists, recreating from latest %s HEAD...", branch, defaultBranch))
-
-		// Close any open PRs from the stale topic branch
-		openPRs, lerr := gh.ListPullRequests(ctx, client, sourceRepo,
-			&gh.ListPullRequestsOptionHead{Head: fmt.Sprintf("%s:%s", sourceRepo.Owner, branch)},
-			gh.ListPullRequestsOptionStateOpen(),
-		)
-		if lerr != nil {
-			return 0, fmt.Errorf("failed to list pull requests for branch %s: %w", branch, lerr)
-		}
-		for _, pr := range openPRs {
-			prNumber := pr.GetNumber()
-			logger.Debug(fmt.Sprintf("Closing stale PR #%d...", prNumber))
-			if _, cerr := gh.ClosePullRequest(ctx, client, sourceRepo, prNumber); cerr != nil {
-				return 0, fmt.Errorf("failed to close PR #%d: %w", prNumber, cerr)
+		// No open PR exists - create or recreate branch
+		_, branchErr := gh.GetBranch(ctx, client, sourceRepo, branch)
+		if branchErr != nil {
+			// Branch doesn't exist, create it
+			logger.Info(fmt.Sprintf("Creating topic branch %s from %s...", branch, defaultBranch))
+			_, err = gh.CreateBranch(ctx, client, sourceRepo, branch, headSHA)
+			if err != nil {
+				return 0, fmt.Errorf("failed to create topic branch %s: %w", branch, err)
 			}
+		} else {
+			// Branch exists but no open PR - delete and recreate from latest HEAD
+			logger.Info(fmt.Sprintf("Topic branch %s exists but no open PR found, recreating from latest %s HEAD...", branch, defaultBranch))
+			if derr := gh.DeleteBranch(ctx, client, sourceRepo, branch); derr != nil {
+				return 0, fmt.Errorf("failed to delete stale topic branch %s: %w", branch, derr)
+			}
+			_, err = gh.CreateBranch(ctx, client, sourceRepo, branch, headSHA)
+			if err != nil {
+				return 0, fmt.Errorf("failed to recreate topic branch %s: %w", branch, err)
+			}
+			logger.Info(fmt.Sprintf("Topic branch %s recreated from %s", branch, defaultBranch))
 		}
-
-		// Delete and recreate the branch from latest HEAD
-		if derr := gh.DeleteBranch(ctx, client, sourceRepo, branch); derr != nil {
-			return 0, fmt.Errorf("failed to delete stale topic branch %s: %w", branch, derr)
-		}
-		_, err = gh.CreateBranch(ctx, client, sourceRepo, branch, headSHA)
-		if err != nil {
-			return 0, fmt.Errorf("failed to recreate topic branch %s: %w", branch, err)
-		}
-		logger.Info(fmt.Sprintf("Topic branch %s recreated from %s", branch, defaultBranch))
 	}
 
 	// Push stub workflow to topic branch
@@ -164,20 +177,8 @@ func RunInit(ctx context.Context, config *InitConfig) (int, error) {
 		logger.Debug(fmt.Sprintf("Trigger label %s already exists", labelName))
 	}
 
-	// Check for an existing open PR from branch to defaultBranch
-	var prNumber int
-	existingPRs, err := gh.ListPullRequests(ctx, client, sourceRepo,
-		&gh.ListPullRequestsOptionHead{Head: fmt.Sprintf("%s:%s", sourceRepo.Owner, branch)},
-		gh.ListPullRequestsOptionStateOpen(),
-	)
-	if err != nil {
-		return 0, fmt.Errorf("failed to check existing pull requests: %w", err)
-	}
-
-	if len(existingPRs) > 0 {
-		prNumber = existingPRs[0].GetNumber()
-		logger.Debug(fmt.Sprintf("Reusing existing PR #%d", prNumber))
-	} else {
+	// Create PR if we don't have one yet
+	if prNumber == 0 {
 		// Create PR: branch → defaultBranch
 		logger.Info(fmt.Sprintf("Creating PR: %s → %s...", branch, defaultBranch))
 		title := fmt.Sprintf("[gh-secret-kit] Register stub workflow: %s", config.WorkflowName)
