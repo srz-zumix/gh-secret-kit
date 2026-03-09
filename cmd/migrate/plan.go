@@ -21,10 +21,10 @@ type planConfig struct {
 
 // PlanResult represents the migration plan result
 type PlanResult struct {
-	RunnerSetup   string
-	RepoMigrates  []string
-	EnvMigrates   []string
-	OrgMigrate    string
+	RunnerSetup    string
+	RepoMigrates   []string
+	EnvMigrates    []string
+	OrgMigrate     string
 	RunnerTeardown string
 }
 
@@ -156,7 +156,7 @@ func runPlan(ctx context.Context, config *planConfig) error {
 		}
 
 		repoName := srcRepo.GetName()
-		srcRepoRef, err := parser.Repository(parser.RepositoryInput(srcRepo.GetFullName()))
+		srcRepoRef, err := gh.GetRepositoryFromGitHubRepository(srcRepo)
 		if err != nil {
 			logger.Warn(fmt.Sprintf("Skipping %s: failed to parse repository: %v", srcRepo.GetFullName(), err))
 			continue
