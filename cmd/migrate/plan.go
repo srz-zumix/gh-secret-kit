@@ -7,12 +7,11 @@ import (
 
 	"github.com/cli/go-gh/v2/pkg/repository"
 	"github.com/spf13/cobra"
+	"github.com/srz-zumix/gh-secret-kit/cmd/migrate/types"
 	"github.com/srz-zumix/go-gh-extension/pkg/gh"
 	"github.com/srz-zumix/go-gh-extension/pkg/logger"
 	"github.com/srz-zumix/go-gh-extension/pkg/parser"
 )
-
-const defaultRunnerLabel = "gh-secret-kit-migrate"
 
 type planConfig struct {
 	Source      string
@@ -63,7 +62,7 @@ Arguments:
 
 	f := cmd.Flags()
 	f.StringVarP(&config.Destination, "dst", "d", "", "Destination organization (e.g., org or HOST/org)")
-	f.StringVar(&config.RunnerLabel, "runner-label", defaultRunnerLabel, "Runner label for the workflow")
+	f.StringVar(&config.RunnerLabel, "runner-label", types.DefaultRunnerLabel, "Runner label for the workflow")
 
 	_ = cmd.MarkFlagRequired("dst")
 
@@ -121,7 +120,7 @@ func runPlan(ctx context.Context, config *planConfig) error {
 	}
 
 	runnerCmd := fmt.Sprintf("gh secret-kit migrate runner %s", orgArg)
-	if config.RunnerLabel != "" && config.RunnerLabel != defaultRunnerLabel {
+	if config.RunnerLabel != "" && config.RunnerLabel != types.DefaultRunnerLabel {
 		result.RunnerSetup = fmt.Sprintf("%s setup --runner-label %s", runnerCmd, config.RunnerLabel)
 		result.RunnerTeardown = fmt.Sprintf("%s teardown --runner-label %s", runnerCmd, config.RunnerLabel)
 	} else {
@@ -244,7 +243,7 @@ func buildRepoMigrateCmd(src, dst repository.Repository, config *planConfig) str
 	if dst.Host != "" && dst.Host != src.Host {
 		parts = append(parts, fmt.Sprintf("--dst-host %s", dst.Host))
 	}
-	if config.RunnerLabel != "" && config.RunnerLabel != defaultRunnerLabel {
+	if config.RunnerLabel != "" && config.RunnerLabel != types.DefaultRunnerLabel {
 		parts = append(parts, fmt.Sprintf("--runner-label %s", config.RunnerLabel))
 	}
 	return strings.Join(parts, " ")
@@ -260,7 +259,7 @@ func buildEnvMigrateCmd(src, dst repository.Repository, envName string, config *
 	if dst.Host != "" && dst.Host != src.Host {
 		parts = append(parts, fmt.Sprintf("--dst-host %s", dst.Host))
 	}
-	if config.RunnerLabel != "" && config.RunnerLabel != defaultRunnerLabel {
+	if config.RunnerLabel != "" && config.RunnerLabel != types.DefaultRunnerLabel {
 		parts = append(parts, fmt.Sprintf("--runner-label %s", config.RunnerLabel))
 	}
 	return strings.Join(parts, " ")
@@ -274,7 +273,7 @@ func buildOrgMigrateCmd(srcRepo repository.Repository, dstOrg string, dstHost st
 	if dstHost != "" && dstHost != srcRepo.Host {
 		parts = append(parts, fmt.Sprintf("--dst-host %s", dstHost))
 	}
-	if config.RunnerLabel != "" && config.RunnerLabel != defaultRunnerLabel {
+	if config.RunnerLabel != "" && config.RunnerLabel != types.DefaultRunnerLabel {
 		parts = append(parts, fmt.Sprintf("--runner-label %s", config.RunnerLabel))
 	}
 	return strings.Join(parts, " ")

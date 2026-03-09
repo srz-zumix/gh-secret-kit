@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/spf13/cobra"
+	"github.com/srz-zumix/gh-secret-kit/cmd/migrate/types"
 	"github.com/srz-zumix/gh-secret-kit/cmd/migrate/workflow"
 	"github.com/srz-zumix/gh-secret-kit/pkg/migrate"
 )
@@ -34,11 +35,11 @@ workflow, triggers it, waits for completion, verifies the results, and cleans up
 	f.BoolVar(&config.Overwrite, "overwrite", false, "Overwrite existing secrets at destination")
 	f.StringVar(&config.DestinationTokenSecret, "dst-token", "", "Secret variable name that holds the PAT for the destination (e.g. DST_PAT; referenced as ${{ secrets.<name> }} in the workflow)")
 	f.StringVar(&config.DestinationHost, "dst-host", "", "GitHub host for the destination (defaults to source repository host)")
-	f.StringVar(&config.RunnerLabel, "runner-label", "gh-secret-kit-migrate", "Runner label for the workflow")
+	f.StringVar(&config.RunnerLabel, "runner-label", types.DefaultRunnerLabel, "Runner label for the workflow")
 	_ = cmd.Flags().MarkHidden("dst-token")
-	f.StringVar(&config.WorkflowName, "workflow-name", "gh-secret-kit-migrate", "Name of the generated workflow file")
-	f.StringVar(&config.Branch, "branch", "gh-secret-kit-migrate", "Branch to push the workflow to")
-	f.StringVar(&config.Label, "label", "gh-secret-kit-migrate", "Label name for triggering the migration workflow")
+	f.StringVar(&config.WorkflowName, "workflow-name", types.DefaultWorkflowName, "Name of the generated workflow file")
+	f.StringVar(&config.Branch, "branch", types.DefaultBranch, "Branch to push the workflow to")
+	f.StringVar(&config.Label, "label", types.DefaultLabel, "Label name for triggering the migration workflow")
 	f.StringVar(&config.Timeout, "timeout", "10m", "Timeout duration when waiting for workflow completion (e.g., 5m, 1h)")
 	f.BoolVar(&config.Unarchive, "unarchive", false, "Temporarily unarchive the repository if it is archived, then re-archive after completion")
 

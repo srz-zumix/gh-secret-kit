@@ -40,7 +40,7 @@ Arguments:
 	f.StringVarP(&teardownRepo, "repo", "R", "", "Source repository (owner/repo); when omitted uses the first argument as org or falls back to the current repository")
 
 	// Runner-specific flags
-	f.StringVar(&teardownRunnerOpts.RunnerLabel, "runner-label", "gh-secret-kit-migrate", "Label of the runner to tear down")
+	f.StringVar(&teardownRunnerOpts.RunnerLabel, "runner-label", types.DefaultRunnerLabel, "Label of the runner to tear down")
 
 	return cmd
 }
