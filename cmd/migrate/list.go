@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+	"github.com/srz-zumix/gh-secret-kit/pkg/migrate"
 	"github.com/srz-zumix/go-gh-extension/pkg/gh"
 	"github.com/srz-zumix/go-gh-extension/pkg/logger"
 	"github.com/srz-zumix/go-gh-extension/pkg/parser"
@@ -60,52 +61,16 @@ func runMigrateList(cmd *cobra.Command, args []string) error {
 }
 
 func runMigrateListOrg(ctx context.Context, source string) error {
-	ownerRepo, err := parser.Repository(parser.RepositoryOwnerWithHost(source))
+	oc, err := migrate.ParseOrg(source)
 	if err != nil {
-		return fmt.Errorf("failed to parse organization: %w", err)
+		return err
 	}
 
-	client, err := gh.NewGitHubClientWithRepo(ownerRepo)
+	logger.Debug(fmt.Sprintf("Listing repositories for owner: %s", oc.OwnerRepo.Owner))
+
+	results, err := migrate.ScanOrgRepos(ctx, oc)
 	if err != nil {
-		return fmt.Errorf("failed to create GitHub client: %w", err)
-	}
-
-	logger.Debug(fmt.Sprintf("Listing repositories for owner: %s", ownerRepo.Owner))
-
-	repos, err := gh.ListOwnerRepositories(ctx, client, ownerRepo.Owner)
-	if err != nil {
-		return fmt.Errorf("failed to list repositories for %s: %w", ownerRepo.Owner, err)
-	}
-
-	logger.Debug(fmt.Sprintf("Found %d repositories total, scanning for secrets...", len(repos)))
-
-	var results []gh.RepoWithSecrets
-	for _, repo := range repos {
-		if repo.GetFullName() == "" {
-			continue
-		}
-		repoRef, err := parser.Repository(parser.RepositoryInput(repo.GetFullName()))
-		if err != nil {
-			logger.Warn(fmt.Sprintf("Skipping %s: failed to parse repository: %v", repo.GetFullName(), err))
-			continue
-		}
-		secrets, err := gh.ListRepoSecrets(ctx, client, repoRef)
-		if err != nil {
-			logger.Warn(fmt.Sprintf("Skipping %s: failed to list secrets: %v", repo.GetFullName(), err))
-			continue
-		}
-
-		envSecrets, err := gh.CollectEnvSecrets(ctx, client, repo)
-		if err != nil {
-			logger.Warn(fmt.Sprintf("Skipping environments for %s: %v", repo.GetFullName(), err))
-		}
-		if len(secrets) > 0 || len(envSecrets) > 0 {
-			results = append(results, gh.RepoWithSecrets{
-				Repository: repo,
-				Secrets:    secrets,
-				EnvSecrets: envSecrets,
-			})
-		}
+		return err
 	}
 
 	renderResults(results)
