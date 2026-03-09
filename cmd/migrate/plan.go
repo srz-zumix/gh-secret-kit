@@ -119,13 +119,23 @@ func runPlan(ctx context.Context, config *planConfig) error {
 		orgArg = fmt.Sprintf("%s/%s", srcOwnerRepo.Host, srcOrg)
 	}
 
-	runnerCmd := fmt.Sprintf("gh secret-kit migrate runner %s", shellQuote(orgArg))
+	runnerCmd := "gh secret-kit migrate runner"
 	if config.RunnerLabel != "" && config.RunnerLabel != types.DefaultRunnerLabel {
-		result.RunnerSetup = fmt.Sprintf("%s setup --runner-label %s", runnerCmd, shellQuote(config.RunnerLabel))
-		result.RunnerTeardown = fmt.Sprintf("%s teardown --runner-label %s", runnerCmd, shellQuote(config.RunnerLabel))
+		if orgArg != "" {
+			result.RunnerSetup = fmt.Sprintf("%s setup --runner-label %s %s", runnerCmd, shellQuote(config.RunnerLabel), shellQuote(orgArg))
+			result.RunnerTeardown = fmt.Sprintf("%s teardown --runner-label %s %s", runnerCmd, shellQuote(config.RunnerLabel), shellQuote(orgArg))
+		} else {
+			result.RunnerSetup = fmt.Sprintf("%s setup --runner-label %s", runnerCmd, shellQuote(config.RunnerLabel))
+			result.RunnerTeardown = fmt.Sprintf("%s teardown --runner-label %s", runnerCmd, shellQuote(config.RunnerLabel))
+		}
 	} else {
-		result.RunnerSetup = fmt.Sprintf("%s setup", runnerCmd)
-		result.RunnerTeardown = fmt.Sprintf("%s teardown", runnerCmd)
+		if orgArg != "" {
+			result.RunnerSetup = fmt.Sprintf("%s setup %s", runnerCmd, shellQuote(orgArg))
+			result.RunnerTeardown = fmt.Sprintf("%s teardown %s", runnerCmd, shellQuote(orgArg))
+		} else {
+			result.RunnerSetup = fmt.Sprintf("%s setup", runnerCmd)
+			result.RunnerTeardown = fmt.Sprintf("%s teardown", runnerCmd)
+		}
 	}
 	// Try to identify the current repository as the preferred -s for "migrate org all".
 	// If the current repo belongs to srcOrg and has a matching destination repo, it is
