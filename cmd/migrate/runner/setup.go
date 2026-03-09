@@ -49,7 +49,7 @@ Arguments:
 	f.StringVarP(&setupRepo, "repo", "R", "", "Source repository (owner/repo); when omitted uses the first argument as org or falls back to the current repository")
 
 	// Runner-specific flags
-	f.StringVar(&setupRunnerOpts.RunnerLabel, "runner-label", "gh-secret-kit-migrate", "Custom label for the runner")
+	f.StringVar(&setupRunnerOpts.RunnerLabel, "runner-label", types.DefaultRunnerLabel, "Custom label for the runner")
 
 	return cmd
 }

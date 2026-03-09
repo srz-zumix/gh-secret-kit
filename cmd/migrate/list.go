@@ -95,7 +95,7 @@ func runMigrateListOrg(ctx context.Context, source string) error {
 			continue
 		}
 
-		envSecrets, err := gh.CollectEnvSecrets(ctx, client, repoRef, int(repo.GetID()))
+		envSecrets, err := gh.CollectEnvSecrets(ctx, client, repo)
 		if err != nil {
 			logger.Warn(fmt.Sprintf("Skipping environments for %s: %v", repo.GetFullName(), err))
 		}
@@ -133,7 +133,7 @@ func runMigrateListRepo(ctx context.Context, source string) error {
 		return fmt.Errorf("failed to list secrets for %s/%s: %w", repoRef.Owner, repoRef.Name, err)
 	}
 
-	envSecrets, err := gh.CollectEnvSecrets(ctx, client, repoRef, int(repoInfo.GetID()))
+	envSecrets, err := gh.CollectEnvSecrets(ctx, client, repoInfo)
 	if err != nil {
 		logger.Warn(fmt.Sprintf("Skipping environments for %s/%s: %v", repoRef.Owner, repoRef.Name, err))
 	}

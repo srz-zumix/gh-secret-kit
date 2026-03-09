@@ -1,5 +1,13 @@
 package types
 
+// Default values for each flag.
+const (
+	DefaultRunnerLabel  = "gh-secret-kit-migrate"
+	DefaultWorkflowName = "gh-secret-kit-migrate"
+	DefaultBranch       = "gh-secret-kit-migrate"
+	DefaultLabel        = "gh-secret-kit-migrate"
+)
+
 // CommonOptions holds common options for migrate commands
 type CommonOptions struct {
 	Source                 string

@@ -7,6 +7,7 @@ import (
 
 	"github.com/cli/go-gh/v2/pkg/repository"
 	"github.com/spf13/cobra"
+	"github.com/srz-zumix/gh-secret-kit/cmd/migrate/types"
 	"github.com/srz-zumix/go-gh-extension/pkg/gh"
 	"github.com/srz-zumix/go-gh-extension/pkg/logger"
 	"github.com/srz-zumix/go-gh-extension/pkg/parser"
@@ -28,9 +29,9 @@ on the open PR. Optionally wait for the workflow run to complete.`,
 
 	f := cmd.Flags()
 	f.StringVarP(&config.Source, "src", "s", "", "Source repository (e.g., owner/repo; defaults to current repository)")
-	f.StringVar(&config.WorkflowName, "workflow-name", "gh-secret-kit-migrate", "Name of the workflow file")
-	f.StringVar(&config.Branch, "branch", "gh-secret-kit-migrate", "Branch name for the migration PR")
-	f.StringVar(&config.Label, "label", "gh-secret-kit-migrate", "Label name that triggers the migration workflow")
+	f.StringVar(&config.WorkflowName, "workflow-name", types.DefaultWorkflowName, "Name of the workflow file")
+	f.StringVar(&config.Branch, "branch", types.DefaultBranch, "Branch name for the migration PR")
+	f.StringVar(&config.Label, "label", types.DefaultLabel, "Label name that triggers the migration workflow")
 	f.BoolVarP(&config.Wait, "wait", "w", false, "Wait for the workflow run to complete")
 	f.StringVar(&config.Timeout, "timeout", "10m", "Timeout duration when waiting for workflow completion (e.g., 5m, 1h)")
 	f.BoolVar(&config.Unarchive, "unarchive", false, "Temporarily unarchive the repository if it is archived, then re-archive after the workflow run")

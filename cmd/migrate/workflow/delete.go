@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+	"github.com/srz-zumix/gh-secret-kit/cmd/migrate/types"
 	"github.com/srz-zumix/go-gh-extension/pkg/gh"
 	"github.com/srz-zumix/go-gh-extension/pkg/logger"
 	"github.com/srz-zumix/go-gh-extension/pkg/parser"
@@ -27,8 +28,8 @@ related resources from the source repository.`,
 
 	f := cmd.Flags()
 	f.StringVarP(&config.Source, "src", "s", "", "Source repository (e.g., owner/repo; defaults to current repository)")
-	f.StringVar(&config.WorkflowName, "workflow-name", "gh-secret-kit-migrate", "Name of the workflow file")
-	f.StringVar(&config.Branch, "branch", "gh-secret-kit-migrate", "Branch to delete")
+	f.StringVar(&config.WorkflowName, "workflow-name", types.DefaultWorkflowName, "Name of the workflow file")
+	f.StringVar(&config.Branch, "branch", types.DefaultBranch, "Branch to delete")
 	f.BoolVar(&config.Unarchive, "unarchive", false, "Temporarily unarchive the repository if it is archived, then re-archive after completion")
 
 	return cmd

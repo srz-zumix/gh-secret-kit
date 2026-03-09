@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+	"github.com/srz-zumix/gh-secret-kit/cmd/migrate/types"
 	migratePackage "github.com/srz-zumix/gh-secret-kit/pkg/migrate"
 	"github.com/srz-zumix/go-gh-extension/pkg/gh"
 	"github.com/srz-zumix/go-gh-extension/pkg/logger"
@@ -31,9 +32,9 @@ The branch can be cleaned up later with "delete".`,
 
 	f := cmd.Flags()
 	f.StringVarP(&config.Source, "src", "s", "", "Source repository (e.g., owner/repo; defaults to current repository)")
-	f.StringVar(&config.WorkflowName, "workflow-name", "gh-secret-kit-migrate", "Name of the generated workflow file")
-	f.StringVar(&config.Branch, "branch", "gh-secret-kit-migrate", "Branch to push the stub workflow to")
-	f.StringVar(&config.Label, "label", "gh-secret-kit-migrate", "Label name to create for triggering the migration workflow")
+	f.StringVar(&config.WorkflowName, "workflow-name", types.DefaultWorkflowName, "Name of the generated workflow file")
+	f.StringVar(&config.Branch, "branch", types.DefaultBranch, "Branch to push the stub workflow to")
+	f.StringVar(&config.Label, "label", types.DefaultLabel, "Label name to create for triggering the migration workflow")
 	f.BoolVar(&config.Unarchive, "unarchive", false, "Temporarily unarchive the repository if it is archived, then re-archive after completion")
 
 	return cmd
