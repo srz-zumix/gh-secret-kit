@@ -158,6 +158,30 @@ Trigger the migration workflow by removing and re-adding the trigger label on th
 - `--wait` / `-w`: Wait for the workflow run to complete
 - `--workflow-name string`: Name of the workflow file (default: "gh-secret-kit-migrate")
 
+#### migrate check
+
+```sh
+gh secret-kit migrate check [org] [flags]
+```
+
+Scan the source and destination organizations, identify matching repository and environment pairs that have secrets, and run the migration check for each.
+
+This command verifies whether secrets from the source have been successfully migrated to the destination. It checks:
+
+- Repository secrets for all matching repositories
+- Environment secrets for all matching environments
+- Organization secrets (if any)
+
+Exits with a non-zero status if any secrets have not been migrated yet.
+
+**Arguments:**
+
+- `[org]`: Source organization name (e.g., org or HOST/org). Defaults to current repository owner.
+
+**Options:**
+
+- `--dst string` / `-d`: Destination organization (e.g., org or HOST/org) (required)
+
 #### migrate list
 
 ```sh

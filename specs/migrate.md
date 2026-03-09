@@ -60,6 +60,7 @@ User CLI (local)
 
 | Subcommand | Description |
 | --- | --- |
+| `gh secret-kit migrate check` | Scan source and destination organizations, run migration check for all matching repositories/environments/org secrets, and report pass/fail summary |
 | `gh secret-kit migrate list` | List repositories that have at least one repository secret registered |
 | `gh secret-kit migrate plan` | Generate migration commands for matching repositories between source and destination organizations |
 | `gh secret-kit migrate runner setup [org]` | Register and start a scaleset runner on the source |
@@ -121,6 +122,14 @@ User CLI (local)
 | `--dst-host` | - | string | No | - | GitHub host for the destination |
 
 > For `org check`, `--src` is the source organization name. For `repo check` and `env check`, `--src` is the source repository.
+
+### migrate check Options
+
+| Option | Short | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- | --- |
+| `--dst` | `-d` | string | Yes | - | Destination organization (e.g., org or HOST/org) |
+
+Positional argument: `[org]` — Source organization name (e.g., org or HOST/org). Defaults to current repository owner.
 
 ### plan Options
 
@@ -207,7 +216,19 @@ Positional argument: `[org]` — Organization name for organization-scoped runne
 
 ## Detailed Behavior
 
-### 0. List Repositories with Secrets (`migrate list`)
+### 0a. Check Migration Status (`migrate check`)
+
+1. Determine the source organization (positional arg or current repository owner).
+2. List all repositories in the source organization.
+3. For each source repository, check if a matching repository (same name) exists in the destination organization.
+4. For each matching repository pair:
+   a. List repository secrets on the source. If any exist, run `{repo} check` against the destination.
+   b. List environment secrets on the source. For each environment that also exists in the destination, run `{env} check`.
+5. List organization secrets on the source. If any exist, run `{org} check` against the destination.
+6. Print a summary table showing pass (✓) or fail (✗) for each check.
+7. Exit with non-zero status if any check failed.
+
+### 0b. List Repositories with Secrets (`migrate list`)
 
 When called without arguments or with an org name:
 
