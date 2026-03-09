@@ -8,6 +8,7 @@ import (
 	"github.com/cli/go-gh/v2/pkg/repository"
 	"github.com/spf13/cobra"
 	"github.com/srz-zumix/gh-secret-kit/cmd/migrate/types"
+	"github.com/srz-zumix/gh-secret-kit/pkg/migrate"
 	"github.com/srz-zumix/go-gh-extension/pkg/gh"
 	"github.com/srz-zumix/go-gh-extension/pkg/logger"
 	"github.com/srz-zumix/go-gh-extension/pkg/parser"
@@ -70,53 +71,27 @@ Arguments:
 }
 
 func runPlan(ctx context.Context, config *planConfig) error {
-	// Parse source organization
-	srcOwnerRepo, err := parser.Repository(parser.RepositoryOwnerWithHost(config.Source))
+	src, dst, err := migrate.ParseOrgPair(config.Source, config.Destination)
 	if err != nil {
-		return fmt.Errorf("failed to parse source organization: %w", err)
-	}
-	srcOrg := srcOwnerRepo.Owner
-
-	// Parse destination organization
-	dstOwnerRepo, err := parser.Repository(parser.RepositoryOwnerWithHost(config.Destination))
-	if err != nil {
-		return fmt.Errorf("failed to parse destination organization: %w", err)
-	}
-	if dstOwnerRepo.Host == "" && srcOwnerRepo.Host != "" {
-		dstOwnerRepo.Host = srcOwnerRepo.Host
-	}
-	dstOrg := dstOwnerRepo.Owner
-
-	// Create clients
-	srcClient, err := gh.NewGitHubClientWithRepo(srcOwnerRepo)
-	if err != nil {
-		return fmt.Errorf("failed to create source GitHub client: %w", err)
+		return err
 	}
 
-	dstClient := srcClient
-	if dstOwnerRepo.Host != srcOwnerRepo.Host {
-		dstClient, err = gh.NewGitHubClientWithRepo(dstOwnerRepo)
-		if err != nil {
-			return fmt.Errorf("failed to create destination GitHub client: %w", err)
-		}
-	}
+	srcOrg := src.OwnerRepo.Owner
+	dstOrg := dst.OwnerRepo.Owner
 
 	logger.Info(fmt.Sprintf("Scanning source organization: %s", srcOrg))
 	logger.Info(fmt.Sprintf("Checking against destination organization: %s", dstOrg))
 
-	// Get source repositories with secrets
-	srcRepos, err := gh.ListOwnerRepositories(ctx, srcClient, srcOrg)
+	matches, err := migrate.ScanMatchingRepos(ctx, src, dst)
 	if err != nil {
-		return fmt.Errorf("failed to list source repositories: %w", err)
+		return err
 	}
-
-	logger.Info(fmt.Sprintf("Found %d repositories in source, scanning for secrets...", len(srcRepos)))
 
 	var result PlanResult
 
 	orgArg := srcOrg
-	if srcOwnerRepo.Host != "" {
-		orgArg = fmt.Sprintf("%s/%s", srcOwnerRepo.Host, srcOrg)
+	if src.OwnerRepo.Host != "" {
+		orgArg = fmt.Sprintf("%s/%s", src.OwnerRepo.Host, srcOrg)
 	}
 
 	runnerCmd := "gh secret-kit migrate runner"
@@ -137,10 +112,8 @@ func runPlan(ctx context.Context, config *planConfig) error {
 			result.RunnerTeardown = fmt.Sprintf("%s teardown", runnerCmd)
 		}
 	}
-	// Try to identify the current repository as the preferred -s for "migrate org all".
-	// If the current repo belongs to srcOrg and has a matching destination repo, it is
-	// used as the org migration source (priority a). Otherwise the first repository in
-	// srcOrg that has a matching destination repo is used (priority b).
+
+	// Detect current repo for orgMigrationSrc preference
 	var currentRepoName string
 	if currentRepo, err := parser.Repository(); err == nil && currentRepo.Owner == srcOrg {
 		currentRepoName = currentRepo.Name
@@ -150,77 +123,27 @@ func runPlan(ctx context.Context, config *planConfig) error {
 	var orgMigrationSrc string
 	var orgSourceFixed bool // true once the current repo has been selected
 
-	for _, srcRepo := range srcRepos {
-		if srcRepo.GetFullName() == "" {
-			continue
-		}
-
-		repoName := srcRepo.GetName()
-		srcRepoRef, err := gh.GetRepositoryFromGitHubRepository(srcRepo)
-		if err != nil {
-			logger.Warn(fmt.Sprintf("Skipping %s: failed to parse repository: %v", srcRepo.GetFullName(), err))
-			continue
-		}
-
-		// Check if destination repository exists
-		dstRepoRef := repository.Repository{
-			Owner: dstOrg,
-			Name:  repoName,
-			Host:  dstOwnerRepo.Host,
-		}
-		dstRepoInfo, dstErr := gh.GetRepository(ctx, dstClient, dstRepoRef)
-		if dstErr != nil {
-			logger.Debug(fmt.Sprintf("Skipping %s: no matching repository in destination", repoName))
-			continue
-		}
-
+	for _, m := range matches {
 		// Update org migration source selection: prefer current repo (a), then first
 		// matching repo regardless of secrets (b).
 		if orgMigrationSrc == "" {
-			orgMigrationSrc = srcRepo.GetFullName()
+			orgMigrationSrc = m.SrcFullName
 		}
-		if !orgSourceFixed && repoName == currentRepoName {
-			orgMigrationSrc = srcRepo.GetFullName()
+		if !orgSourceFixed && m.SrcName == currentRepoName {
+			orgMigrationSrc = m.SrcFullName
 			orgSourceFixed = true
 		}
 
-		// Get source repo secrets
-		secrets, err := gh.ListRepoSecrets(ctx, srcClient, srcRepoRef)
-		if err != nil {
-			logger.Warn(fmt.Sprintf("Skipping %s: failed to list secrets: %v", srcRepo.GetFullName(), err))
-			continue
-		}
-
-		// Get source env secrets
-		envSecrets, err := gh.CollectEnvSecrets(ctx, srcClient, srcRepo)
-		if err != nil {
-			logger.Warn(fmt.Sprintf("Skipping environments for %s: %v", srcRepo.GetFullName(), err))
-		}
-
-		// Generate repo migration command if repo has secrets
-		if len(secrets) > 0 {
-			cmd := buildRepoMigrateCmd(srcRepoRef, dstRepoRef, config)
+		if m.RepoSecretCount > 0 {
+			cmd := buildRepoMigrateCmd(m.SrcRepoRef, m.DstRepoRef, config)
 			result.RepoMigrates = append(result.RepoMigrates, cmd)
-			logger.Info(fmt.Sprintf("Found matching repo with secrets: %s (%d secrets)", repoName, len(secrets)))
+			logger.Info(fmt.Sprintf("Found matching repo with secrets: %s (%d secrets)", m.SrcName, m.RepoSecretCount))
 		}
 
-		// Generate env migration commands
-		if len(envSecrets) > 0 {
-			dstEnvSecrets, err := gh.CollectEnvSecrets(ctx, dstClient, dstRepoInfo)
-			if err != nil {
-				logger.Warn(fmt.Sprintf("Skipping env check for %s: %v", repoName, err))
-			}
-
-			for envName, srcEnvSecs := range envSecrets {
-				// Check if destination has the same environment
-				if _, exists := dstEnvSecrets[envName]; exists {
-					cmd := buildEnvMigrateCmd(srcRepoRef, dstRepoRef, envName, config)
-					result.EnvMigrates = append(result.EnvMigrates, cmd)
-					logger.Info(fmt.Sprintf("Found matching env with secrets: %s/%s (%d secrets)", repoName, envName, len(srcEnvSecs)))
-				} else {
-					logger.Debug(fmt.Sprintf("Skipping env %s/%s: no matching environment in destination", repoName, envName))
-				}
-			}
+		for _, env := range m.EnvMatches {
+			cmd := buildEnvMigrateCmd(m.SrcRepoRef, m.DstRepoRef, env.Name, config)
+			result.EnvMigrates = append(result.EnvMigrates, cmd)
+			logger.Info(fmt.Sprintf("Found matching env with secrets: %s/%s (%d secrets)", m.SrcName, env.Name, env.SecretCount))
 		}
 	}
 
@@ -228,12 +151,12 @@ func runPlan(ctx context.Context, config *planConfig) error {
 	// A source repo is required to run the migration workflow, so skip only when
 	// no repository in srcOrg has a counterpart in dstOrg.
 	if orgMigrationSrc != "" {
-		srcOrgSecrets, err := gh.ListOrgSecrets(ctx, srcClient, srcOwnerRepo)
+		srcOrgSecrets, err := gh.ListOrgSecrets(ctx, src.Client, src.OwnerRepo)
 		if err != nil {
 			logger.Warn(fmt.Sprintf("Failed to list org secrets: %v", err))
 		} else if len(srcOrgSecrets) > 0 {
 			orgSrcRepo, _ := parser.Repository(parser.RepositoryInput(orgMigrationSrc))
-			cmd := buildOrgMigrateCmd(orgSrcRepo, dstOrg, dstOwnerRepo.Host, config)
+			cmd := buildOrgMigrateCmd(orgSrcRepo, dstOrg, dst.OwnerRepo.Host, config)
 			result.OrgMigrate = cmd
 			logger.Info(fmt.Sprintf("Found org secrets: %d secrets", len(srcOrgSecrets)))
 		}
@@ -243,21 +166,6 @@ func runPlan(ctx context.Context, config *planConfig) error {
 	printPlan(&result)
 
 	return nil
-}
-
-// shellQuote wraps s in single quotes, escaping any embedded single quotes,
-// so the value is safe to embed in a POSIX shell script regardless of spaces
-// or special characters.
-func shellQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
-}
-
-// repoArg returns the "HOST/OWNER/REPO" or "OWNER/REPO" string for a repository.
-func repoArg(r repository.Repository) string {
-	if r.Host != "" {
-		return r.Host + "/" + r.Owner + "/" + r.Name
-	}
-	return r.Owner + "/" + r.Name
 }
 
 func buildRepoMigrateCmd(src, dst repository.Repository, config *planConfig) string {
