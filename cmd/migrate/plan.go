@@ -12,6 +12,8 @@ import (
 	"github.com/srz-zumix/go-gh-extension/pkg/parser"
 )
 
+const defaultRunnerLabel = "gh-secret-kit-migrate"
+
 type planConfig struct {
 	Source      string
 	Destination string
@@ -61,7 +63,7 @@ Arguments:
 
 	f := cmd.Flags()
 	f.StringVarP(&config.Destination, "dst", "d", "", "Destination organization (e.g., org or HOST/org)")
-	f.StringVar(&config.RunnerLabel, "runner-label", "gh-secret-kit-migrate", "Runner label for the workflow")
+	f.StringVar(&config.RunnerLabel, "runner-label", defaultRunnerLabel, "Runner label for the workflow")
 
 	_ = cmd.MarkFlagRequired("dst")
 
@@ -119,15 +121,25 @@ func runPlan(ctx context.Context, config *planConfig) error {
 	}
 
 	runnerCmd := fmt.Sprintf("gh secret-kit migrate runner %s", orgArg)
-	if cfg.RunnerLabel != "" {
-		result.RunnerSetup = fmt.Sprintf("%s setup --runner-label %s", runnerCmd, cfg.RunnerLabel)
-		result.RunnerTeardown = fmt.Sprintf("%s teardown --runner-label %s", runnerCmd, cfg.RunnerLabel)
+	if config.RunnerLabel != "" && config.RunnerLabel != defaultRunnerLabel {
+		result.RunnerSetup = fmt.Sprintf("%s setup --runner-label %s", runnerCmd, config.RunnerLabel)
+		result.RunnerTeardown = fmt.Sprintf("%s teardown --runner-label %s", runnerCmd, config.RunnerLabel)
 	} else {
 		result.RunnerSetup = fmt.Sprintf("%s setup", runnerCmd)
 		result.RunnerTeardown = fmt.Sprintf("%s teardown", runnerCmd)
 	}
-	// Track first repo with secrets for org migration
-	var firstRepoWithSecrets string
+	// Try to identify the current repository as the preferred -s for "migrate org all".
+	// If the current repo belongs to srcOrg and has a matching destination repo, it is
+	// used as the org migration source (priority a). Otherwise the first repository in
+	// srcOrg that has a matching destination repo is used (priority b).
+	var currentRepoName string
+	if currentRepo, err := parser.Repository(); err == nil && currentRepo.Owner == srcOrg {
+		currentRepoName = currentRepo.Name
+	}
+
+	// orgMigrationSrc is the "owner/repo" string passed as -s to "migrate org all".
+	var orgMigrationSrc string
+	var orgSourceFixed bool // true once the current repo has been selected
 
 	for _, srcRepo := range srcRepos {
 		if srcRepo.GetFullName() == "" {
@@ -147,10 +159,20 @@ func runPlan(ctx context.Context, config *planConfig) error {
 			Name:  repoName,
 			Host:  dstOwnerRepo.Host,
 		}
-		_, dstErr := gh.GetRepository(ctx, dstClient, dstRepoRef)
+		dstRepoInfo, dstErr := gh.GetRepository(ctx, dstClient, dstRepoRef)
 		if dstErr != nil {
 			logger.Debug(fmt.Sprintf("Skipping %s: no matching repository in destination", repoName))
 			continue
+		}
+
+		// Update org migration source selection: prefer current repo (a), then first
+		// matching repo regardless of secrets (b).
+		if orgMigrationSrc == "" {
+			orgMigrationSrc = srcRepo.GetFullName()
+		}
+		if !orgSourceFixed && repoName == currentRepoName {
+			orgMigrationSrc = srcRepo.GetFullName()
+			orgSourceFixed = true
 		}
 
 		// Get source repo secrets
@@ -168,9 +190,6 @@ func runPlan(ctx context.Context, config *planConfig) error {
 
 		// Generate repo migration command if repo has secrets
 		if len(secrets) > 0 {
-			if firstRepoWithSecrets == "" {
-				firstRepoWithSecrets = srcRepo.GetFullName()
-			}
 			cmd := buildRepoMigrateCmd(srcRepoRef, dstRepoRef, config)
 			result.RepoMigrates = append(result.RepoMigrates, cmd)
 			logger.Info(fmt.Sprintf("Found matching repo with secrets: %s (%d secrets)", repoName, len(secrets)))
@@ -178,15 +197,6 @@ func runPlan(ctx context.Context, config *planConfig) error {
 
 		// Generate env migration commands
 		if len(envSecrets) > 0 {
-			if firstRepoWithSecrets == "" {
-				firstRepoWithSecrets = srcRepo.GetFullName()
-			}
-			// Check destination environments - need to fetch repo info first
-			dstRepoInfo, rerr := gh.GetRepository(ctx, dstClient, dstRepoRef)
-			if rerr != nil {
-				logger.Warn(fmt.Sprintf("Skipping env check for %s: failed to get destination repository info: %v", repoName, rerr))
-				continue
-			}
 			dstEnvSecrets, err := gh.CollectEnvSecrets(ctx, dstClient, dstRepoInfo)
 			if err != nil {
 				logger.Warn(fmt.Sprintf("Skipping env check for %s: %v", repoName, err))
@@ -205,14 +215,16 @@ func runPlan(ctx context.Context, config *planConfig) error {
 		}
 	}
 
-	// Check org secrets
-	if firstRepoWithSecrets != "" {
+	// Check org secrets independently of repo/env secrets.
+	// A source repo is required to run the migration workflow, so skip only when
+	// no repository in srcOrg has a counterpart in dstOrg.
+	if orgMigrationSrc != "" {
 		srcOrgSecrets, err := gh.ListOrgSecrets(ctx, srcClient, srcOwnerRepo)
 		if err != nil {
 			logger.Warn(fmt.Sprintf("Failed to list org secrets: %v", err))
 		} else if len(srcOrgSecrets) > 0 {
-			firstRepo, _ := parser.Repository(parser.RepositoryInput(firstRepoWithSecrets))
-			cmd := buildOrgMigrateCmd(firstRepo, dstOrg, dstOwnerRepo.Host, config)
+			orgSrcRepo, _ := parser.Repository(parser.RepositoryInput(orgMigrationSrc))
+			cmd := buildOrgMigrateCmd(orgSrcRepo, dstOrg, dstOwnerRepo.Host, config)
 			result.OrgMigrate = cmd
 			logger.Info(fmt.Sprintf("Found org secrets: %d secrets", len(srcOrgSecrets)))
 		}
@@ -232,7 +244,7 @@ func buildRepoMigrateCmd(src, dst repository.Repository, config *planConfig) str
 	if dst.Host != "" && dst.Host != src.Host {
 		parts = append(parts, fmt.Sprintf("--dst-host %s", dst.Host))
 	}
-	if config.RunnerLabel != "gh-secret-kit-migrate" {
+	if config.RunnerLabel != "" && config.RunnerLabel != defaultRunnerLabel {
 		parts = append(parts, fmt.Sprintf("--runner-label %s", config.RunnerLabel))
 	}
 	return strings.Join(parts, " ")
@@ -248,7 +260,7 @@ func buildEnvMigrateCmd(src, dst repository.Repository, envName string, config *
 	if dst.Host != "" && dst.Host != src.Host {
 		parts = append(parts, fmt.Sprintf("--dst-host %s", dst.Host))
 	}
-	if config.RunnerLabel != "gh-secret-kit-migrate" {
+	if config.RunnerLabel != "" && config.RunnerLabel != defaultRunnerLabel {
 		parts = append(parts, fmt.Sprintf("--runner-label %s", config.RunnerLabel))
 	}
 	return strings.Join(parts, " ")
@@ -262,7 +274,7 @@ func buildOrgMigrateCmd(srcRepo repository.Repository, dstOrg string, dstHost st
 	if dstHost != "" && dstHost != srcRepo.Host {
 		parts = append(parts, fmt.Sprintf("--dst-host %s", dstHost))
 	}
-	if config.RunnerLabel != "gh-secret-kit-migrate" {
+	if config.RunnerLabel != "" && config.RunnerLabel != defaultRunnerLabel {
 		parts = append(parts, fmt.Sprintf("--runner-label %s", config.RunnerLabel))
 	}
 	return strings.Join(parts, " ")
