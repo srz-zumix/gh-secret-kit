@@ -14,8 +14,8 @@ github.com/Masterminds/sprig/v3 v3.3.0 h1:mQh0Yrg1XPo6vjYXgtf5OtijNAKJRNcTdOOGZe
 github.com/Masterminds/sprig/v3 v3.3.0/go.mod h1:Zy1iXRYNqNLUolqCpL4uhk6SHUMAOSCzdgBfDb35Lz0=
 github.com/Netflix/go-expect v0.0.0-20220104043353-73e0943537d2 h1:+vx7roKuyA63nhn5WAunQHLTznkw5W8b1Xc0dNjp83s=
 github.com/Netflix/go-expect v0.0.0-20220104043353-73e0943537d2/go.mod h1:HBCaDeC1lPdgDeDbhX8XFpy1jqjK0IBG8W5K+xYqA0w=
-github.com/actions/scaleset v0.1.0 h1:Rzov5AqcphrQV+VfcPWUAK+hdVJzzJihr/qof1YjZx8=
-github.com/actions/scaleset v0.1.0/go.mod h1:ncR5vzCCTUSyLgvclAtZ5dRBgF6qwA2nbTfTXmOJp84=
+github.com/actions/scaleset v0.2.0 h1:CKsDtTjOBCwjyT4ikwiMykMttzuKejimWRAvVr8xj9w=
+github.com/actions/scaleset v0.2.0/go.mod h1:ncR5vzCCTUSyLgvclAtZ5dRBgF6qwA2nbTfTXmOJp84=
 github.com/atotto/clipboard v0.1.4 h1:EH0zSVneZPSuFR11BlR9YppQTVDbh5+16AmcJi4g1z4=
 github.com/atotto/clipboard v0.1.4/go.mod h1:ZY9tmq7sm5xIbd9bOK4onWV4S6X0u6GY7Vn0Yu86PYI=
 github.com/aymanbagabas/go-osc52/v2 v2.0.1 h1:HwpRHbFMcZLEVr42D4p7XBqjyuxQH5SMiErDT4WkJ2k=
