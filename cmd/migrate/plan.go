@@ -252,10 +252,18 @@ func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
+// repoArg returns the "HOST/OWNER/REPO" or "OWNER/REPO" string for a repository.
+func repoArg(r repository.Repository) string {
+	if r.Host != "" {
+		return r.Host + "/" + r.Owner + "/" + r.Name
+	}
+	return r.Owner + "/" + r.Name
+}
+
 func buildRepoMigrateCmd(src, dst repository.Repository, config *planConfig) string {
 	var parts []string
 	parts = append(parts, "gh secret-kit migrate repo all")
-	parts = append(parts, fmt.Sprintf("-s %s", shellQuote(src.Owner+"/"+src.Name)))
+	parts = append(parts, fmt.Sprintf("-s %s", shellQuote(repoArg(src))))
 	parts = append(parts, fmt.Sprintf("-d %s", shellQuote(dst.Owner+"/"+dst.Name)))
 	if dst.Host != "" && dst.Host != src.Host {
 		parts = append(parts, fmt.Sprintf("--dst-host %s", shellQuote(dst.Host)))
@@ -269,7 +277,7 @@ func buildRepoMigrateCmd(src, dst repository.Repository, config *planConfig) str
 func buildEnvMigrateCmd(src, dst repository.Repository, envName string, config *planConfig) string {
 	var parts []string
 	parts = append(parts, "gh secret-kit migrate env all")
-	parts = append(parts, fmt.Sprintf("-s %s", shellQuote(src.Owner+"/"+src.Name)))
+	parts = append(parts, fmt.Sprintf("-s %s", shellQuote(repoArg(src))))
 	parts = append(parts, fmt.Sprintf("--src-env %s", shellQuote(envName)))
 	parts = append(parts, fmt.Sprintf("-d %s", shellQuote(dst.Owner+"/"+dst.Name)))
 	parts = append(parts, fmt.Sprintf("--dst-env %s", shellQuote(envName)))
@@ -285,7 +293,7 @@ func buildEnvMigrateCmd(src, dst repository.Repository, envName string, config *
 func buildOrgMigrateCmd(srcRepo repository.Repository, dstOrg string, dstHost string, config *planConfig) string {
 	var parts []string
 	parts = append(parts, "gh secret-kit migrate org all")
-	parts = append(parts, fmt.Sprintf("-s %s", shellQuote(srcRepo.Owner+"/"+srcRepo.Name)))
+	parts = append(parts, fmt.Sprintf("-s %s", shellQuote(repoArg(srcRepo))))
 	parts = append(parts, fmt.Sprintf("-d %s", shellQuote(dstOrg)))
 	if dstHost != "" && dstHost != srcRepo.Host {
 		parts = append(parts, fmt.Sprintf("--dst-host %s", shellQuote(dstHost)))
