@@ -119,10 +119,10 @@ func runPlan(ctx context.Context, config *planConfig) error {
 		orgArg = fmt.Sprintf("%s/%s", srcOwnerRepo.Host, srcOrg)
 	}
 
-	runnerCmd := fmt.Sprintf("gh secret-kit migrate runner %s", orgArg)
+	runnerCmd := fmt.Sprintf("gh secret-kit migrate runner %s", shellQuote(orgArg))
 	if config.RunnerLabel != "" && config.RunnerLabel != types.DefaultRunnerLabel {
-		result.RunnerSetup = fmt.Sprintf("%s setup --runner-label %s", runnerCmd, config.RunnerLabel)
-		result.RunnerTeardown = fmt.Sprintf("%s teardown --runner-label %s", runnerCmd, config.RunnerLabel)
+		result.RunnerSetup = fmt.Sprintf("%s setup --runner-label %s", runnerCmd, shellQuote(config.RunnerLabel))
+		result.RunnerTeardown = fmt.Sprintf("%s teardown --runner-label %s", runnerCmd, shellQuote(config.RunnerLabel))
 	} else {
 		result.RunnerSetup = fmt.Sprintf("%s setup", runnerCmd)
 		result.RunnerTeardown = fmt.Sprintf("%s teardown", runnerCmd)
@@ -235,16 +235,23 @@ func runPlan(ctx context.Context, config *planConfig) error {
 	return nil
 }
 
+// shellQuote wraps s in single quotes, escaping any embedded single quotes,
+// so the value is safe to embed in a POSIX shell script regardless of spaces
+// or special characters.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
 func buildRepoMigrateCmd(src, dst repository.Repository, config *planConfig) string {
 	var parts []string
 	parts = append(parts, "gh secret-kit migrate repo all")
-	parts = append(parts, fmt.Sprintf("-s %s/%s", src.Owner, src.Name))
-	parts = append(parts, fmt.Sprintf("-d %s/%s", dst.Owner, dst.Name))
+	parts = append(parts, fmt.Sprintf("-s %s", shellQuote(src.Owner+"/"+src.Name)))
+	parts = append(parts, fmt.Sprintf("-d %s", shellQuote(dst.Owner+"/"+dst.Name)))
 	if dst.Host != "" && dst.Host != src.Host {
-		parts = append(parts, fmt.Sprintf("--dst-host %s", dst.Host))
+		parts = append(parts, fmt.Sprintf("--dst-host %s", shellQuote(dst.Host)))
 	}
 	if config.RunnerLabel != "" && config.RunnerLabel != types.DefaultRunnerLabel {
-		parts = append(parts, fmt.Sprintf("--runner-label %s", config.RunnerLabel))
+		parts = append(parts, fmt.Sprintf("--runner-label %s", shellQuote(config.RunnerLabel)))
 	}
 	return strings.Join(parts, " ")
 }
@@ -252,15 +259,15 @@ func buildRepoMigrateCmd(src, dst repository.Repository, config *planConfig) str
 func buildEnvMigrateCmd(src, dst repository.Repository, envName string, config *planConfig) string {
 	var parts []string
 	parts = append(parts, "gh secret-kit migrate env all")
-	parts = append(parts, fmt.Sprintf("-s %s/%s", src.Owner, src.Name))
-	parts = append(parts, fmt.Sprintf("--src-env %s", envName))
-	parts = append(parts, fmt.Sprintf("-d %s/%s", dst.Owner, dst.Name))
-	parts = append(parts, fmt.Sprintf("--dst-env %s", envName))
+	parts = append(parts, fmt.Sprintf("-s %s", shellQuote(src.Owner+"/"+src.Name)))
+	parts = append(parts, fmt.Sprintf("--src-env %s", shellQuote(envName)))
+	parts = append(parts, fmt.Sprintf("-d %s", shellQuote(dst.Owner+"/"+dst.Name)))
+	parts = append(parts, fmt.Sprintf("--dst-env %s", shellQuote(envName)))
 	if dst.Host != "" && dst.Host != src.Host {
-		parts = append(parts, fmt.Sprintf("--dst-host %s", dst.Host))
+		parts = append(parts, fmt.Sprintf("--dst-host %s", shellQuote(dst.Host)))
 	}
 	if config.RunnerLabel != "" && config.RunnerLabel != types.DefaultRunnerLabel {
-		parts = append(parts, fmt.Sprintf("--runner-label %s", config.RunnerLabel))
+		parts = append(parts, fmt.Sprintf("--runner-label %s", shellQuote(config.RunnerLabel)))
 	}
 	return strings.Join(parts, " ")
 }
@@ -268,13 +275,13 @@ func buildEnvMigrateCmd(src, dst repository.Repository, envName string, config *
 func buildOrgMigrateCmd(srcRepo repository.Repository, dstOrg string, dstHost string, config *planConfig) string {
 	var parts []string
 	parts = append(parts, "gh secret-kit migrate org all")
-	parts = append(parts, fmt.Sprintf("-s %s/%s", srcRepo.Owner, srcRepo.Name))
-	parts = append(parts, fmt.Sprintf("-d %s", dstOrg))
+	parts = append(parts, fmt.Sprintf("-s %s", shellQuote(srcRepo.Owner+"/"+srcRepo.Name)))
+	parts = append(parts, fmt.Sprintf("-d %s", shellQuote(dstOrg)))
 	if dstHost != "" && dstHost != srcRepo.Host {
-		parts = append(parts, fmt.Sprintf("--dst-host %s", dstHost))
+		parts = append(parts, fmt.Sprintf("--dst-host %s", shellQuote(dstHost)))
 	}
 	if config.RunnerLabel != "" && config.RunnerLabel != types.DefaultRunnerLabel {
-		parts = append(parts, fmt.Sprintf("--runner-label %s", config.RunnerLabel))
+		parts = append(parts, fmt.Sprintf("--runner-label %s", shellQuote(config.RunnerLabel)))
 	}
 	return strings.Join(parts, " ")
 }

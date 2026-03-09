@@ -14,7 +14,7 @@ gh extension install srz-zumix/gh-secret-kit
 
 **Prerequisites:** Before setting up gh-secret-kit completion, ensure gh CLI completion is configured for your shell. See [gh completion documentation](https://cli.github.com/manual/gh_completion) for setup instructions.
 
-For detailed installation instructions and setup for each shell, see the [Shell Completion Guide](docs/shell-completion.md).
+For detailed installation instructions and setup for each shell, see the [Shell Completion Guide](https://github.com/srz-zumix/go-gh-extension/blob/main/docs/shell-completion.md).
 
 ## Commands
 
