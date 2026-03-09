@@ -112,9 +112,20 @@ func runPlan(ctx context.Context, config *planConfig) error {
 	logger.Info(fmt.Sprintf("Found %d repositories in source, scanning for secrets...", len(srcRepos)))
 
 	var result PlanResult
-	result.RunnerSetup = fmt.Sprintf("gh secret-kit migrate runner setup %s", srcOrg)
-	result.RunnerTeardown = fmt.Sprintf("gh secret-kit migrate runner teardown %s", srcOrg)
 
+	orgArg := srcOrg
+	if srcOwnerRepo.Host != "" {
+		orgArg = fmt.Sprintf("%s/%s", srcOwnerRepo.Host, srcOrg)
+	}
+
+	runnerCmd := fmt.Sprintf("gh secret-kit migrate runner %s", orgArg)
+	if cfg.RunnerLabel != "" {
+		result.RunnerSetup = fmt.Sprintf("%s setup --runner-label %s", runnerCmd, cfg.RunnerLabel)
+		result.RunnerTeardown = fmt.Sprintf("%s teardown --runner-label %s", runnerCmd, cfg.RunnerLabel)
+	} else {
+		result.RunnerSetup = fmt.Sprintf("%s setup", runnerCmd)
+		result.RunnerTeardown = fmt.Sprintf("%s teardown", runnerCmd)
+	}
 	// Track first repo with secrets for org migration
 	var firstRepoWithSecrets string
 
