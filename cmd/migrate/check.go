@@ -18,11 +18,11 @@ type checkConfig struct {
 
 // CheckResult represents the check result for one target
 type CheckResult struct {
-	Scope   string
-	Source  string
-	Dest    string
-	Env     string
-	Err     error
+	Scope  string
+	Source string
+	Dest   string
+	Env    string
+	Err    error
 }
 
 // NewCheckCmd creates the migrate check command
@@ -82,9 +82,9 @@ func runCheck(ctx context.Context, config *checkConfig) error {
 		if m.RepoSecretCount > 0 {
 			logger.Info(fmt.Sprintf("Checking repo secrets: %s (%d secrets)", m.SrcName, m.RepoSecretCount))
 			checkCfg := &workflow.CheckConfig{
-				Source:          repoArg(m.SrcRepoRef),
-				Destination:     repoArg(m.DstRepoRef),
-				Scope:           migrate.SecretScopeRepo,
+				Source:      repoArg(m.SrcRepoRef),
+				Destination: repoArg(m.DstRepoRef),
+				Scope:       migrate.SecretScopeRepo,
 			}
 			cerr := workflow.RunCheck(ctx, checkCfg)
 			results = append(results, CheckResult{
@@ -98,11 +98,11 @@ func runCheck(ctx context.Context, config *checkConfig) error {
 		for _, env := range m.EnvMatches {
 			logger.Info(fmt.Sprintf("Checking env secrets: %s/%s (%d secrets)", m.SrcName, env.Name, env.SecretCount))
 			checkCfg := &workflow.CheckConfig{
-				Source:          repoArg(m.SrcRepoRef),
-					Destination:     repoArg(m.DstRepoRef),
-				SourceEnv:       env.Name,
-				DestinationEnv:  env.Name,
-				Scope:           migrate.SecretScopeEnv,
+				Source:         repoArg(m.SrcRepoRef),
+				Destination:    repoArg(m.DstRepoRef),
+				SourceEnv:      env.Name,
+				DestinationEnv: env.Name,
+				Scope:          migrate.SecretScopeEnv,
 			}
 			cerr := workflow.RunCheck(ctx, checkCfg)
 			results = append(results, CheckResult{

@@ -45,7 +45,7 @@ type RunConfig struct {
 	SkipArchiveCheck bool
 	// PRNumber is an optional PR number to use directly, skipping the search.
 	// Set by RunAll to avoid API race conditions between init and run.
-	PRNumber         int
+	PRNumber int
 }
 
 // DeleteConfig holds configuration for the delete operation
