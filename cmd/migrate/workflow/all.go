@@ -38,7 +38,6 @@ func RunAll(ctx context.Context, config *AllConfig) error {
 	createConfig := &CreateConfig{
 		Source:                 config.Source,
 		Destination:            config.Destination,
-		DestinationHost:        config.DestinationHost,
 		SourceEnv:              config.SourceEnv,
 		DestinationEnv:         config.DestinationEnv,
 		Secrets:                config.Secrets,
@@ -66,7 +65,6 @@ func RunAll(ctx context.Context, config *AllConfig) error {
 	checkConfig := &CheckConfig{
 		Source:           config.Source,
 		Destination:      config.Destination,
-		DestinationHost:  config.DestinationHost,
 		SourceEnv:        config.SourceEnv,
 		DestinationEnv:   config.DestinationEnv,
 		Secrets:          config.Secrets,

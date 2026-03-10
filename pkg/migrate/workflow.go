@@ -23,17 +23,17 @@ const (
 
 // WorkflowConfig holds configuration for generating migration workflow
 type WorkflowConfig struct {
-	WorkflowName     string
-	RunnerLabel      string
-	TriggerLabel     string
-	Source           string
-	Destination      string
-	DestinationHost  string
-	SourceEnv        string
-	DestinationEnv   string
-	Secrets          []string
-	Rename           map[string]string // OLD_NAME -> NEW_NAME
-	Overwrite             bool
+	WorkflowName           string
+	RunnerLabel            string
+	TriggerLabel           string
+	Source                 string
+	Destination            string
+	DestinationHost        string
+	SourceEnv              string
+	DestinationEnv         string
+	Secrets                []string
+	Rename                 map[string]string // OLD_NAME -> NEW_NAME
+	Overwrite              bool
 	DestinationTokenSecret string
 	Scope                  SecretScope
 }

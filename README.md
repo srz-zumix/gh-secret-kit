@@ -51,9 +51,8 @@ This command initializes the stub workflow, generates and pushes the migration w
 **Options:**
 
 - `--branch string`: Branch to push the workflow to (default: "gh-secret-kit-migrate")
-- `--dst string` / `-d`: Destination repository (e.g., owner/repo) (required)
+- `--dst string` / `-d`: Destination repository (e.g., owner/repo or HOST/OWNER/REPO) (required)
 - `--dst-env string`: Destination environment name (required)
-- `--dst-host string`: GitHub host for the destination (defaults to source repository host)
 - `--label string`: Label name for triggering the migration workflow (default: "gh-secret-kit-migrate")
 - `--overwrite`: Overwrite existing secrets at destination
 - `--rename strings`: Rename mapping in OLD\_NAME=NEW\_NAME format (repeatable)
@@ -75,9 +74,8 @@ Compare environment secrets between source and destination repositories. For eac
 
 **Options:**
 
-- `--dst string` / `-d`: Destination repository (e.g., owner/repo)
+- `--dst string` / `-d`: Destination repository (e.g., owner/repo or HOST/OWNER/REPO)
 - `--dst-env string`: Destination environment name
-- `--dst-host string`: GitHub host for the destination (defaults to source repository host)
 - `--dst-token string`: PAT or token for the destination (required if destination is on a different host)
 - `--rename strings`: Rename mapping in OLD\_NAME=NEW\_NAME format (repeatable)
 - `--secrets strings`: Specific secret names to check (comma-separated or repeated flag; defaults to all)
@@ -95,9 +93,8 @@ Generate a GitHub Actions workflow that migrates environment secrets from the so
 **Options:**
 
 - `--branch string`: Branch to push the workflow to (default: "gh-secret-kit-migrate")
-- `--dst string` / `-d`: Destination repository (e.g., owner/repo)
+- `--dst string` / `-d`: Destination repository (e.g., owner/repo or HOST/OWNER/REPO)
 - `--dst-env string`: Destination environment name
-- `--dst-host string`: GitHub host for the destination (defaults to source repository host)
 - `--dst-token string`: PAT or token for the destination (required if destination is on a different host)
 - `--label string`: Label name for triggering the migration workflow (default: "gh-secret-kit-migrate")
 - `--overwrite`: Overwrite existing secrets at destination
@@ -234,8 +231,7 @@ This command initializes the stub workflow, generates and pushes the migration w
 **Options:**
 
 - `--branch string`: Branch to push the workflow to (default: "gh-secret-kit-migrate")
-- `--dst string` / `-d`: Destination organization name (required)
-- `--dst-host string`: GitHub host for the destination (defaults to source repository host)
+- `--dst string` / `-d`: Destination organization (e.g., org or HOST/org) (required)
 - `--label string`: Label name for triggering the migration workflow (default: "gh-secret-kit-migrate")
 - `--overwrite`: Overwrite existing secrets at destination
 - `--rename strings`: Rename mapping in OLD\_NAME=NEW\_NAME format (repeatable)
@@ -256,8 +252,7 @@ Compare organization secrets between source and destination organizations. For e
 
 **Options:**
 
-- `--dst string` / `-d`: Destination organization name
-- `--dst-host string`: GitHub host for the destination (defaults to source host)
+- `--dst string` / `-d`: Destination organization (e.g., org or HOST/org)
 - `--dst-token string`: PAT or token for the destination (required if destination is on a different host)
 - `--rename strings`: Rename mapping in OLD\_NAME=NEW\_NAME format (repeatable)
 - `--secrets strings`: Specific secret names to check (comma-separated or repeated flag; defaults to all)
@@ -274,8 +269,7 @@ Generate a GitHub Actions workflow that migrates organization secrets from the s
 **Options:**
 
 - `--branch string`: Branch to push the workflow to (default: "gh-secret-kit-migrate")
-- `--dst string` / `-d`: Destination organization name
-- `--dst-host string`: GitHub host for the destination (defaults to source repository host)
+- `--dst string` / `-d`: Destination organization (e.g., org or HOST/org)
 - `--dst-token string`: PAT or token for the destination (required if destination is on a different host)
 - `--label string`: Label name for triggering the migration workflow (default: "gh-secret-kit-migrate")
 - `--overwrite`: Overwrite existing secrets at destination
@@ -354,8 +348,7 @@ This command initializes the stub workflow, generates and pushes the migration w
 **Options:**
 
 - `--branch string`: Branch to push the workflow to (default: "gh-secret-kit-migrate")
-- `--dst string` / `-d`: Destination repository (e.g., owner/repo) (required)
-- `--dst-host string`: GitHub host for the destination (defaults to source repository host)
+- `--dst string` / `-d`: Destination repository (e.g., owner/repo or HOST/OWNER/REPO) (required)
 - `--label string`: Label name for triggering the migration workflow (default: "gh-secret-kit-migrate")
 - `--overwrite`: Overwrite existing secrets at destination
 - `--rename strings`: Rename mapping in OLD\_NAME=NEW\_NAME format (repeatable)
@@ -376,8 +369,7 @@ Compare repository secrets between source and destination repositories. For each
 
 **Options:**
 
-- `--dst string` / `-d`: Destination repository (e.g., owner/repo)
-- `--dst-host string`: GitHub host for the destination (defaults to source repository host)
+- `--dst string` / `-d`: Destination repository (e.g., owner/repo or HOST/OWNER/REPO)
 - `--dst-token string`: PAT or token for the destination (required if destination is on a different host)
 - `--rename strings`: Rename mapping in OLD\_NAME=NEW\_NAME format (repeatable)
 - `--secrets strings`: Specific secret names to check (comma-separated or repeated flag; defaults to all)
@@ -394,8 +386,7 @@ Generate a GitHub Actions workflow that migrates repository secrets from the sou
 **Options:**
 
 - `--branch string`: Branch to push the workflow to (default: "gh-secret-kit-migrate")
-- `--dst string` / `-d`: Destination repository (e.g., owner/repo)
-- `--dst-host string`: GitHub host for the destination (defaults to source repository host)
+- `--dst string` / `-d`: Destination repository (e.g., owner/repo or HOST/OWNER/REPO)
 - `--dst-token string`: PAT or token for the destination (required if destination is on a different host)
 - `--label string`: Label name for triggering the migration workflow (default: "gh-secret-kit-migrate")
 - `--overwrite`: Overwrite existing secrets at destination

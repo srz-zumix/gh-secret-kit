@@ -89,12 +89,11 @@ User CLI (local)
 | Option | Short | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- | --- |
 | `--src` | `-s` | string | No | current repository | Source repository (e.g., `owner/repo`; defaults to current repository) |
-| `--dst` | `-d` | string | Yes | - | Destination repository or organization |
+| `--dst` | `-d` | string | Yes | - | Destination repository or organization (e.g., `owner/repo`, `HOST/OWNER/REPO`, `org`, or `HOST/org`) |
 | `--secrets` | - | []string | No | all | Specific secret names to migrate (comma-separated or repeated flag) |
 | `--rename` | - | []string | No | - | Rename mapping in `OLD_NAME=NEW_NAME` format (repeatable) |
 | `--overwrite` | - | bool | No | false | Overwrite existing secrets at the destination (default is skip) |
 | `--dst-token` | - | string | No | - | PAT or token for the destination (required if destination is on a different host) |
-| `--dst-host` | - | string | No | - | GitHub host for the destination (defaults to source repository host) |
 | `--branch` | - | string | No | `gh-secret-kit-migrate` | Topic branch to push the workflow YAML to |
 | `--label` | - | string | No | `gh-secret-kit-migrate` | Label name for triggering the migration workflow |
 | `--runner-label` | - | string | No | `self-hosted` | Runner label to use in the workflow `runs-on` |
@@ -115,11 +114,10 @@ User CLI (local)
 | Option | Short | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- | --- |
 | `--src` | `-s` | string | Varies | current repository | Source repository or organization |
-| `--dst` | `-d` | string | Yes | - | Destination repository or organization |
+| `--dst` | `-d` | string | Yes | - | Destination repository or organization (e.g., `owner/repo`, `HOST/OWNER/REPO`, `org`, or `HOST/org`) |
 | `--secrets` | - | []string | No | all | Specific secret names to check |
 | `--rename` | - | []string | No | - | Rename mappings to apply when comparing |
 | `--dst-token` | - | string | No | - | PAT or token for the destination |
-| `--dst-host` | - | string | No | - | GitHub host for the destination |
 
 > For `org check`, `--src` is the source organization name. For `repo check` and `env check`, `--src` is the source repository.
 
@@ -202,11 +200,10 @@ Positional argument: `[org]` — Organization name for organization-scoped runne
 | Option | Short | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- | --- |
 | `--src` | `-s` | string | No | current repository | Source repository (e.g., owner/repo; defaults to current repository) |
-| `--dst` | `-d` | string | Yes | - | Destination repository or organization |
+| `--dst` | `-d` | string | Yes | - | Destination repository or organization (e.g., `owner/repo`, `HOST/OWNER/REPO`, `org`, or `HOST/org`) |
 | `--secrets` | - | []string | No | all | Specific secret names to migrate (comma-separated or repeated flag) |
 | `--rename` | - | []string | No | - | Rename mapping in `OLD_NAME=NEW_NAME` format (repeatable) |
 | `--overwrite` | - | bool | No | false | Overwrite existing secrets at the destination |
-| `--dst-host` | - | string | No | - | GitHub host for the destination (defaults to source repository host) |
 | `--branch` | - | string | No | `gh-secret-kit-migrate` | Branch to push the workflow to |
 | `--label` | - | string | No | `gh-secret-kit-migrate` | Label name for triggering the migration workflow |
 | `--runner-label` | - | string | No | `gh-secret-kit-migrate` | Runner label for the workflow |

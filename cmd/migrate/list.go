@@ -13,8 +13,8 @@ import (
 )
 
 var (
-	listRepo     string
-	listPlain    bool
+	listRepo  string
+	listPlain bool
 )
 
 // NewListCmd creates the migrate list command
