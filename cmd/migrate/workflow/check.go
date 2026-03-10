@@ -36,16 +36,7 @@ func RunCheck(ctx context.Context, config *CheckConfig) error {
 		return fmt.Errorf("failed to create source GitHub client: %w", err)
 	}
 
-	// Determine destination host: use explicit flag, fall back to source host
-	destHost := config.DestinationHost
-	if destHost == "" {
-		destHost = sourceRepo.Host
-	}
-	if destHost == "" {
-		destHost = "github.com"
-	}
-
-	// Parse destination based on scope
+	// Parse destination based on scope; host is extracted from the [HOST/]... prefix.
 	var destRepo repository.Repository
 	switch config.Scope {
 	case migratePackage.SecretScopeOrg:
@@ -56,7 +47,15 @@ func RunCheck(ctx context.Context, config *CheckConfig) error {
 	if err != nil {
 		return fmt.Errorf("failed to parse destination: %w", err)
 	}
-	// Always apply the resolved destination host
+
+	// Determine destination host: use parsed host, fall back to source host.
+	destHost := destRepo.Host
+	if destHost == "" {
+		destHost = sourceRepo.Host
+	}
+	if destHost == "" {
+		destHost = "github.com"
+	}
 	destRepo.Host = destHost
 
 	// Initialize destination GitHub client

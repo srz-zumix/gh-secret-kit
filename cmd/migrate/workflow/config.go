@@ -18,7 +18,6 @@ type InitConfig struct {
 type CreateConfig struct {
 	Source                 string
 	Destination            string
-	DestinationHost        string
 	SourceEnv              string
 	DestinationEnv         string
 	Secrets                []string
@@ -62,7 +61,6 @@ type DeleteConfig struct {
 type CheckConfig struct {
 	Source           string
 	Destination      string
-	DestinationHost  string
 	SourceEnv        string
 	DestinationEnv   string
 	Secrets          []string
@@ -77,7 +75,6 @@ type AllConfig struct {
 	// Common fields
 	Source                 string
 	Destination            string
-	DestinationHost        string
 	SourceEnv              string
 	DestinationEnv         string
 	Secrets                []string

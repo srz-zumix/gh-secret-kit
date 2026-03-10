@@ -156,7 +156,7 @@ func runPlan(ctx context.Context, config *planConfig) error {
 			logger.Warn(fmt.Sprintf("Failed to list org secrets: %v", err))
 		} else if len(srcOrgSecrets) > 0 {
 			orgSrcRepo, _ := parser.Repository(parser.RepositoryInput(orgMigrationSrc))
-			cmd := buildOrgMigrateCmd(orgSrcRepo, dstOrg, dst.OwnerRepo.Host, config)
+			cmd := buildOrgMigrateCmd(orgSrcRepo, dst.OwnerRepo, config)
 			result.OrgMigrate = cmd
 			logger.Info(fmt.Sprintf("Found org secrets: %d secrets", len(srcOrgSecrets)))
 		}
@@ -172,10 +172,7 @@ func buildRepoMigrateCmd(src, dst repository.Repository, config *planConfig) str
 	var parts []string
 	parts = append(parts, "gh secret-kit migrate repo all")
 	parts = append(parts, fmt.Sprintf("-s %s", shellQuote(repoArg(src))))
-	parts = append(parts, fmt.Sprintf("-d %s", shellQuote(dst.Owner+"/"+dst.Name)))
-	if dst.Host != "" && dst.Host != src.Host {
-		parts = append(parts, fmt.Sprintf("--dst-host %s", shellQuote(dst.Host)))
-	}
+	parts = append(parts, fmt.Sprintf("-d %s", shellQuote(repoArg(dst))))
 	if config.RunnerLabel != "" && config.RunnerLabel != types.DefaultRunnerLabel {
 		parts = append(parts, fmt.Sprintf("--runner-label %s", shellQuote(config.RunnerLabel)))
 	}
@@ -187,25 +184,23 @@ func buildEnvMigrateCmd(src, dst repository.Repository, envName string, config *
 	parts = append(parts, "gh secret-kit migrate env all")
 	parts = append(parts, fmt.Sprintf("-s %s", shellQuote(repoArg(src))))
 	parts = append(parts, fmt.Sprintf("--src-env %s", shellQuote(envName)))
-	parts = append(parts, fmt.Sprintf("-d %s", shellQuote(dst.Owner+"/"+dst.Name)))
+	parts = append(parts, fmt.Sprintf("-d %s", shellQuote(repoArg(dst))))
 	parts = append(parts, fmt.Sprintf("--dst-env %s", shellQuote(envName)))
-	if dst.Host != "" && dst.Host != src.Host {
-		parts = append(parts, fmt.Sprintf("--dst-host %s", shellQuote(dst.Host)))
-	}
 	if config.RunnerLabel != "" && config.RunnerLabel != types.DefaultRunnerLabel {
 		parts = append(parts, fmt.Sprintf("--runner-label %s", shellQuote(config.RunnerLabel)))
 	}
 	return strings.Join(parts, " ")
 }
 
-func buildOrgMigrateCmd(srcRepo repository.Repository, dstOrg string, dstHost string, config *planConfig) string {
+func buildOrgMigrateCmd(srcRepo repository.Repository, dstOrg repository.Repository, config *planConfig) string {
 	var parts []string
 	parts = append(parts, "gh secret-kit migrate org all")
 	parts = append(parts, fmt.Sprintf("-s %s", shellQuote(repoArg(srcRepo))))
-	parts = append(parts, fmt.Sprintf("-d %s", shellQuote(dstOrg)))
-	if dstHost != "" && dstHost != srcRepo.Host {
-		parts = append(parts, fmt.Sprintf("--dst-host %s", shellQuote(dstHost)))
+	dstOrgArg := dstOrg.Owner
+	if dstOrg.Host != "" && dstOrg.Host != srcRepo.Host {
+		dstOrgArg = dstOrg.Host + "/" + dstOrg.Owner
 	}
+	parts = append(parts, fmt.Sprintf("-d %s", shellQuote(dstOrgArg)))
 	if config.RunnerLabel != "" && config.RunnerLabel != types.DefaultRunnerLabel {
 		parts = append(parts, fmt.Sprintf("--runner-label %s", shellQuote(config.RunnerLabel)))
 	}

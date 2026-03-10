@@ -12,7 +12,6 @@ const (
 type CommonOptions struct {
 	Source                 string
 	Destination            string
-	DestinationHost        string
 	SourceEnv              string
 	DestinationEnv         string
 	Secrets                []string

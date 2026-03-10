@@ -77,15 +77,13 @@ func runCheck(ctx context.Context, config *checkConfig) error {
 	}
 
 	var results []CheckResult
-	dstHost := dst.OwnerRepo.Host
 
 	for _, m := range matches {
 		if m.RepoSecretCount > 0 {
 			logger.Info(fmt.Sprintf("Checking repo secrets: %s (%d secrets)", m.SrcName, m.RepoSecretCount))
 			checkCfg := &workflow.CheckConfig{
 				Source:          repoArg(m.SrcRepoRef),
-				Destination:     fmt.Sprintf("%s/%s", m.DstRepoRef.Owner, m.DstRepoRef.Name),
-				DestinationHost: dstHost,
+				Destination:     repoArg(m.DstRepoRef),
 				Scope:           migrate.SecretScopeRepo,
 			}
 			cerr := workflow.RunCheck(ctx, checkCfg)
@@ -101,8 +99,7 @@ func runCheck(ctx context.Context, config *checkConfig) error {
 			logger.Info(fmt.Sprintf("Checking env secrets: %s/%s (%d secrets)", m.SrcName, env.Name, env.SecretCount))
 			checkCfg := &workflow.CheckConfig{
 				Source:          repoArg(m.SrcRepoRef),
-				Destination:     fmt.Sprintf("%s/%s", m.DstRepoRef.Owner, m.DstRepoRef.Name),
-				DestinationHost: dstHost,
+					Destination:     repoArg(m.DstRepoRef),
 				SourceEnv:       env.Name,
 				DestinationEnv:  env.Name,
 				Scope:           migrate.SecretScopeEnv,
@@ -125,11 +122,14 @@ func runCheck(ctx context.Context, config *checkConfig) error {
 	} else if len(srcOrgSecrets) > 0 {
 		srcOrg := src.OwnerRepo.Owner
 		logger.Info(fmt.Sprintf("Checking org secrets: %s (%d secrets)", srcOrg, len(srcOrgSecrets)))
+		dstOrgArg := dst.OwnerRepo.Owner
+		if dst.OwnerRepo.Host != "" && dst.OwnerRepo.Host != src.OwnerRepo.Host {
+			dstOrgArg = dst.OwnerRepo.Host + "/" + dst.OwnerRepo.Owner
+		}
 		checkCfg := &workflow.CheckConfig{
-			Source:          srcOrg,
-			Destination:     dst.OwnerRepo.Owner,
-			DestinationHost: dstHost,
-			Scope:           migrate.SecretScopeOrg,
+			Source:      srcOrg,
+			Destination: dstOrgArg,
+			Scope:       migrate.SecretScopeOrg,
 		}
 		if src.OwnerRepo.Host != "" {
 			checkCfg.Source = fmt.Sprintf("%s/%s", src.OwnerRepo.Host, srcOrg)

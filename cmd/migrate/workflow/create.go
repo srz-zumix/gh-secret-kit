@@ -80,13 +80,32 @@ func RunCreate(ctx context.Context, config *CreateConfig) error {
 		renameMap[parts[0]] = parts[1]
 	}
 
-	// Determine destination host
-	destHost := config.DestinationHost
+	// Determine destination host: parse --dst to extract [HOST/]OWNER/REPO or [HOST/]ORG,
+	// then fall back to the source host.
+	var destRepo repository.Repository
+	if config.Scope == migratePackage.SecretScopeOrg {
+		destRepo, err = parser.Repository(parser.RepositoryOwnerWithHost(config.Destination))
+	} else {
+		destRepo, err = parser.Repository(parser.RepositoryInput(config.Destination))
+	}
+	if err != nil {
+		return fmt.Errorf("failed to parse destination: %w", err)
+	}
+	destHost := destRepo.Host
 	if destHost == "" {
 		destHost = sourceRepo.Host
 	}
 	if destHost == "" {
 		destHost = "github.com"
+	}
+
+	// Normalize destination: strip the host prefix so the generated workflow
+	// uses just OWNER/REPO (or ORG) and relies on GH_HOST for the host.
+	normalizedDst := config.Destination
+	if config.Scope == migratePackage.SecretScopeOrg {
+		normalizedDst = destRepo.Owner
+	} else if destRepo.Owner != "" && destRepo.Name != "" {
+		normalizedDst = destRepo.Owner + "/" + destRepo.Name
 	}
 
 	// Build workflow configuration
@@ -95,7 +114,7 @@ func RunCreate(ctx context.Context, config *CreateConfig) error {
 		RunnerLabel:            config.RunnerLabel,
 		TriggerLabel:           config.Label,
 		Source:                 config.Source,
-		Destination:            config.Destination,
+		Destination:            normalizedDst,
 		DestinationHost:        destHost,
 		SourceEnv:              config.SourceEnv,
 		DestinationEnv:         config.DestinationEnv,
