@@ -202,7 +202,6 @@ gh secret-kit migrate env check \
 | `--dst` / `-d` | Destination repository or organization |
 | `--secrets` | Secret names to check (default: all) |
 | `--rename` | Rename mappings to apply when comparing |
-| `--dst-token` | *(Rarely needed)* Name of a secret variable on the source repository holding a PAT for the destination. Use only when the runner lacks `gh` authentication for the destination host. |
 
 ### Step 6: Delete
 
