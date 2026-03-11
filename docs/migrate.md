@@ -150,7 +150,6 @@ gh secret-kit migrate env create \
 | `--secrets` | Secret names to migrate (comma-separated; default: all) |
 | `--rename` | Rename mapping `OLD=NEW` (repeatable) |
 | `--overwrite` | Overwrite existing secrets at destination |
-| `--dst-token` | *(Rarely needed)* Name of a secret variable registered on the source repository that holds a PAT for the destination (e.g., `DST_PAT`; referenced as `${{ secrets.DST_PAT }}` in the workflow). Use only when the runner does not have `gh` authenticated for the destination host. |
 | `--runner-label` | Runner label in workflow `runs-on` (default: `gh-secret-kit-migrate`) |
 | `--src-env` | Source environment name (env scope only, required) |
 | `--dst-env` | Destination environment name (env scope only, required) |
