@@ -62,10 +62,12 @@ Use --dst-host to apply a host to destination arguments that do not include one.
 				}
 				if dstHost != "" && dst.Host == "" {
 					dst.Host = dstHost
+				} else if dst.Host == "" && src.Host != "" {
+					dst.Host = src.Host
 				}
 
 				dstClient := srcClient
-				if src.Host != dst.Host {
+				if dst.Host != src.Host {
 					dstClient, err = gh.NewGitHubClientWithRepo(dst)
 					if err != nil {
 						return fmt.Errorf("failed to create GitHub client for destination %q on host %q: %w", dstArg, dst.Host, err)
