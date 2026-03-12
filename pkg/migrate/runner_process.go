@@ -357,8 +357,10 @@ func ConfigureRunner(runnerDir, configURL, token, name, labels string) error {
 
 // StartRunner starts the runner binary with the given JIT config.
 // The runner process runs in background as a detached subprocess.
+// logPath specifies where stdout/stderr of the runner process are written;
+// use an empty string to default to <runnerDir>/runner.log.
 // The caller must call cmd.Wait() (or the watcher goroutine in listener.go handles it).
-func StartRunner(runnerDir, jitConfig string) (*exec.Cmd, error) {
+func StartRunner(runnerDir, jitConfig, logPath string) (*exec.Cmd, error) {
 	runScript := "run.sh"
 	if runtime.GOOS == "windows" {
 		runScript = "run.cmd"
@@ -371,8 +373,14 @@ func StartRunner(runnerDir, jitConfig string) (*exec.Cmd, error) {
 		cmd.Env = append(os.Environ(), fmt.Sprintf("ACTIONS_RUNNER_INPUT_JITCONFIG=%s", jitConfig))
 	}
 
-	// Redirect stdout/stderr to a log file
-	logFile, err := os.Create(filepath.Join(runnerDir, "runner.log"))
+	if logPath == "" {
+		logPath = filepath.Join(runnerDir, "runner.log")
+	}
+
+	// Redirect stdout/stderr to a log file.
+	// The file is closed in the parent after cmd.Start() — the child inherits
+	// its own file descriptor and keeps writing to the log independently.
+	logFile, err := os.Create(logPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create runner log file: %w", err)
 	}
@@ -384,6 +392,9 @@ func StartRunner(runnerDir, jitConfig string) (*exec.Cmd, error) {
 		_ = logFile.Close()
 		return nil, fmt.Errorf("failed to start runner process: %w", err)
 	}
+
+	// Close the parent's file descriptor now that the child has inherited it.
+	_ = logFile.Close()
 
 	return cmd, nil
 }

@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"sync"
 	"syscall"
 
@@ -317,13 +318,14 @@ func (s *migrateScaler) startRunner(ctx context.Context) error {
 		}
 
 		logger.Info(fmt.Sprintf("Starting ephemeral runner: %s", runnerName))
-		cmd, err := StartRunner(s.runnerDir, "")
+		logPath := filepath.Join(s.runnerDir, runnerName+".log")
+		cmd, err := StartRunner(s.runnerDir, "", logPath)
 		if err != nil {
 			return fmt.Errorf("failed to start runner: %w", err)
 		}
 
 		s.runners.addIdle(runnerName, cmd)
-		logger.Info(fmt.Sprintf("Runner started: %s (PID: %d)", runnerName, cmd.Process.Pid))
+		logger.Info(fmt.Sprintf("Runner started: %s (PID: %d, log: %s)", runnerName, cmd.Process.Pid, logPath))
 		// Watch for unexpected process exit and remove from state so the next
 		// HandleDesiredRunnerCount call correctly reflects the actual runner count.
 		s.runnerWg.Add(1)
@@ -342,13 +344,14 @@ func (s *migrateScaler) startRunner(ctx context.Context) error {
 		}
 
 		logger.Info(fmt.Sprintf("Starting ephemeral runner: %s", runnerName))
-		cmd, err := StartRunner(s.runnerDir, jitConfig.EncodedJITConfig)
+		logPath := filepath.Join(s.runnerDir, runnerName+".log")
+		cmd, err := StartRunner(s.runnerDir, jitConfig.EncodedJITConfig, logPath)
 		if err != nil {
 			return fmt.Errorf("failed to start runner: %w", err)
 		}
 
 		s.runners.addIdle(runnerName, cmd)
-		logger.Info(fmt.Sprintf("Runner started: %s (PID: %d)", runnerName, cmd.Process.Pid))
+		logger.Info(fmt.Sprintf("Runner started: %s (PID: %d, log: %s)", runnerName, cmd.Process.Pid, logPath))
 		// Watch for unexpected process exit and remove from state so the next
 		// HandleDesiredRunnerCount call correctly reflects the actual runner count.
 		s.runnerWg.Add(1)

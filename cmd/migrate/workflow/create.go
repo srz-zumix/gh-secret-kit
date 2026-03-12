@@ -79,7 +79,7 @@ func RunCreate(ctx context.Context, config *CreateConfig) error {
 		filtered := secrets[:0]
 		for _, name := range secrets {
 			if _, excluded := excludeSet[name]; excluded {
-				logger.Info(fmt.Sprintf("Excluding secret: %s", name))
+				logger.Debug(fmt.Sprintf("Excluding secret: %s", name))
 				continue
 			}
 			filtered = append(filtered, name)
