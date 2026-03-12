@@ -167,9 +167,9 @@ Generate a GitHub Actions workflow that migrates environment secrets from the so
 - `--overwrite`: Overwrite existing secrets at destination
 - `--rename strings`: Rename mapping in OLD\_NAME=NEW\_NAME format (repeatable)
 - `--runner-label string`: Runner label for the workflow (default: "self-hosted")
-- `--secrets strings`: Specific secret names to migrate (comma-separated or repeated flag; defaults to all)- `--exclude-secrets strings`: Secret names to exclude from migration (comma-separated or repeated flag)- `--src string` / `-s`: Source repository (e.g., owner/repo; defaults to current repository)
-- `--src-env string`: Source environment name
-- `--unarchive`: Temporarily unarchive the repository if it is archived
+- `--secrets strings`: Specific secret names to migrate (comma-separated or repeated flag; defaults to all)
+- `--exclude-secrets strings`: Secret names to exclude from migration (comma-separated or repeated flag)
+- `--src string` / `-s`: Source repository (e.g., owner/repo; defaults to current repository)
 - `--workflow-name string`: Name of the generated workflow file (default: "gh-secret-kit-migrate")
 
 #### migrate env delete
