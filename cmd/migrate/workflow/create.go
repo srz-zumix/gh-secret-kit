@@ -119,18 +119,23 @@ func RunCreate(ctx context.Context, config *CreateConfig) error {
 
 	// Verify the destination exists before proceeding to avoid running the full
 	// pipeline against a mistyped destination.
-	destCheckRepo := repository.Repository{Host: destHost, Owner: destRepo.Owner, Name: destRepo.Name}
-	destClient, err := gh.NewGitHubClientWithRepo(destCheckRepo)
-	if err != nil {
-		return fmt.Errorf("failed to create destination GitHub client: %w", err)
-	}
-	if config.Scope == migratePackage.SecretScopeOrg {
-		if _, err := destClient.GetOrg(ctx, destRepo.Owner); err != nil {
-			return fmt.Errorf("destination organization %q not found or inaccessible: %w", destRepo.Owner, err)
+	// This check requires local API access to the destination host, so skip it
+	// when a destination token secret is configured for a different host and the
+	// actual access check will happen at workflow runtime.
+	if config.DestinationTokenSecret == "" || destHost == sourceRepo.Host {
+		destCheckRepo := repository.Repository{Host: destHost, Owner: destRepo.Owner, Name: destRepo.Name}
+		destClient, err := gh.NewGitHubClientWithRepo(destCheckRepo)
+		if err != nil {
+			return fmt.Errorf("failed to create destination GitHub client: %w", err)
 		}
-	} else {
-		if _, err := gh.GetRepository(ctx, destClient, destCheckRepo); err != nil {
-			return fmt.Errorf("destination repository %q not found or inaccessible: %w", config.Destination, err)
+		if config.Scope == migratePackage.SecretScopeOrg {
+			if _, err := destClient.GetOrg(ctx, destRepo.Owner); err != nil {
+				return fmt.Errorf("destination organization %q not found or inaccessible: %w", destRepo.Owner, err)
+			}
+		} else {
+			if _, err := gh.GetRepository(ctx, destClient, destCheckRepo); err != nil {
+				return fmt.Errorf("destination repository %q not found or inaccessible: %w", config.Destination, err)
+			}
 		}
 	}
 
