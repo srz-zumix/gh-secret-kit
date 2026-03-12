@@ -20,7 +20,7 @@ For detailed installation instructions and setup for each shell, see the [Shell 
 
 ### Copy GitHub Actions Variables
 
-Copy GitHub Actions variables from a source repository or organization to a destination.
+Copy GitHub Actions variables from a source repository or organization to one or more destinations.
 
 ```sh
 gh secret-kit variable [command]
