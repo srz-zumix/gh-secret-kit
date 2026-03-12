@@ -70,6 +70,24 @@ func RunCreate(ctx context.Context, config *CreateConfig) error {
 		logger.Info(fmt.Sprintf("Found %d secrets to migrate", len(secrets)))
 	}
 
+	// Apply exclusion filter
+	if len(config.ExcludeSecrets) > 0 {
+		excludeSet := make(map[string]struct{}, len(config.ExcludeSecrets))
+		for _, name := range config.ExcludeSecrets {
+			excludeSet[name] = struct{}{}
+		}
+		filtered := secrets[:0]
+		for _, name := range secrets {
+			if _, excluded := excludeSet[name]; excluded {
+				logger.Info(fmt.Sprintf("Excluding secret: %s", name))
+				continue
+			}
+			filtered = append(filtered, name)
+		}
+		secrets = filtered
+		logger.Info(fmt.Sprintf("%d secrets after exclusion", len(secrets)))
+	}
+
 	// Parse rename mappings
 	renameMap := make(map[string]string)
 	for _, mapping := range config.Rename {
@@ -97,6 +115,23 @@ func RunCreate(ctx context.Context, config *CreateConfig) error {
 	}
 	if destHost == "" {
 		destHost = "github.com"
+	}
+
+	// Verify the destination exists before proceeding to avoid running the full
+	// pipeline against a mistyped destination.
+	destCheckRepo := repository.Repository{Host: destHost, Owner: destRepo.Owner, Name: destRepo.Name}
+	destClient, err := gh.NewGitHubClientWithRepo(destCheckRepo)
+	if err != nil {
+		return fmt.Errorf("failed to create destination GitHub client: %w", err)
+	}
+	if config.Scope == migratePackage.SecretScopeOrg {
+		if _, err := destClient.GetOrg(ctx, destRepo.Owner); err != nil {
+			return fmt.Errorf("destination organization %q not found or inaccessible: %w", destRepo.Owner, err)
+		}
+	} else {
+		if _, err := gh.GetRepository(ctx, destClient, destCheckRepo); err != nil {
+			return fmt.Errorf("destination repository %q not found or inaccessible: %w", config.Destination, err)
+		}
 	}
 
 	// Normalize destination: strip the host prefix so the generated workflow

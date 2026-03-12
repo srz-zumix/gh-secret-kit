@@ -20,12 +20,18 @@ type planConfig struct {
 	RunnerLabel string
 }
 
+// PlanEntry represents a single migration command with an optional comment listing secrets.
+type PlanEntry struct {
+	Comment string // secret names comment (may be empty)
+	Cmd     string
+}
+
 // PlanResult represents the migration plan result
 type PlanResult struct {
 	RunnerSetup    string
-	RepoMigrates   []string
-	EnvMigrates    []string
-	OrgMigrate     string
+	RepoMigrates   []PlanEntry
+	EnvMigrates    []PlanEntry
+	OrgMigrate     PlanEntry
 	RunnerTeardown string
 }
 
@@ -135,13 +141,13 @@ func runPlan(ctx context.Context, config *planConfig) error {
 		}
 
 		if m.RepoSecretCount > 0 {
-			cmd := buildRepoMigrateCmd(m.SrcRepoRef, m.DstRepoRef, config)
+			cmd := buildRepoMigrateCmd(m.SrcRepoRef, m.DstRepoRef, m.RepoSecretNames, config)
 			result.RepoMigrates = append(result.RepoMigrates, cmd)
 			logger.Info(fmt.Sprintf("Found matching repo with secrets: %s (%d secrets)", m.SrcName, m.RepoSecretCount))
 		}
 
 		for _, env := range m.EnvMatches {
-			cmd := buildEnvMigrateCmd(m.SrcRepoRef, m.DstRepoRef, env.Name, config)
+			cmd := buildEnvMigrateCmd(m.SrcRepoRef, m.DstRepoRef, env.Name, env.SecretNames, config)
 			result.EnvMigrates = append(result.EnvMigrates, cmd)
 			logger.Info(fmt.Sprintf("Found matching env with secrets: %s/%s (%d secrets)", m.SrcName, env.Name, env.SecretCount))
 		}
@@ -155,8 +161,12 @@ func runPlan(ctx context.Context, config *planConfig) error {
 		if err != nil {
 			logger.Warn(fmt.Sprintf("Failed to list org secrets: %v", err))
 		} else if len(srcOrgSecrets) > 0 {
+			var orgSecretNames []string
+			for _, s := range srcOrgSecrets {
+				orgSecretNames = append(orgSecretNames, s.Name)
+			}
 			orgSrcRepo, _ := parser.Repository(parser.RepositoryInput(orgMigrationSrc))
-			cmd := buildOrgMigrateCmd(orgSrcRepo, dst.OwnerRepo, config)
+			cmd := buildOrgMigrateCmd(orgSrcRepo, dst.OwnerRepo, orgSecretNames, config)
 			result.OrgMigrate = cmd
 			logger.Info(fmt.Sprintf("Found org secrets: %d secrets", len(srcOrgSecrets)))
 		}
@@ -168,7 +178,42 @@ func runPlan(ctx context.Context, config *planConfig) error {
 	return nil
 }
 
-func buildRepoMigrateCmd(src, dst repository.Repository, config *planConfig) string {
+const secretsCommentMaxWidth = 80
+
+func secretsComment(names []string) string {
+	if len(names) == 0 {
+		return ""
+	}
+	const prefix = "# secrets: "
+	const cont   = "#          " // same width as prefix, aligned with first secret name
+
+	var lines []string
+	currentPrefix := prefix
+	currentLen := len(prefix)
+	var current []string
+
+	for _, name := range names {
+		needed := len(name)
+		if len(current) > 0 {
+			needed += 2 // ", " separator
+		}
+		if len(current) > 0 && currentLen+needed > secretsCommentMaxWidth {
+			lines = append(lines, currentPrefix+strings.Join(current, ", "))
+			current = current[:0]
+			currentPrefix = cont
+			currentLen = len(cont)
+			needed = len(name)
+		}
+		current = append(current, name)
+		currentLen += needed
+	}
+	if len(current) > 0 {
+		lines = append(lines, currentPrefix+strings.Join(current, ", "))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func buildRepoMigrateCmd(src, dst repository.Repository, secretNames []string, config *planConfig) PlanEntry {
 	var parts []string
 	parts = append(parts, "gh secret-kit migrate repo all")
 	parts = append(parts, fmt.Sprintf("-s %s", shellQuote(repoArg(src))))
@@ -176,10 +221,10 @@ func buildRepoMigrateCmd(src, dst repository.Repository, config *planConfig) str
 	if config.RunnerLabel != "" && config.RunnerLabel != types.DefaultRunnerLabel {
 		parts = append(parts, fmt.Sprintf("--runner-label %s", shellQuote(config.RunnerLabel)))
 	}
-	return strings.Join(parts, " ")
+	return PlanEntry{Comment: secretsComment(secretNames), Cmd: strings.Join(parts, " ")}
 }
 
-func buildEnvMigrateCmd(src, dst repository.Repository, envName string, config *planConfig) string {
+func buildEnvMigrateCmd(src, dst repository.Repository, envName string, secretNames []string, config *planConfig) PlanEntry {
 	var parts []string
 	parts = append(parts, "gh secret-kit migrate env all")
 	parts = append(parts, fmt.Sprintf("-s %s", shellQuote(repoArg(src))))
@@ -189,10 +234,10 @@ func buildEnvMigrateCmd(src, dst repository.Repository, envName string, config *
 	if config.RunnerLabel != "" && config.RunnerLabel != types.DefaultRunnerLabel {
 		parts = append(parts, fmt.Sprintf("--runner-label %s", shellQuote(config.RunnerLabel)))
 	}
-	return strings.Join(parts, " ")
+	return PlanEntry{Comment: secretsComment(secretNames), Cmd: strings.Join(parts, " ")}
 }
 
-func buildOrgMigrateCmd(srcRepo repository.Repository, dstOrg repository.Repository, config *planConfig) string {
+func buildOrgMigrateCmd(srcRepo repository.Repository, dstOrg repository.Repository, secretNames []string, config *planConfig) PlanEntry {
 	var parts []string
 	parts = append(parts, "gh secret-kit migrate org all")
 	parts = append(parts, fmt.Sprintf("-s %s", shellQuote(repoArg(srcRepo))))
@@ -204,11 +249,11 @@ func buildOrgMigrateCmd(srcRepo repository.Repository, dstOrg repository.Reposit
 	if config.RunnerLabel != "" && config.RunnerLabel != types.DefaultRunnerLabel {
 		parts = append(parts, fmt.Sprintf("--runner-label %s", shellQuote(config.RunnerLabel)))
 	}
-	return strings.Join(parts, " ")
+	return PlanEntry{Comment: secretsComment(secretNames), Cmd: strings.Join(parts, " ")}
 }
 
 func printPlan(result *PlanResult) {
-	if len(result.RepoMigrates) == 0 && len(result.EnvMigrates) == 0 && result.OrgMigrate == "" {
+	if len(result.RepoMigrates) == 0 && len(result.EnvMigrates) == 0 && result.OrgMigrate.Cmd == "" {
 		fmt.Println("# No matching repositories or environments found for migration")
 		return
 	}
@@ -223,23 +268,32 @@ func printPlan(result *PlanResult) {
 
 	if len(result.RepoMigrates) > 0 {
 		fmt.Println("# Repository secret migrations")
-		for _, cmd := range result.RepoMigrates {
-			fmt.Println(cmd)
+		for _, entry := range result.RepoMigrates {
+			if entry.Comment != "" {
+				fmt.Println(entry.Comment)
+			}
+			fmt.Println(entry.Cmd)
 		}
 		fmt.Println()
 	}
 
 	if len(result.EnvMigrates) > 0 {
 		fmt.Println("# Environment secret migrations")
-		for _, cmd := range result.EnvMigrates {
-			fmt.Println(cmd)
+		for _, entry := range result.EnvMigrates {
+			if entry.Comment != "" {
+				fmt.Println(entry.Comment)
+			}
+			fmt.Println(entry.Cmd)
 		}
 		fmt.Println()
 	}
 
-	if result.OrgMigrate != "" {
+	if result.OrgMigrate.Cmd != "" {
 		fmt.Println("# Organization secret migration")
-		fmt.Println(result.OrgMigrate)
+		if result.OrgMigrate.Comment != "" {
+			fmt.Println(result.OrgMigrate.Comment)
+		}
+		fmt.Println(result.OrgMigrate.Cmd)
 		fmt.Println()
 	}
 

@@ -91,6 +91,7 @@ User CLI (local)
 | `--src` | `-s` | string | No | current repository | Source repository (e.g., `owner/repo`; defaults to current repository) |
 | `--dst` | `-d` | string | Yes | - | Destination repository or organization (e.g., `owner/repo`, `HOST/OWNER/REPO`, `org`, or `HOST/org`) |
 | `--secrets` | - | []string | No | all | Specific secret names to migrate (comma-separated or repeated flag) |
+| `--exclude-secrets` | - | []string | No | - | Secret names to exclude from migration (comma-separated or repeated flag) |
 | `--rename` | - | []string | No | - | Rename mapping in `OLD_NAME=NEW_NAME` format (repeatable) |
 | `--overwrite` | - | bool | No | false | Overwrite existing secrets at the destination (default is skip) |
 | `--dst-token` | - | string | No | - | PAT or token for the destination (required if destination is on a different host) |
@@ -202,6 +203,7 @@ Positional argument: `[org]` — Organization name for organization-scoped runne
 | `--src` | `-s` | string | No | current repository | Source repository (e.g., owner/repo; defaults to current repository) |
 | `--dst` | `-d` | string | Yes | - | Destination repository or organization (e.g., `owner/repo`, `HOST/OWNER/REPO`, `org`, or `HOST/org`) |
 | `--secrets` | - | []string | No | all | Specific secret names to migrate (comma-separated or repeated flag) |
+| `--exclude-secrets` | - | []string | No | - | Secret names to exclude from migration (comma-separated or repeated flag) |
 | `--rename` | - | []string | No | - | Rename mapping in `OLD_NAME=NEW_NAME` format (repeatable) |
 | `--overwrite` | - | bool | No | false | Overwrite existing secrets at the destination |
 | `--branch` | - | string | No | `gh-secret-kit-migrate` | Branch to push the workflow to |
@@ -278,6 +280,14 @@ The scope of secrets is determined by the subcommand:
 #### Generated Workflow Behavior
 
 - The workflow uses `pull_request` trigger with a label filter.
+
+#### Workflow Trigger Design Constraints
+
+The generated workflow is pushed to a **topic branch** (not the default branch). This is intentional:
+- The migration workflow contains sensitive secret names and must not be committed to the default branch (e.g., `main`).
+- The PR keeps the workflow active for the duration of the migration and is deleted in the `delete` step.
+- Because `workflow_dispatch` requires the workflow file to be on the **default branch**, that trigger cannot be used here. Triggering via `pull_request: labeled` on a topic branch is the required approach.
+- GitHub Actions may take several seconds to register a newly pushed workflow file. The `run` command accounts for this with a registration wait and label-trigger retry logic (see [Run behavior](#4-run-migrate-orgrepoenv-run)).
 - The destination is embedded in the generated workflow YAML at `create` time.
 - For each secret, it:
   1. Reads the value from `${{ secrets.SECRET_NAME }}`.
@@ -299,10 +309,19 @@ When migrating organization secrets, the workflow also:
 
 ### 4. Run (`migrate {org,repo,env} run`)
 
-1. Remove and re-add the trigger label on the open PR to dispatch the workflow.
-2. If `--wait` is true, poll until the workflow run completes.
-3. Report success/failure for each secret migration.
-4. Return error if the workflow run fails or times out.
+1. Wait until GitHub Actions has registered the workflow file (poll until the workflow is no longer 404).
+2. Remove and re-add the trigger label on the open PR to dispatch the workflow.
+3. Poll for a workflow run to appear. If no run is queued within the queue-detection window:
+   - When invoked via `all`: remove and re-add the label (up to `LabelRetries` attempts).
+   - When invoked standalone: report an error.
+4. If `--wait` is true, poll until the workflow run completes.
+5. Report success/failure for each secret migration.
+6. Return error if the workflow run fails or times out.
+
+> **Note on `all` behavior**: When `run` is called as part of the `all` pipeline, a short fixed
+> wait (`InitialWait`) is inserted before the first label addition to give GitHub Actions extra
+> time after the `create` step's file push. If still no run is queued, the label is retried
+> automatically.
 
 ### 5. Check (`migrate {org,repo,env} check`)
 

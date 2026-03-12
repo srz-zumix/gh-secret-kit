@@ -3,6 +3,7 @@ package workflow
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/srz-zumix/go-gh-extension/pkg/gh"
 	"github.com/srz-zumix/go-gh-extension/pkg/logger"
@@ -41,6 +42,7 @@ func RunAll(ctx context.Context, config *AllConfig) error {
 		SourceEnv:              config.SourceEnv,
 		DestinationEnv:         config.DestinationEnv,
 		Secrets:                config.Secrets,
+		ExcludeSecrets:         config.ExcludeSecrets,
 		Rename:                 config.Rename,
 		Overwrite:              config.Overwrite,
 		DestinationTokenSecret: config.DestinationTokenSecret,
@@ -94,8 +96,13 @@ func RunAll(ctx context.Context, config *AllConfig) error {
 	}
 
 	// Step 3: run (always wait)
-	// Pass the PR number from init to avoid API race conditions on GHES
+	// Pass the PR number from init to avoid API race conditions on GHES.
+	// InitialWait gives GitHub Actions extra time after the file push before
+	// the label fires. LabelRetries handles the case where the trigger label
+	// is added before Actions has fully registered the new workflow file.
 	runConfig.PRNumber = prNumber
+	runConfig.InitialWait = 5 * time.Second
+	runConfig.LabelRetries = 3
 	logger.Info("Step 3/5: Running migration workflow...")
 	if err := RunWorkflow(ctx, runConfig); err != nil {
 		return fmt.Errorf("run failed: %w", err)

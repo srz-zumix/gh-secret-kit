@@ -1,6 +1,8 @@
 package workflow
 
 import (
+	"time"
+
 	"github.com/srz-zumix/gh-secret-kit/pkg/migrate"
 )
 
@@ -21,6 +23,7 @@ type CreateConfig struct {
 	SourceEnv              string
 	DestinationEnv         string
 	Secrets                []string
+	ExcludeSecrets         []string
 	Rename                 []string
 	Overwrite              bool
 	DestinationTokenSecret string
@@ -46,6 +49,14 @@ type RunConfig struct {
 	// PRNumber is an optional PR number to use directly, skipping the search.
 	// Set by RunAll to avoid API race conditions between init and run.
 	PRNumber int
+	// InitialWait, when non-zero, adds a fixed sleep before the first trigger
+	// label addition. Set by RunAll to give GitHub Actions extra time after the
+	// create step's file push before the label fires the workflow.
+	InitialWait time.Duration
+	// LabelRetries is the number of additional label-trigger attempts to make
+	// when no workflow run is queued within the queue-detection window.
+	// Set by RunAll; 0 means no retry (standalone run command).
+	LabelRetries int
 }
 
 // DeleteConfig holds configuration for the delete operation
@@ -78,6 +89,7 @@ type AllConfig struct {
 	SourceEnv              string
 	DestinationEnv         string
 	Secrets                []string
+	ExcludeSecrets         []string
 	Rename                 []string
 	Overwrite              bool
 	DestinationTokenSecret string

@@ -357,7 +357,8 @@ func ConfigureRunner(runnerDir, configURL, token, name, labels string) error {
 
 // StartRunner starts the runner binary with the given JIT config.
 // The runner process runs in background as a detached subprocess.
-func StartRunner(runnerDir, jitConfig string) (*os.Process, error) {
+// The caller must call cmd.Wait() (or the watcher goroutine in listener.go handles it).
+func StartRunner(runnerDir, jitConfig string) (*exec.Cmd, error) {
 	runScript := "run.sh"
 	if runtime.GOOS == "windows" {
 		runScript = "run.cmd"
@@ -384,7 +385,7 @@ func StartRunner(runnerDir, jitConfig string) (*os.Process, error) {
 		return nil, fmt.Errorf("failed to start runner process: %w", err)
 	}
 
-	return cmd.Process, nil
+	return cmd, nil
 }
 
 // WaitForRunnerReady waits for the runner to become ready by polling
