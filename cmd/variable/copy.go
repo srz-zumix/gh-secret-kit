@@ -58,7 +58,7 @@ Use --dst-host to apply a host to destination arguments that do not include one.
 					dst, err = parser.Repository(parser.RepositoryOwnerWithHost(dstArg))
 				}
 				if err != nil {
-					return fmt.Errorf("failed to parse destination %q: expected owner/repo or owner", dstArg)
+					return fmt.Errorf("failed to parse destination %q: expected owner/repo or owner: %w", dstArg, err)
 				}
 				if dstHost != "" && dst.Host == "" {
 					dst.Host = dstHost
