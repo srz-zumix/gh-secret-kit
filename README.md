@@ -47,8 +47,8 @@ Each destination argument can be `owner/repo` (repository scope) or `owner` (org
 **Options:**
 
 - `--dst-host string`: Host to apply to destination arguments that do not specify one (e.g., `github.com`)
-- `--overwrite`: Overwrite existing variables at destination (default: false)
 - `--owner string`: Source organization/owner for organization-level variables. Mutually exclusive with `--repo`
+- `--overwrite`: Overwrite existing variables at destination (default: false)
 - `--repo string` / `-R`: Source repository (e.g., `owner/repo`; defaults to current repository). Mutually exclusive with `--owner`
 - `--variables strings`: Specific variable names to copy (comma-separated or repeated flag; defaults to all)
 
