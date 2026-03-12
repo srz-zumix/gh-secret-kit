@@ -28,7 +28,7 @@ gh secret-kit variable [command]
 
 Since variable values are accessible via the GitHub API (unlike secrets), this command reads values directly from the source and writes them to the destination.
 
-The scope (repository or organization) is determined automatically based on whether the source and destination include a repository name (`owner/repo`) or only an owner name.
+The source scope (repository or organization) is controlled by the `--repo` and `--owner` flags: use `--repo` for repository variables (default: current repository when neither is set) or `--owner` for organization variables. The destination scope is inferred for each destination argument: use `owner/repo` for repository scope or `owner` for organization scope.
 
 #### variable copy
 
