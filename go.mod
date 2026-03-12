@@ -5,7 +5,6 @@ go 1.25.4
 require (
 	github.com/actions/scaleset v0.2.0
 	github.com/cli/go-gh/v2 v2.13.0
-	github.com/google/go-github/v79 v79.0.0
 	github.com/spf13/cobra v1.10.2
 	github.com/srz-zumix/go-gh-extension v0.3.13
 	gopkg.in/yaml.v3 v3.0.1
