@@ -18,6 +18,72 @@ For detailed installation instructions and setup for each shell, see the [Shell 
 
 ## Commands
 
+### Copy GitHub Actions Variables
+
+Copy GitHub Actions variables from a source repository or organization to one or more destinations.
+
+```sh
+gh secret-kit variable [command]
+```
+
+Since variable values are accessible via the GitHub API (unlike secrets), this command reads values directly from the source and writes them to the destination.
+
+The source scope (repository or organization) is controlled by the `--repo` and `--owner` flags: use `--repo` for repository variables (default: current repository when neither is set) or `--owner` for organization variables. The destination scope is inferred for each destination argument: use `owner/repo` for repository scope or `owner` for organization scope.
+
+#### variable copy
+
+```sh
+gh secret-kit variable copy <dst> [dst...] [flags]
+```
+
+Copy all (or specific) GitHub Actions variables from a source repository or organization to one or more destinations. For each variable, if it already exists at the destination and `--overwrite` is not set, it is skipped silently; otherwise it is created or updated.
+
+Each destination argument can be `owner/repo` (repository scope) or `owner` (organization scope). Use `--dst-host` to apply a host to destination arguments that do not include one.
+
+**Arguments:**
+
+- `<dst> [dst...]`: One or more destination repositories or organizations (required)
+
+**Options:**
+
+- `--dst-host string`: Host to apply to destination arguments that do not specify one (e.g., `github.com`)
+- `--owner string`: Source organization/owner for organization-level variables. Mutually exclusive with `--repo`
+- `--overwrite`: Overwrite existing variables at destination (default: false)
+- `--repo string` / `-R`: Source repository (e.g., `owner/repo`; defaults to current repository). Mutually exclusive with `--owner`
+- `--variables strings`: Specific variable names to copy (comma-separated or repeated flag; defaults to all)
+
+### Manage GitHub Actions Environment Resources
+
+Manage GitHub Actions environment resources such as variables for repository environments.
+
+```sh
+gh secret-kit env [command]
+```
+
+#### env variable copy
+
+```sh
+gh secret-kit env variable copy <dst> [dst...] [flags]
+```
+
+Copy GitHub Actions environment variables from a source repository environment to one or more destination repository environments.
+
+Each destination argument must be in `owner/repo` format. Use `--dst-host` to apply a host to destination arguments that do not specify one.
+The destination environment name defaults to `--src-env` when `--dst-env` is not specified.
+
+**Arguments:**
+
+- `<dst> [dst...]`: One or more destination repositories in `owner/repo` format (required)
+
+**Options:**
+
+- `--dst-env string`: Destination environment name (defaults to `--src-env`)
+- `--dst-host string`: Host to apply to destination arguments that do not specify one (e.g., `github.com`)
+- `--overwrite`: Overwrite existing variables at destination (default: false)
+- `--repo string` / `-R`: Source repository (e.g., `owner/repo`; defaults to current repository)
+- `--src-env string`: Source environment name (required)
+- `--variables strings`: Specific variable names to copy (comma-separated or repeated flag; defaults to all)
+
 ### Migrate GitHub Actions Secrets
 
 Migrate GitHub Actions secrets between repositories, organizations, and environments.
