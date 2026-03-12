@@ -103,8 +103,8 @@ func RunWorkflow(ctx context.Context, config *RunConfig) error {
 			time.Sleep(3 * time.Second)
 		}
 
-		// Snapshot the latest run ID before adding the label so we can identify
-		// new runs by ID rather than relying solely on a time-based filter.
+		// Snapshot the latest workflow run number before adding the label so we can
+		// identify new runs by number rather than relying solely on a time-based filter.
 		preRunMaxNumber := fetchLatestRunNumber(ctx, client, sourceRepo, config)
 
 		logger.Info(fmt.Sprintf("Adding label %s to PR #%d to trigger workflow...", labelName, prNumber))
