@@ -52,7 +52,7 @@ Use --dst-host to apply a host to destination arguments that do not specify one.
 			for _, dstArg := range args {
 				dst, err := parser.Repository(parser.RepositoryInput(dstArg))
 				if err != nil {
-					return fmt.Errorf("failed to parse destination %q: expected owner/repo format", dstArg)
+					return fmt.Errorf("failed to parse destination %q as owner/repo: %w", dstArg, err)
 				}
 				if dstHost != "" && dst.Host == "" {
 					dst.Host = dstHost
