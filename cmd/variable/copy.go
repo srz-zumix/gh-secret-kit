@@ -96,7 +96,9 @@ Use --dst-host to apply a host to destination arguments that do not include one.
 	f.StringSliceVar(&variables, "variables", []string{}, "Specific variable names to copy (comma-separated or repeated flag; defaults to all)")
 	f.BoolVar(&overwrite, "overwrite", false, "Overwrite existing variables at destination")
 
-	cmd.MarkFlagsMutuallyExclusive("repo", "owner")
+	// MarkFlagsMutuallyExclusive returns an error only if the flags do not exist.
+	// Since the flags are defined above, the error is intentionally ignored.
+	_ = cmd.MarkFlagsMutuallyExclusive("repo", "owner")
 
 	return cmd
 }
