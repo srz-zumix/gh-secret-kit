@@ -368,11 +368,17 @@ func (s *migrateScaler) startRunner(ctx context.Context) error {
 
 // watchRunner waits for a runner process to exit and logs readiness/completion.
 // It is launched as a goroutine (owns the s.runnerWg counter added by the caller).
+// The goroutine always blocks until procExitCh fires so that shutdown() →
+// runnerWg.Wait() does not return before the runner process has actually exited.
+// When ctx is cancelled, readyCtx is also cancelled (it is derived from ctx),
+// causing WaitForRunnerReady to return early via readyCh; the goroutine then
+// continues waiting for the process to exit (shutdown() sends SIGINT/kill).
 func (s *migrateScaler) watchRunner(ctx context.Context, runnerName string, cmd *exec.Cmd, logPath string) {
 	defer s.runnerWg.Done()
 
 	// readyCtx is cancelled when the runner exits, readiness completes, or the parent context is done.
 	readyCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
 	readyCh := make(chan error, 1)
 	procExitCh := make(chan error, 1)
@@ -405,11 +411,6 @@ func (s *migrateScaler) watchRunner(ctx context.Context, runnerName string, cmd 
 			}
 			s.runners.remove(runnerName)
 			// Ensure readiness watcher is stopped when the process exits.
-			cancel()
-			return
-		case <-ctx.Done():
-			logger.Warn(fmt.Sprintf("Context cancelled while waiting for runner: %s", runnerName))
-			// Propagate cancellation to readiness watcher.
 			cancel()
 			return
 		}
