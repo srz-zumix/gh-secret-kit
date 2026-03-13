@@ -346,15 +346,46 @@ func (s *migrateScaler) startRunner(ctx context.Context) error {
 		s.runnerWg.Add(1)
 		go func() {
 			defer s.runnerWg.Done()
-			logger.Info(fmt.Sprintf("Waiting for runner to become ready: %s", runnerName))
-			if err := WaitForRunnerReady(ctx, logPath, RunnerStartTimeout); err != nil {
-				logger.Warn(fmt.Sprintf("Runner may not be fully ready (%s): %v", runnerName, err))
-			} else {
-				logger.Info(fmt.Sprintf("Runner is ready and listening for jobs: %s", runnerName))
+
+			// Channel to receive process exit result from cmd.Wait.
+			procExitCh := make(chan error, 1)
+			go func() {
+				// Wait for runner process to exit and notify watcher goroutine.
+				procExitCh <- cmd.Wait()
+			}()
+
+			// Channel to receive readiness result from WaitForRunnerReady.
+			readyCh := make(chan error, 1)
+			go func() {
+				logger.Info(fmt.Sprintf("Waiting for runner to become ready: %s", runnerName))
+				readyCh <- WaitForRunnerReady(ctx, logPath, RunnerStartTimeout)
+			}()
+
+			var readyLogged bool
+			for {
+				select {
+				case err := <-readyCh:
+					if !readyLogged {
+						if err != nil {
+							logger.Warn(fmt.Sprintf("Runner may not be fully ready (%s): %v", runnerName, err))
+						} else {
+							logger.Info(fmt.Sprintf("Runner is ready and listening for jobs: %s", runnerName))
+						}
+						readyLogged = true
+					}
+					// Stop selecting on readiness once it has been logged.
+					readyCh = nil
+				case err := <-procExitCh:
+					if err != nil {
+						logger.Warn(fmt.Sprintf("Runner process exited with error (%s): %v", runnerName, err))
+					} else {
+						logger.Info(fmt.Sprintf("Runner process exited: %s", runnerName))
+					}
+					// Remove runner from state as soon as the process exits.
+					s.runners.remove(runnerName)
+					return
+				}
 			}
-			_ = cmd.Wait()
-			logger.Info(fmt.Sprintf("Runner process exited: %s", runnerName))
-			s.runners.remove(runnerName)
 		}()
 	} else {
 		// Use JIT config (github.com)
