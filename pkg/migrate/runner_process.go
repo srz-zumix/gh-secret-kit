@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -509,7 +510,7 @@ func RemoveRunnerInstances(instancesBaseDir string) {
 		instanceDir := filepath.Join(instancesBaseDir, entry.Name())
 		if err := RemoveRunner(instanceDir); err != nil {
 			// Non-fatal: log and continue
-			_ = err
+			log.Printf("failed to remove runner instance in %s: %v", instanceDir, err)
 		}
 	}
 }
