@@ -517,7 +517,7 @@ func RemoveRunnerInstances(instancesBaseDir string) {
 		instanceDir := filepath.Join(instancesBaseDir, entry.Name())
 		if err := RemoveRunner(instanceDir); err != nil {
 			// Non-fatal: log and continue
-			logger.Warn("failed to remove runner instance in %s: %v", instanceDir, err)
+			logger.Warn(fmt.Sprintf("failed to remove runner instance in %s: %v", instanceDir, err))
 		}
 	}
 }
