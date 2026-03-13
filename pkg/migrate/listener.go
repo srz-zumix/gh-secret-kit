@@ -340,53 +340,8 @@ func (s *migrateScaler) startRunner(ctx context.Context) error {
 
 		s.runners.addIdle(runnerName, cmd)
 		logger.Info(fmt.Sprintf("Runner started: %s (PID: %d, log: %s)", runnerName, cmd.Process.Pid, logPath))
-		// Watch for unexpected process exit and remove from state so the next
-		// HandleDesiredRunnerCount call correctly reflects the actual runner count.
-		// Also wait for the runner to become ready and log when it is.
 		s.runnerWg.Add(1)
-		go func() {
-			defer s.runnerWg.Done()
-
-			// Channel to receive process exit result from cmd.Wait.
-			procExitCh := make(chan error, 1)
-			go func() {
-				// Wait for runner process to exit and notify watcher goroutine.
-				procExitCh <- cmd.Wait()
-			}()
-
-			// Channel to receive readiness result from WaitForRunnerReady.
-			readyCh := make(chan error, 1)
-			go func() {
-				logger.Info(fmt.Sprintf("Waiting for runner to become ready: %s", runnerName))
-				readyCh <- WaitForRunnerReady(ctx, logPath, RunnerStartTimeout)
-			}()
-
-			var readyLogged bool
-			for {
-				select {
-				case err := <-readyCh:
-					if !readyLogged {
-						if err != nil {
-							logger.Warn(fmt.Sprintf("Runner may not be fully ready (%s): %v", runnerName, err))
-						} else {
-							logger.Info(fmt.Sprintf("Runner is ready and listening for jobs: %s", runnerName))
-						}
-						readyLogged = true
-					}
-					// Stop selecting on readiness once it has been logged.
-					readyCh = nil
-				case err := <-procExitCh:
-					if err != nil {
-						logger.Warn(fmt.Sprintf("Runner process exited with error (%s): %v", runnerName, err))
-					} else {
-						logger.Info(fmt.Sprintf("Runner process exited: %s", runnerName))
-					}
-					// Remove runner from state as soon as the process exits.
-					s.runners.remove(runnerName)
-					return
-				}
-			}
-		}()
+		go s.watchRunner(ctx, runnerName, cmd, logPath)
 	} else {
 		// Use JIT config (github.com)
 		logger.Info(fmt.Sprintf("Generating JIT config for runner: %s", runnerName))
@@ -404,56 +359,53 @@ func (s *migrateScaler) startRunner(ctx context.Context) error {
 
 		s.runners.addIdle(runnerName, cmd)
 		logger.Info(fmt.Sprintf("Runner started: %s (PID: %d, log: %s)", runnerName, cmd.Process.Pid, logPath))
-		// Watch for unexpected process exit and remove from state so the next
-		// HandleDesiredRunnerCount call correctly reflects the actual runner count.
-		// Also wait for the runner to become ready and log when it is.
 		s.runnerWg.Add(1)
-		go func() {
-			defer s.runnerWg.Done()
-
-			readyCh := make(chan error, 1)
-			waitCh := make(chan error, 1)
-
-			// Wait for the runner to become ready in a separate goroutine
-			go func() {
-				logger.Info(fmt.Sprintf("Waiting for runner to become ready: %s", runnerName))
-				err := WaitForRunnerReady(ctx, logPath, RunnerStartTimeout)
-				readyCh <- err
-			}()
-
-			// Wait for the runner process to exit in a separate goroutine
-			go func() {
-				err := cmd.Wait()
-				waitCh <- err
-			}()
-
-			for {
-				select {
-				case err := <-readyCh:
-					if err != nil {
-						logger.Warn(fmt.Sprintf("Runner may not be fully ready (%s): %v", runnerName, err))
-					} else {
-						logger.Info(fmt.Sprintf("Runner is ready and listening for jobs: %s", runnerName))
-					}
-					// Avoid handling readiness more than once
-					readyCh = nil
-				case err := <-waitCh:
-					if err != nil {
-						logger.Warn(fmt.Sprintf("Runner process exited with error (%s): %v", runnerName, err))
-					} else {
-						logger.Info(fmt.Sprintf("Runner process exited: %s", runnerName))
-					}
-					s.runners.remove(runnerName)
-					return
-				case <-ctx.Done():
-					logger.Warn(fmt.Sprintf("Context cancelled while waiting for runner: %s", runnerName))
-					return
-				}
-			}
-		}()
+		go s.watchRunner(ctx, runnerName, cmd, logPath)
 	}
 
 	return nil
+}
+
+// watchRunner waits for a runner process to exit and logs readiness/completion.
+// It is launched as a goroutine (owns the s.runnerWg counter added by the caller).
+func (s *migrateScaler) watchRunner(ctx context.Context, runnerName string, cmd *exec.Cmd, logPath string) {
+	defer s.runnerWg.Done()
+
+	readyCh := make(chan error, 1)
+	procExitCh := make(chan error, 1)
+
+	go func() {
+		logger.Info(fmt.Sprintf("Waiting for runner to become ready: %s", runnerName))
+		readyCh <- WaitForRunnerReady(ctx, logPath, RunnerStartTimeout)
+	}()
+
+	go func() {
+		procExitCh <- cmd.Wait()
+	}()
+
+	for {
+		select {
+		case err := <-readyCh:
+			if err != nil {
+				logger.Warn(fmt.Sprintf("Runner may not be fully ready (%s): %v", runnerName, err))
+			} else {
+				logger.Info(fmt.Sprintf("Runner is ready and listening for jobs: %s", runnerName))
+			}
+			// Deactivate this case after the first result.
+			readyCh = nil
+		case err := <-procExitCh:
+			if err != nil {
+				logger.Warn(fmt.Sprintf("Runner process exited with error (%s): %v", runnerName, err))
+			} else {
+				logger.Info(fmt.Sprintf("Runner process exited: %s", runnerName))
+			}
+			s.runners.remove(runnerName)
+			return
+		case <-ctx.Done():
+			logger.Warn(fmt.Sprintf("Context cancelled while waiting for runner: %s", runnerName))
+			return
+		}
+	}
 }
 
 // shutdown stops all running runner processes and waits for them to exit.
