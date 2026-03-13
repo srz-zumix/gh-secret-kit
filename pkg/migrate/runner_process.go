@@ -369,14 +369,19 @@ func ConfigureRunner(runnerBinDir, workDir, configURL, token, name, labels strin
 	return nil
 }
 
-// StartRunner starts the runner binary with the given JIT config.
-// The runner process runs in background as a detached subprocess.
+// StartRunner starts the runner binary (run.sh / run.cmd).
 // runnerBinDir is the directory containing the runner binaries (run.sh).
-// workDir is the working directory for the runner process (where config files live);
-// pass an empty string to use runnerBinDir.
-// logPath specifies where stdout/stderr of the runner process are written;
-// use an empty string to default to <workDir>/runner.log.
-// The caller must call cmd.Wait() (or the watcher goroutine in listener.go handles it).
+// workDir is the working directory for the runner process; pass an empty string
+// to use runnerBinDir.
+// jitConfig is the base64-encoded JIT configuration passed via the
+// ACTIONS_RUNNER_INPUT_JITCONFIG environment variable. When empty, the runner
+// reads its registration from the .runner/.credentials files in workDir
+// (config.sh mode).
+// logPath is the file path where stdout/stderr of the runner process are
+// written; pass an empty string to default to <workDir>/runner.log.
+// stdout/stderr are redirected to logPath and cmd.Start() is called, so the
+// process runs concurrently with the caller. The caller (or the watcher
+// goroutine started by watchRunner) is responsible for calling cmd.Wait().
 func StartRunner(runnerBinDir, workDir, jitConfig, logPath string) (*exec.Cmd, error) {
 	if workDir == "" {
 		workDir = runnerBinDir
@@ -479,8 +484,9 @@ func RemoveRunner(instanceDir string) error {
 
 	scriptPath := filepath.Join(instanceDir, configScript)
 	if _, err := os.Stat(scriptPath); os.IsNotExist(err) {
-		// config.sh does not exist (e.g. hard-linked instance dir was already cleaned)
-		return nil
+		// config.sh is missing even though .runner exists: the runner may still be
+		// registered on the server side but cannot be deregistered locally.
+		return fmt.Errorf("runner config file %s not found in %s; runner may still be registered on the server", configScript, instanceDir)
 	}
 
 	cmd := exec.Command(scriptPath, "remove", "--unattended")
@@ -511,7 +517,7 @@ func RemoveRunnerInstances(instancesBaseDir string) {
 		instanceDir := filepath.Join(instancesBaseDir, entry.Name())
 		if err := RemoveRunner(instanceDir); err != nil {
 			// Non-fatal: log and continue
-			logger.Warnf("failed to remove runner instance in %s: %v", instanceDir, err)
+			logger.Warn("failed to remove runner instance in %s: %v", instanceDir, err)
 		}
 	}
 }
