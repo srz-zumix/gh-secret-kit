@@ -371,12 +371,15 @@ func (s *migrateScaler) startRunner(ctx context.Context) error {
 func (s *migrateScaler) watchRunner(ctx context.Context, runnerName string, cmd *exec.Cmd, logPath string) {
 	defer s.runnerWg.Done()
 
+	// readyCtx is cancelled when the runner exits, readiness completes, or the parent context is done.
+	readyCtx, cancel := context.WithCancel(ctx)
+
 	readyCh := make(chan error, 1)
 	procExitCh := make(chan error, 1)
 
 	go func() {
 		logger.Info(fmt.Sprintf("Waiting for runner to become ready: %s", runnerName))
-		readyCh <- WaitForRunnerReady(ctx, logPath, RunnerStartTimeout)
+		readyCh <- WaitForRunnerReady(readyCtx, logPath, RunnerStartTimeout)
 	}()
 
 	go func() {
@@ -391,7 +394,8 @@ func (s *migrateScaler) watchRunner(ctx context.Context, runnerName string, cmd 
 			} else {
 				logger.Info(fmt.Sprintf("Runner is ready and listening for jobs: %s", runnerName))
 			}
-			// Deactivate this case after the first result.
+			// Cancel readiness context and deactivate this case after the first result.
+			cancel()
 			readyCh = nil
 		case err := <-procExitCh:
 			if err != nil {
@@ -400,9 +404,13 @@ func (s *migrateScaler) watchRunner(ctx context.Context, runnerName string, cmd 
 				logger.Info(fmt.Sprintf("Runner process exited: %s", runnerName))
 			}
 			s.runners.remove(runnerName)
+			// Ensure readiness watcher is stopped when the process exits.
+			cancel()
 			return
 		case <-ctx.Done():
 			logger.Warn(fmt.Sprintf("Context cancelled while waiting for runner: %s", runnerName))
+			// Propagate cancellation to readiness watcher.
+			cancel()
 			return
 		}
 	}
