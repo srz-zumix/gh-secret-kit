@@ -22,7 +22,7 @@ var (
 // NewSetupCmd creates the runner setup command
 func NewSetupCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "setup [org]",
+		Use:   "setup [[HOST]/ORG]",
 		Short: "Register and start a self-hosted runner",
 		Long: `Register and start a self-hosted runner for secret migration.
 
@@ -50,6 +50,7 @@ Arguments:
 
 	// Runner-specific flags
 	f.StringVar(&setupRunnerOpts.RunnerLabel, "runner-label", types.DefaultRunnerLabel, "Custom label for the runner")
+	f.IntVar(&setupRunnerOpts.MaxRunners, "max-runners", 2, "Maximum number of concurrent runners")
 
 	return cmd
 }
@@ -186,18 +187,23 @@ func setupNewRunner(ctx context.Context, sourceRepo repository.Repository) error
 	logger.Info(fmt.Sprintf("  Runner Label: %s", setupRunnerOpts.RunnerLabel))
 	logger.Info("")
 
-	// Get runner registration token for config.sh-based registration (GHES compatibility)
-	logger.Info("Creating registration token for runner...")
-	regToken, err := gh.CreateRegistrationToken(ctx, client, sourceRepo)
+	// Build a token refresher for config.sh-based GHES registration.
+	// Registration tokens are one-time-use on GHES, so we obtain a fresh one
+	// before each ConfigureRunner call instead of reusing a single token.
+	var tokenRefresher func(ctx context.Context) (string, error)
+	logger.Info("Verifying registration token availability...")
+	_, err = gh.CreateRegistrationToken(ctx, client, sourceRepo)
 	if err != nil {
-		logger.Warn(fmt.Sprintf("Failed to create registration token: %v", err))
-		logger.Info("Falling back to JIT config mode")
-	}
-
-	registrationToken := ""
-	if regToken != nil && regToken.Token != nil {
-		registrationToken = regToken.GetToken()
-		logger.Info("Registration token obtained successfully")
+		logger.Warn(fmt.Sprintf("Failed to obtain registration token (will use JIT config): %v", err))
+	} else {
+		logger.Info("Registration token available; using config.sh mode for runners")
+		tokenRefresher = func(ctx context.Context) (string, error) {
+			token, err := gh.CreateRegistrationToken(ctx, client, sourceRepo)
+			if err != nil {
+				return "", fmt.Errorf("failed to create registration token: %w", err)
+			}
+			return token.GetToken(), nil
+		}
 	}
 
 	logger.Info("Starting message session listener (foreground)...")
@@ -209,12 +215,13 @@ func setupNewRunner(ctx context.Context, sourceRepo repository.Repository) error
 
 	// Run the message session listener loop (blocks until job completes or interrupted)
 	listenerConfig := &migrate.ListenerConfig{
-		Client:            scalesetClient,
-		ScaleSetID:        scaleSet.ID,
-		RunnerDir:         runnerDir,
-		ConfigURL:         configURL,
-		RunnerLabel:       setupRunnerOpts.RunnerLabel,
-		RegistrationToken: registrationToken,
+		Client:         scalesetClient,
+		ScaleSetID:     scaleSet.ID,
+		RunnerDir:      runnerDir,
+		ConfigURL:      configURL,
+		RunnerLabel:    setupRunnerOpts.RunnerLabel,
+		TokenRefresher: tokenRefresher,
+		MaxRunners:     setupRunnerOpts.MaxRunners,
 	}
 	listenerErr := migrate.RunListenerLoop(ctx, listenerConfig)
 

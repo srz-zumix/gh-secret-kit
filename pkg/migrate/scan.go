@@ -61,10 +61,11 @@ func ParseOrgPair(srcStr, dstStr string) (src, dst *OrgContext, err error) {
 	return src, dst, nil
 }
 
-// EnvMatch represents a matched environment pair with its secret count.
+// EnvMatch represents a matched environment pair with its secret metadata.
 type EnvMatch struct {
 	Name        string
 	SecretCount int
+	SecretNames []string
 }
 
 // RepoMatch represents a matched src/dst repo pair with secret metadata.
@@ -74,6 +75,7 @@ type RepoMatch struct {
 	SrcName         string
 	DstRepoRef      repository.Repository
 	RepoSecretCount int
+	RepoSecretNames []string
 	EnvMatches      []EnvMatch
 }
 
@@ -120,6 +122,10 @@ func ScanMatchingRepos(ctx context.Context, src, dst *OrgContext) ([]RepoMatch, 
 			logger.Warn(fmt.Sprintf("Skipping %s: failed to list secrets: %v", fullName, err))
 			continue
 		}
+		var repoSecretNames []string
+		for _, s := range secrets {
+			repoSecretNames = append(repoSecretNames, s.Name)
+		}
 
 		// Get source env secrets and match with destination
 		envSecrets, err := gh.CollectEnvSecrets(ctx, src.Client, srcRepo)
@@ -135,9 +141,14 @@ func ScanMatchingRepos(ctx context.Context, src, dst *OrgContext) ([]RepoMatch, 
 			} else {
 				for envName, srcEnvSecs := range envSecrets {
 					if _, exists := dstEnvSecrets[envName]; exists {
+						var envSecretNames []string
+						for _, s := range srcEnvSecs {
+							envSecretNames = append(envSecretNames, s.Name)
+						}
 						envMatches = append(envMatches, EnvMatch{
 							Name:        envName,
 							SecretCount: len(srcEnvSecs),
+							SecretNames: envSecretNames,
 						})
 					} else {
 						logger.Debug(fmt.Sprintf("Skipping env %s/%s: no matching environment in destination", repoName, envName))
@@ -152,6 +163,7 @@ func ScanMatchingRepos(ctx context.Context, src, dst *OrgContext) ([]RepoMatch, 
 			SrcName:         repoName,
 			DstRepoRef:      dstRepoRef,
 			RepoSecretCount: len(secrets),
+			RepoSecretNames: repoSecretNames,
 			EnvMatches:      envMatches,
 		})
 	}

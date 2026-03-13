@@ -31,6 +31,7 @@ workflow, triggers it, waits for completion, verifies the results, and cleans up
 	f.StringVarP(&config.Source, "src", "s", "", "Source repository (e.g., owner/repo; defaults to current repository)")
 	f.StringVarP(&config.Destination, "dst", "d", "", "Destination repository (e.g., owner/repo)")
 	f.StringSliceVar(&config.Secrets, "secrets", []string{}, "Specific secret names to migrate (comma-separated or repeated flag; defaults to all)")
+	f.StringSliceVar(&config.ExcludeSecrets, "exclude-secrets", []string{}, "Secret names to exclude from migration (comma-separated or repeated flag)")
 	f.StringSliceVar(&config.Rename, "rename", []string{}, "Rename mapping in OLD_NAME=NEW_NAME format (repeatable)")
 	f.BoolVar(&config.Overwrite, "overwrite", false, "Overwrite existing secrets at destination")
 	f.StringVar(&config.DestinationTokenSecret, "dst-token", "", "Secret variable name that holds the PAT for the destination (e.g. DST_PAT; referenced as ${{ secrets.<name> }} in the workflow)")

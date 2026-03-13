@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"sync"
-	"sync/atomic"
 	"syscall"
 
 	"github.com/actions/scaleset"
@@ -50,14 +51,15 @@ func (c *loggingSessionClient) GetMessage(ctx context.Context, lastMessageID, ma
 		// runners are actually registered. The SDK listener uses only
 		// TotalAssignedJobs to call HandleDesiredRunnerCount, which stays 0
 		// and never triggers runner startup (chicken-and-egg problem).
-		// Work around this by treating available+acquired jobs as assigned
-		// so the listener will start runners, allowing the server to then
-		// assign the jobs to them.
+		// Treat all pending (available+acquired) jobs as needing runners so
+		// the listener proactively starts runners for every queued job,
+		// including when another runner is already busy.
 		pendingJobs := msg.Statistics.TotalAvailableJobs + msg.Statistics.TotalAcquiredJobs
-		if msg.Statistics.TotalAssignedJobs == 0 && pendingJobs > 0 {
+		if pendingJobs > 0 {
+			newAssigned := msg.Statistics.TotalAssignedJobs + pendingJobs
 			logger.Info(fmt.Sprintf("  Adjusting TotalAssignedJobs: %d -> %d (pending jobs need runners)",
-				msg.Statistics.TotalAssignedJobs, pendingJobs))
-			msg.Statistics.TotalAssignedJobs = pendingJobs
+				msg.Statistics.TotalAssignedJobs, newAssigned))
+			msg.Statistics.TotalAssignedJobs = newAssigned
 		}
 	}
 	return msg, nil
@@ -73,12 +75,16 @@ func (c *loggingSessionClient) Session() scaleset.RunnerScaleSetSession {
 
 // ListenerConfig holds configuration for the message session listener
 type ListenerConfig struct {
-	Client            *scaleset.Client
-	ScaleSetID        int
-	RunnerDir         string
-	ConfigURL         string // GitHub config URL for runner registration
-	RunnerLabel       string // Label to assign to runners
-	RegistrationToken string // Token for runner registration via config.sh
+	Client       *scaleset.Client
+	ScaleSetID   int
+	RunnerDir    string
+	ConfigURL    string // GitHub config URL for runner registration
+	RunnerLabel  string // Label to assign to runners
+	// TokenRefresher, when non-nil, is called before each config.sh invocation to
+	// obtain a fresh one-time-use registration token. Required for GHES because
+	// registration tokens are invalidated after the first use.
+	TokenRefresher func(ctx context.Context) (string, error)
+	MaxRunners     int // Maximum number of concurrent runners (default: 1)
 }
 
 // RunListenerLoop runs the scaleset message session listener loop using the
@@ -166,9 +172,13 @@ func runListenerOnce(ctx context.Context, config *ListenerConfig, hostname strin
 
 	// Create the SDK listener
 	logger.Info("Initializing listener...")
+	maxRunners := config.MaxRunners
+	if maxRunners <= 0 {
+		maxRunners = 1
+	}
 	sdkListener, err := listener.New(loggingClient, listener.Config{
 		ScaleSetID: config.ScaleSetID,
-		MaxRunners: 1,
+		MaxRunners: maxRunners,
 		Logger:     slog.Default().WithGroup("listener"),
 	})
 	if err != nil {
@@ -177,15 +187,16 @@ func runListenerOnce(ctx context.Context, config *ListenerConfig, hostname strin
 
 	// Create the scaler that handles runner lifecycle
 	scaler := &migrateScaler{
-		scalesetClient:    config.Client,
-		scaleSetID:        config.ScaleSetID,
-		runnerDir:         config.RunnerDir,
-		configURL:         config.ConfigURL,
-		runnerLabel:       config.RunnerLabel,
-		registrationToken: config.RegistrationToken,
+		scalesetClient: config.Client,
+		scaleSetID:     config.ScaleSetID,
+		runnerDir:      config.RunnerDir,
+		configURL:      config.ConfigURL,
+		runnerLabel:    config.RunnerLabel,
+		tokenRefresher: config.TokenRefresher,
+		maxRunners:     maxRunners,
 		runners: runnerState{
-			idle: make(map[string]int),
-			busy: make(map[string]int),
+			idle: make(map[string]*exec.Cmd),
+			busy: make(map[string]*exec.Cmd),
 		},
 		doneCh: make(chan struct{}),
 	}
@@ -215,18 +226,20 @@ func runListenerOnce(ctx context.Context, config *ListenerConfig, hostname strin
 	}
 }
 
-// migrateScaler implements listener.Scaler for single-job migration
+// migrateScaler implements listener.Scaler for migration.
+// It supports concurrent jobs up to maxRunners.
 type migrateScaler struct {
-	scalesetClient    *scaleset.Client
-	scaleSetID        int
-	runnerDir         string
-	configURL         string
-	runnerLabel       string
-	registrationToken string
+	scalesetClient *scaleset.Client
+	scaleSetID     int
+	runnerDir      string
+	configURL      string
+	runnerLabel    string
+	tokenRefresher func(ctx context.Context) (string, error)
+	maxRunners     int
 	runners           runnerState
+	runnerWg          sync.WaitGroup // tracks all watcher goroutines for clean shutdown
 	doneCh            chan struct{}
 	doneOnce          sync.Once
-	completed         atomic.Bool
 }
 
 // HandleDesiredRunnerCount is called by the listener when the desired runner
@@ -235,13 +248,8 @@ func (s *migrateScaler) HandleDesiredRunnerCount(ctx context.Context, count int)
 	currentCount := s.runners.count()
 	logger.Info(fmt.Sprintf("HandleDesiredRunnerCount: desired=%d, current=%d", count, currentCount))
 
-	// Don't start new runners after migration is done
-	if s.completed.Load() {
-		return currentCount, nil
-	}
-
-	// Cap at 1 runner max for migration
-	targetCount := min(1, count)
+	// Cap at maxRunners
+	targetCount := min(s.maxRunners, count)
 
 	if targetCount <= currentCount {
 		return currentCount, nil
@@ -274,43 +282,59 @@ func (s *migrateScaler) HandleJobCompleted(ctx context.Context, jobInfo *scalese
 	logger.Info(fmt.Sprintf("Job completed: %s (result: %s, runner: %s)",
 		jobInfo.JobDisplayName, jobInfo.Result, jobInfo.RunnerName))
 
-	s.completed.Store(true)
-
-	pid := s.runners.markDone(jobInfo.RunnerName)
-	if pid > 0 {
-		logger.Info(fmt.Sprintf("Stopping runner process (PID: %d)...", pid))
-		_ = StopRunner(pid)
+	cmd := s.runners.markDone(jobInfo.RunnerName)
+	if cmd != nil && cmd.Process != nil {
+		logger.Info(fmt.Sprintf("Stopping runner process (PID: %d)...", cmd.Process.Pid))
+		_ = StopRunner(cmd.Process.Pid)
+		// cmd.Wait() is owned by the watcher goroutine; do not call it here.
 	}
 
-	// Signal that migration is done
-	s.doneOnce.Do(func() {
-		close(s.doneCh)
-	})
+	// Signal done only when all concurrent runners have finished.
+	if s.runners.count() == 0 {
+		s.doneOnce.Do(func() {
+			close(s.doneCh)
+		})
+	}
 
 	return nil
 }
 
 // startRunner configures and starts an ephemeral runner process.
 // Uses config.sh with explicit labels (for GHES compatibility) when a
-// registration token is provided, otherwise falls back to JIT config.
+// TokenRefresher is provided, otherwise falls back to JIT config.
 func (s *migrateScaler) startRunner(ctx context.Context) error {
 	runnerName := GenerateRunnerName()
 
-	if s.registrationToken != "" {
-		// Use config.sh with explicit labels (GHES-compatible)
+	if s.tokenRefresher != nil {
+		// Use config.sh with explicit labels (GHES-compatible).
+		// Fetch a fresh one-time-use registration token for each runner.
+		token, err := s.tokenRefresher(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to obtain registration token: %w", err)
+		}
 		logger.Info(fmt.Sprintf("Configuring runner via config.sh: %s (label: %s)", runnerName, s.runnerLabel))
-		if err := ConfigureRunner(s.runnerDir, s.configURL, s.registrationToken, runnerName, s.runnerLabel); err != nil {
+		if err := ConfigureRunner(s.runnerDir, s.configURL, token, runnerName, s.runnerLabel); err != nil {
 			return fmt.Errorf("failed to configure runner: %w", err)
 		}
 
 		logger.Info(fmt.Sprintf("Starting ephemeral runner: %s", runnerName))
-		process, err := StartRunner(s.runnerDir, "")
+		logPath := filepath.Join(s.runnerDir, runnerName+".log")
+		cmd, err := StartRunner(s.runnerDir, "", logPath)
 		if err != nil {
 			return fmt.Errorf("failed to start runner: %w", err)
 		}
 
-		s.runners.addIdle(runnerName, process.Pid)
-		logger.Info(fmt.Sprintf("Runner started: %s (PID: %d)", runnerName, process.Pid))
+		s.runners.addIdle(runnerName, cmd)
+		logger.Info(fmt.Sprintf("Runner started: %s (PID: %d, log: %s)", runnerName, cmd.Process.Pid, logPath))
+		// Watch for unexpected process exit and remove from state so the next
+		// HandleDesiredRunnerCount call correctly reflects the actual runner count.
+		s.runnerWg.Add(1)
+		go func() {
+			defer s.runnerWg.Done()
+			_ = cmd.Wait()
+			logger.Info(fmt.Sprintf("Runner process exited: %s", runnerName))
+			s.runners.remove(runnerName)
+		}()
 	} else {
 		// Use JIT config (github.com)
 		logger.Info(fmt.Sprintf("Generating JIT config for runner: %s", runnerName))
@@ -320,13 +344,23 @@ func (s *migrateScaler) startRunner(ctx context.Context) error {
 		}
 
 		logger.Info(fmt.Sprintf("Starting ephemeral runner: %s", runnerName))
-		process, err := StartRunner(s.runnerDir, jitConfig.EncodedJITConfig)
+		logPath := filepath.Join(s.runnerDir, runnerName+".log")
+		cmd, err := StartRunner(s.runnerDir, jitConfig.EncodedJITConfig, logPath)
 		if err != nil {
 			return fmt.Errorf("failed to start runner: %w", err)
 		}
 
-		s.runners.addIdle(runnerName, process.Pid)
-		logger.Info(fmt.Sprintf("Runner started: %s (PID: %d)", runnerName, process.Pid))
+		s.runners.addIdle(runnerName, cmd)
+		logger.Info(fmt.Sprintf("Runner started: %s (PID: %d, log: %s)", runnerName, cmd.Process.Pid, logPath))
+		// Watch for unexpected process exit and remove from state so the next
+		// HandleDesiredRunnerCount call correctly reflects the actual runner count.
+		s.runnerWg.Add(1)
+		go func() {
+			defer s.runnerWg.Done()
+			_ = cmd.Wait()
+			logger.Info(fmt.Sprintf("Runner process exited: %s", runnerName))
+			s.runners.remove(runnerName)
+		}()
 	}
 
 	// Wait for runner to become ready before returning
@@ -340,29 +374,31 @@ func (s *migrateScaler) startRunner(ctx context.Context) error {
 	return nil
 }
 
-// shutdown stops all running runner processes
+// shutdown stops all running runner processes and waits for them to exit.
 func (s *migrateScaler) shutdown() {
 	s.runners.mu.Lock()
-	defer s.runners.mu.Unlock()
-
-	for name, pid := range s.runners.idle {
-		logger.Info(fmt.Sprintf("Stopping idle runner: %s (PID: %d)", name, pid))
-		_ = StopRunner(pid)
+	for name, cmd := range s.runners.idle {
+		logger.Info(fmt.Sprintf("Stopping idle runner: %s (PID: %d)", name, cmd.Process.Pid))
+		_ = StopRunner(cmd.Process.Pid)
 	}
 	clear(s.runners.idle)
 
-	for name, pid := range s.runners.busy {
-		logger.Info(fmt.Sprintf("Stopping busy runner: %s (PID: %d)", name, pid))
-		_ = StopRunner(pid)
+	for name, cmd := range s.runners.busy {
+		logger.Info(fmt.Sprintf("Stopping busy runner: %s (PID: %d)", name, cmd.Process.Pid))
+		_ = StopRunner(cmd.Process.Pid)
 	}
 	clear(s.runners.busy)
+	s.runners.mu.Unlock()
+
+	// Wait for all watcher goroutines (which own cmd.Wait()) to finish.
+	s.runnerWg.Wait()
 }
 
-// runnerState tracks runner processes by name -> PID
+// runnerState tracks runner processes by name -> *exec.Cmd
 type runnerState struct {
 	mu   sync.Mutex
-	idle map[string]int // name -> PID
-	busy map[string]int // name -> PID
+	idle map[string]*exec.Cmd // name -> Cmd
+	busy map[string]*exec.Cmd // name -> Cmd
 }
 
 func (r *runnerState) count() int {
@@ -371,33 +407,40 @@ func (r *runnerState) count() int {
 	return len(r.idle) + len(r.busy)
 }
 
-func (r *runnerState) addIdle(name string, pid int) {
+func (r *runnerState) addIdle(name string, cmd *exec.Cmd) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.idle[name] = pid
+	r.idle[name] = cmd
 }
 
 func (r *runnerState) markBusy(name string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	pid, ok := r.idle[name]
-	if !ok {
-		return
+	if cmd, ok := r.idle[name]; ok {
+		delete(r.idle, name)
+		r.busy[name] = cmd
 	}
-	delete(r.idle, name)
-	r.busy[name] = pid
 }
 
-func (r *runnerState) markDone(name string) int {
+func (r *runnerState) markDone(name string) *exec.Cmd {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if pid, ok := r.busy[name]; ok {
+	if cmd, ok := r.busy[name]; ok {
 		delete(r.busy, name)
-		return pid
+		return cmd
 	}
-	if pid, ok := r.idle[name]; ok {
+	if cmd, ok := r.idle[name]; ok {
 		delete(r.idle, name)
-		return pid
+		return cmd
 	}
-	return 0
+	return nil
+}
+
+// remove removes the runner from state without stopping it.
+// Called by the process watcher goroutine when the process exits on its own.
+func (r *runnerState) remove(name string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.idle, name)
+	delete(r.busy, name)
 }

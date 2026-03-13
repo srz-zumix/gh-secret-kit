@@ -83,26 +83,115 @@ func RunWorkflow(ctx context.Context, config *RunConfig) error {
 	}
 	logger.Info(fmt.Sprintf("Using PR #%d", prNumber))
 
-	// Remove label (if present) then add label to trigger the workflow
+	// Optional fixed sleep before first label addition (set by RunAll).
+	if config.InitialWait > 0 {
+		logger.Info(fmt.Sprintf("Waiting %s before adding trigger label...", config.InitialWait))
+		time.Sleep(config.InitialWait)
+	}
+
 	labelName := config.Label
+	maxAttempts := 1 + config.LabelRetries
+
+	// Remove any stale label before the first attempt.
 	logger.Info(fmt.Sprintf("Removing label %s from PR #%d (if present)...", labelName, prNumber))
 	_ = gh.RemoveIssueLabel(ctx, client, sourceRepo, prNumber, labelName)
 
-	logger.Info(fmt.Sprintf("Adding label %s to PR #%d to trigger workflow...", labelName, prNumber))
-	_, err = gh.AddIssueLabels(ctx, client, sourceRepo, prNumber, []string{labelName})
-	if err != nil {
-		return fmt.Errorf("failed to add label %s to PR #%d: %w", labelName, prNumber, err)
-	}
-	logger.Info("Migration workflow triggered!")
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		if attempt > 1 {
+			logger.Info(fmt.Sprintf("No workflow run queued; retrying label trigger (attempt %d/%d)...", attempt, maxAttempts))
+			_ = gh.RemoveIssueLabel(ctx, client, sourceRepo, prNumber, labelName)
+			time.Sleep(3 * time.Second)
+		}
 
-	if config.Wait {
-		return waitForWorkflowRun(ctx, client, sourceRepo, config)
+		// Snapshot the latest workflow run number before adding the label so we can
+		// identify new runs by number rather than relying solely on a time-based filter.
+		preRunMaxNumber := fetchLatestRunNumber(ctx, client, sourceRepo, config)
+
+		logger.Info(fmt.Sprintf("Adding label %s to PR #%d to trigger workflow...", labelName, prNumber))
+		_, err = gh.AddIssueLabels(ctx, client, sourceRepo, prNumber, []string{labelName})
+		if err != nil {
+			return fmt.Errorf("failed to add label %s to PR #%d: %w", labelName, prNumber, err)
+		}
+		logger.Info("Migration workflow triggered!")
+
+		if !config.Wait {
+			return nil
+		}
+
+		// When retries are configured, first wait for a run to appear within a
+		// short window. If nothing queues, loop and retry the label.
+		if config.LabelRetries > 0 && attempt < maxAttempts {
+			queued, err := waitForWorkflowQueued(ctx, client, sourceRepo, config, preRunMaxNumber)
+			if err != nil {
+				return err
+			}
+			if !queued {
+				continue
+			}
+		}
+
+		return waitForWorkflowRun(ctx, client, sourceRepo, config, preRunMaxNumber)
 	}
-	return nil
+
+	return fmt.Errorf("workflow did not queue after %d label trigger attempt(s); check that the workflow file is valid and the runner is online", maxAttempts)
 }
 
-// waitForWorkflowRun polls for workflow completion until the run finishes or timeout expires
-func waitForWorkflowRun(ctx context.Context, client *gh.GitHubClient, sourceRepo repository.Repository, config *RunConfig) error {
+// queueDetectTimeout is the duration to wait for a workflow run to appear
+// before declaring it was not queued by the label trigger.
+const queueDetectTimeout = 60 * time.Second
+
+// fetchLatestRunNumber returns the RunNumber of the most recent workflow run on
+// the given branch, or 0 if no run exists yet. Call this before adding the
+// trigger label so any run with RunNumber greater than the returned value is
+// known to be new.
+func fetchLatestRunNumber(ctx context.Context, client *gh.GitHubClient, sourceRepo repository.Repository, config *RunConfig) int {
+	runs, err := gh.ListWorkflowRunsByFileName(ctx, client, sourceRepo, config.WorkflowName+".yml", &gh.ListWorkflowRunsOptions{
+		Branch: config.Branch,
+	})
+	if err != nil || len(runs) == 0 {
+		return 0
+	}
+	return runs[0].GetRunNumber()
+}
+
+// waitForWorkflowQueued polls for up to queueDetectTimeout to detect whether
+// a new workflow run was queued after the label was added.
+// A run is considered new when its RunNumber exceeds preRunMaxNumber (captured before triggering).
+// Returns (true, nil) if a run appears, (false, nil) if none appeared within
+// the timeout, or (false, err) on a non-retriable API error.
+func waitForWorkflowQueued(ctx context.Context, client *gh.GitHubClient, sourceRepo repository.Repository, config *RunConfig, preRunMaxNumber int) (bool, error) {
+	workflowFileName := config.WorkflowName + ".yml"
+	deadline := time.Now().Add(queueDetectTimeout)
+	pollInterval := 5 * time.Second
+	for {
+		runs, err := gh.ListWorkflowRunsByFileName(ctx, client, sourceRepo, workflowFileName, &gh.ListWorkflowRunsOptions{
+			Branch: config.Branch,
+		})
+		if err != nil {
+			if gh.IsHTTPNotFound(err) {
+				// Workflow not yet known to the runs API; treat as not queued yet.
+			} else {
+				return false, fmt.Errorf("failed to list workflow runs: %w", err)
+			}
+		} else {
+			for _, run := range runs {
+				if run.GetRunNumber() > preRunMaxNumber {
+					logger.Info(fmt.Sprintf("Workflow run #%d queued", run.GetRunNumber()))
+					return true, nil
+				}
+			}
+		}
+		if time.Now().After(deadline) {
+			logger.Info("No workflow run queued within the detection window")
+			return false, nil
+		}
+		time.Sleep(pollInterval)
+	}
+}
+
+// waitForWorkflowRun polls for workflow completion until the run finishes or timeout expires.
+// A run is considered new when its RunNumber exceeds preRunMaxNumber (captured before triggering).
+func waitForWorkflowRun(ctx context.Context, client *gh.GitHubClient, sourceRepo repository.Repository, config *RunConfig, preRunMaxNumber int) error {
 	timeout, err := time.ParseDuration(config.Timeout)
 	if err != nil {
 		return fmt.Errorf("invalid timeout duration %q: %w", config.Timeout, err)
@@ -125,13 +214,22 @@ func waitForWorkflowRun(ctx context.Context, client *gh.GitHubClient, sourceRepo
 			Branch: config.Branch,
 		})
 		if err != nil {
+			// 404 means GitHub Actions has not yet registered any runs for this workflow;
+			// treat it as "no runs yet" and keep polling.
+			if gh.IsHTTPNotFound(err) {
+				logger.Info("Workflow run not found yet, retrying...")
+				time.Sleep(pollInterval)
+				continue
+			}
 			return fmt.Errorf("failed to list workflow runs: %w", err)
 		}
-		if len(runs) > 0 {
-			latestRun := runs[0]
+		for _, latestRun := range runs {
+			if latestRun.GetRunNumber() <= preRunMaxNumber {
+				continue
+			}
 			status := latestRun.GetStatus()
 			conclusion := latestRun.GetConclusion()
-			logger.Info(fmt.Sprintf("Workflow run #%d: status=%s, conclusion=%s", latestRun.GetID(), status, conclusion))
+			logger.Info(fmt.Sprintf("Workflow run #%d: status=%s, conclusion=%s", latestRun.GetRunNumber(), status, conclusion))
 
 			if status == "completed" {
 				if conclusion == "success" {
@@ -140,6 +238,7 @@ func waitForWorkflowRun(ctx context.Context, client *gh.GitHubClient, sourceRepo
 				}
 				return fmt.Errorf("workflow run completed with conclusion: %s", conclusion)
 			}
+			break // found a new run that is still in progress; stop scanning
 		}
 
 		time.Sleep(pollInterval)

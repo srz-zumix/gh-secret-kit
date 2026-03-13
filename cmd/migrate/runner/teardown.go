@@ -20,7 +20,7 @@ var (
 // NewTeardownCmd creates the runner teardown command
 func NewTeardownCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "teardown [org]",
+		Use:   "teardown [[HOST]/ORG]",
 		Short: "Unregister and stop the self-hosted runner",
 		Long: `Unregister and stop the self-hosted runner for secret migration.
 
