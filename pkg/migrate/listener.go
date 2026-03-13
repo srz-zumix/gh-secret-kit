@@ -312,14 +312,28 @@ func (s *migrateScaler) startRunner(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("failed to obtain registration token: %w", err)
 		}
+
+		// Create a per-runner instance directory as a hard-linked copy of the
+		// shared runner binary template. config.sh writes .runner/.credentials
+		// into the directory where config.sh lives, so each concurrent runner
+		// must have its own isolated directory to avoid overwriting each other's
+		// configuration files.
+		// Instance dirs live under RunnerInstancesBaseDir (a sibling of runnerDir)
+		// so that WalkDir in CreateRunnerInstanceDir does not recurse into them.
+		instanceDir := filepath.Join(RunnerInstancesBaseDir(s.runnerDir), runnerName)
+		logger.Info(fmt.Sprintf("Creating runner instance directory: %s", instanceDir))
+		if err := CreateRunnerInstanceDir(s.runnerDir, instanceDir); err != nil {
+			return fmt.Errorf("failed to create runner instance directory: %w", err)
+		}
+
 		logger.Info(fmt.Sprintf("Configuring runner via config.sh: %s (label: %s)", runnerName, s.runnerLabel))
-		if err := ConfigureRunner(s.runnerDir, s.configURL, token, runnerName, s.runnerLabel); err != nil {
+		if err := ConfigureRunner(instanceDir, instanceDir, s.configURL, token, runnerName, s.runnerLabel); err != nil {
 			return fmt.Errorf("failed to configure runner: %w", err)
 		}
 
 		logger.Info(fmt.Sprintf("Starting ephemeral runner: %s", runnerName))
-		logPath := filepath.Join(s.runnerDir, runnerName+".log")
-		cmd, err := StartRunner(s.runnerDir, "", logPath)
+		logPath := filepath.Join(instanceDir, runnerName+".log")
+		cmd, err := StartRunner(instanceDir, instanceDir, "", logPath)
 		if err != nil {
 			return fmt.Errorf("failed to start runner: %w", err)
 		}
@@ -328,9 +342,16 @@ func (s *migrateScaler) startRunner(ctx context.Context) error {
 		logger.Info(fmt.Sprintf("Runner started: %s (PID: %d, log: %s)", runnerName, cmd.Process.Pid, logPath))
 		// Watch for unexpected process exit and remove from state so the next
 		// HandleDesiredRunnerCount call correctly reflects the actual runner count.
+		// Also wait for the runner to become ready and log when it is.
 		s.runnerWg.Add(1)
 		go func() {
 			defer s.runnerWg.Done()
+			logger.Info(fmt.Sprintf("Waiting for runner to become ready: %s", runnerName))
+			if err := WaitForRunnerReady(ctx, logPath, RunnerStartTimeout); err != nil {
+				logger.Warn(fmt.Sprintf("Runner may not be fully ready (%s): %v", runnerName, err))
+			} else {
+				logger.Info(fmt.Sprintf("Runner is ready and listening for jobs: %s", runnerName))
+			}
 			_ = cmd.Wait()
 			logger.Info(fmt.Sprintf("Runner process exited: %s", runnerName))
 			s.runners.remove(runnerName)
@@ -345,7 +366,7 @@ func (s *migrateScaler) startRunner(ctx context.Context) error {
 
 		logger.Info(fmt.Sprintf("Starting ephemeral runner: %s", runnerName))
 		logPath := filepath.Join(s.runnerDir, runnerName+".log")
-		cmd, err := StartRunner(s.runnerDir, jitConfig.EncodedJITConfig, logPath)
+		cmd, err := StartRunner(s.runnerDir, "", jitConfig.EncodedJITConfig, logPath)
 		if err != nil {
 			return fmt.Errorf("failed to start runner: %w", err)
 		}
@@ -354,21 +375,20 @@ func (s *migrateScaler) startRunner(ctx context.Context) error {
 		logger.Info(fmt.Sprintf("Runner started: %s (PID: %d, log: %s)", runnerName, cmd.Process.Pid, logPath))
 		// Watch for unexpected process exit and remove from state so the next
 		// HandleDesiredRunnerCount call correctly reflects the actual runner count.
+		// Also wait for the runner to become ready and log when it is.
 		s.runnerWg.Add(1)
 		go func() {
 			defer s.runnerWg.Done()
+			logger.Info(fmt.Sprintf("Waiting for runner to become ready: %s", runnerName))
+			if err := WaitForRunnerReady(ctx, logPath, RunnerStartTimeout); err != nil {
+				logger.Warn(fmt.Sprintf("Runner may not be fully ready (%s): %v", runnerName, err))
+			} else {
+				logger.Info(fmt.Sprintf("Runner is ready and listening for jobs: %s", runnerName))
+			}
 			_ = cmd.Wait()
 			logger.Info(fmt.Sprintf("Runner process exited: %s", runnerName))
 			s.runners.remove(runnerName)
 		}()
-	}
-
-	// Wait for runner to become ready before returning
-	logger.Info("Waiting for runner to become ready...")
-	if err := WaitForRunnerReady(ctx, s.runnerDir, RunnerStartTimeout); err != nil {
-		logger.Warn(fmt.Sprintf("Runner may not be fully ready: %v", err))
-	} else {
-		logger.Info("Runner is ready and listening for jobs")
 	}
 
 	return nil

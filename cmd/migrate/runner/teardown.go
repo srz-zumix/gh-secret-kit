@@ -133,11 +133,28 @@ func runTeardown(cmd *cobra.Command, args []string) error {
 	}
 
 	if runnerDir != "" {
+		// Deregister any leftover runner instances before removing files
+		instancesDir := migrate.RunnerInstancesBaseDir(runnerDir)
+		logger.Info(fmt.Sprintf("Removing registered runners in: %s", instancesDir))
+		migrate.RemoveRunnerInstances(instancesDir)
+
+		// Also deregister the template runner dir itself if it was configured
+		if err := migrate.RemoveRunner(runnerDir); err != nil {
+			logger.Warn(fmt.Sprintf("Failed to remove runner from template dir: %v", err))
+		}
+
 		logger.Info(fmt.Sprintf("Cleaning up runner directory: %s", runnerDir))
 		if err := migrate.CleanupRunnerDir(runnerDir); err != nil {
 			logger.Warn(fmt.Sprintf("Failed to clean up runner directory: %v", err))
 		} else {
 			logger.Info("Runner directory cleaned up")
+		}
+
+		// Clean up runner instance directories (sibling of runnerDir)
+		if err := migrate.CleanupRunnerDir(instancesDir); err != nil {
+			logger.Warn(fmt.Sprintf("Failed to clean up runner instances directory: %v", err))
+		} else {
+			logger.Info(fmt.Sprintf("Runner instances directory cleaned up: %s", instancesDir))
 		}
 	}
 

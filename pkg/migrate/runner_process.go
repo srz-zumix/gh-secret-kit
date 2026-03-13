@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"os/exec"
@@ -324,15 +325,26 @@ func extractZip(zipPath, destDir string) (err error) {
 }
 
 // ConfigureRunner configures the runner using config.sh with explicit labels.
+// runnerBinDir must be a per-runner instance directory created by
+// CreateRunnerInstanceDir; config.sh writes .runner and .credentials into
+// runnerBinDir (the script's own directory).
+// Pass an empty string for workDir to use runnerBinDir.
 // This is used instead of JIT config on GHES where JIT runners may not inherit
 // scale set labels.
-func ConfigureRunner(runnerDir, configURL, token, name, labels string) error {
+func ConfigureRunner(runnerBinDir, workDir, configURL, token, name, labels string) error {
+	if workDir == "" {
+		workDir = runnerBinDir
+	}
+	if err := os.MkdirAll(workDir, 0o755); err != nil {
+		return fmt.Errorf("failed to create runner work directory: %w", err)
+	}
+
 	configScript := "config.sh"
 	if runtime.GOOS == "windows" {
 		configScript = "config.cmd"
 	}
 
-	scriptPath := filepath.Join(runnerDir, configScript)
+	scriptPath := filepath.Join(runnerBinDir, configScript)
 	args := []string{
 		"--url", configURL,
 		"--token", token,
@@ -345,7 +357,7 @@ func ConfigureRunner(runnerDir, configURL, token, name, labels string) error {
 	}
 
 	cmd := exec.Command(scriptPath, args...)
-	cmd.Dir = runnerDir
+	cmd.Dir = workDir
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -357,24 +369,31 @@ func ConfigureRunner(runnerDir, configURL, token, name, labels string) error {
 
 // StartRunner starts the runner binary with the given JIT config.
 // The runner process runs in background as a detached subprocess.
+// runnerBinDir is the directory containing the runner binaries (run.sh).
+// workDir is the working directory for the runner process (where config files live);
+// pass an empty string to use runnerBinDir.
 // logPath specifies where stdout/stderr of the runner process are written;
-// use an empty string to default to <runnerDir>/runner.log.
+// use an empty string to default to <workDir>/runner.log.
 // The caller must call cmd.Wait() (or the watcher goroutine in listener.go handles it).
-func StartRunner(runnerDir, jitConfig, logPath string) (*exec.Cmd, error) {
+func StartRunner(runnerBinDir, workDir, jitConfig, logPath string) (*exec.Cmd, error) {
+	if workDir == "" {
+		workDir = runnerBinDir
+	}
+
 	runScript := "run.sh"
 	if runtime.GOOS == "windows" {
 		runScript = "run.cmd"
 	}
 
-	scriptPath := filepath.Join(runnerDir, runScript)
+	scriptPath := filepath.Join(runnerBinDir, runScript)
 	cmd := exec.Command(scriptPath)
-	cmd.Dir = runnerDir
+	cmd.Dir = workDir
 	if jitConfig != "" {
 		cmd.Env = append(os.Environ(), fmt.Sprintf("ACTIONS_RUNNER_INPUT_JITCONFIG=%s", jitConfig))
 	}
 
 	if logPath == "" {
-		logPath = filepath.Join(runnerDir, "runner.log")
+		logPath = filepath.Join(workDir, "runner.log")
 	}
 
 	// Redirect stdout/stderr to a log file.
@@ -401,8 +420,7 @@ func StartRunner(runnerDir, jitConfig, logPath string) (*exec.Cmd, error) {
 
 // WaitForRunnerReady waits for the runner to become ready by polling
 // the runner's log file for the readiness message.
-func WaitForRunnerReady(ctx context.Context, runnerDir string, timeout time.Duration) error {
-	logPath := filepath.Join(runnerDir, "runner.log")
+func WaitForRunnerReady(ctx context.Context, logPath string, timeout time.Duration) error {
 	deadline := time.After(timeout)
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
@@ -442,7 +460,130 @@ func StopRunner(pid int) error {
 	return nil
 }
 
+// RemoveRunner deregisters a previously configured runner by running
+// config.sh remove --unattended in instanceDir. The .runner and .credentials
+// files stored in instanceDir are used for authentication, so no extra token is
+// required. Returns nil if no .runner file exists (nothing to remove).
+func RemoveRunner(instanceDir string) error {
+	// Skip if the runner was never configured in this directory
+	if _, err := os.Stat(filepath.Join(instanceDir, ".runner")); os.IsNotExist(err) {
+		return nil
+	}
+
+	configScript := "config.sh"
+	if runtime.GOOS == "windows" {
+		configScript = "config.cmd"
+	}
+
+	scriptPath := filepath.Join(instanceDir, configScript)
+	if _, err := os.Stat(scriptPath); os.IsNotExist(err) {
+		// config.sh does not exist (e.g. hard-linked instance dir was already cleaned)
+		return nil
+	}
+
+	cmd := exec.Command(scriptPath, "remove", "--unattended")
+	cmd.Dir = instanceDir
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to remove runner: %w\noutput: %s", err, string(output))
+	}
+	return nil
+}
+
+// RemoveRunnerInstances calls RemoveRunner on every subdirectory of instancesBaseDir
+// that contains a .runner file. Errors are logged as warnings so that cleanup
+// continues even if some runners cannot be deregistered.
+func RemoveRunnerInstances(instancesBaseDir string) {
+	entries, err := os.ReadDir(instancesBaseDir)
+	if os.IsNotExist(err) {
+		return // nothing to do
+	}
+	if err != nil {
+		return
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		instanceDir := filepath.Join(instancesBaseDir, entry.Name())
+		if err := RemoveRunner(instanceDir); err != nil {
+			// Non-fatal: log and continue
+			_ = err
+		}
+	}
+}
+
 // CleanupRunnerDir removes the runner directory and all its contents
 func CleanupRunnerDir(dir string) error {
 	return os.RemoveAll(dir)
+}
+
+// RunnerInstancesBaseDir returns the base directory for per-runner instance
+// subdirectories. It is intentionally a sibling of runnerDir (not a child)
+// to avoid infinite recursion when WalkDir is used in CreateRunnerInstanceDir.
+func RunnerInstancesBaseDir(runnerDir string) string {
+	return runnerDir + "-instances"
+}
+
+// CreateRunnerInstanceDir creates a per-runner directory by hard-linking all
+// files from templateDir into instanceDir. instanceDir MUST NOT be a
+// subdirectory of templateDir to avoid infinite WalkDir recursion.
+// Each concurrent runner must have its own instance directory so that
+// config.sh can write independent .runner/.credentials files without
+// conflicting with other running instances.
+// Hard links share the same inode, so this operation uses virtually no extra
+// disk space. If a hard link cannot be created (e.g., cross-filesystem), the
+// file is copied instead.
+func CreateRunnerInstanceDir(templateDir, instanceDir string) error {
+	return filepath.WalkDir(templateDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		rel, err := filepath.Rel(templateDir, path)
+		if err != nil {
+			return err
+		}
+		dst := filepath.Join(instanceDir, rel)
+
+		if d.IsDir() {
+			return os.MkdirAll(dst, 0o755)
+		}
+
+		// Skip runner config files that belong to a specific instance
+		switch d.Name() {
+		case ".runner", ".credentials", ".credentials_rsaparams":
+			return nil
+		}
+
+		// Hard-link the file; fall back to copy if hard link fails
+		if linkErr := os.Link(path, dst); linkErr != nil {
+			return copyFile(path, dst)
+		}
+		return nil
+	})
+}
+
+// copyFile copies a single file from src to dst, preserving its mode bits.
+func copyFile(src, dst string) error {
+	info, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = in.Close() }()
+
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, info.Mode())
+	if err != nil {
+		return err
+	}
+	defer func() { _ = out.Close() }()
+
+	_, err = io.Copy(out, in)
+	return err
 }
