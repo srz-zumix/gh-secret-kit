@@ -410,15 +410,46 @@ func (s *migrateScaler) startRunner(ctx context.Context) error {
 		s.runnerWg.Add(1)
 		go func() {
 			defer s.runnerWg.Done()
-			logger.Info(fmt.Sprintf("Waiting for runner to become ready: %s", runnerName))
-			if err := WaitForRunnerReady(ctx, logPath, RunnerStartTimeout); err != nil {
-				logger.Warn(fmt.Sprintf("Runner may not be fully ready (%s): %v", runnerName, err))
-			} else {
-				logger.Info(fmt.Sprintf("Runner is ready and listening for jobs: %s", runnerName))
+
+			readyCh := make(chan error, 1)
+			waitCh := make(chan error, 1)
+
+			// Wait for the runner to become ready in a separate goroutine
+			go func() {
+				logger.Info(fmt.Sprintf("Waiting for runner to become ready: %s", runnerName))
+				err := WaitForRunnerReady(ctx, logPath, RunnerStartTimeout)
+				readyCh <- err
+			}()
+
+			// Wait for the runner process to exit in a separate goroutine
+			go func() {
+				err := cmd.Wait()
+				waitCh <- err
+			}()
+
+			for {
+				select {
+				case err := <-readyCh:
+					if err != nil {
+						logger.Warn(fmt.Sprintf("Runner may not be fully ready (%s): %v", runnerName, err))
+					} else {
+						logger.Info(fmt.Sprintf("Runner is ready and listening for jobs: %s", runnerName))
+					}
+					// Avoid handling readiness more than once
+					readyCh = nil
+				case err := <-waitCh:
+					if err != nil {
+						logger.Warn(fmt.Sprintf("Runner process exited with error (%s): %v", runnerName, err))
+					} else {
+						logger.Info(fmt.Sprintf("Runner process exited: %s", runnerName))
+					}
+					s.runners.remove(runnerName)
+					return
+				case <-ctx.Done():
+					logger.Warn(fmt.Sprintf("Context cancelled while waiting for runner: %s", runnerName))
+					return
+				}
 			}
-			_ = cmd.Wait()
-			logger.Info(fmt.Sprintf("Runner process exited: %s", runnerName))
-			s.runners.remove(runnerName)
 		}()
 	}
 
