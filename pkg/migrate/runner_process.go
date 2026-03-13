@@ -488,7 +488,7 @@ func RemoveRunner(instanceDir string) error {
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to remove runner: %w\noutput: %s", err, string(output))
+		return fmt.Errorf("failed to remove runner: %w; output: %s", err, strings.TrimSpace(string(output)))
 	}
 	return nil
 }
