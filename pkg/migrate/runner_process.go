@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -19,6 +18,8 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/srz-zumix/go-gh-extension/pkg/logger"
 )
 
 const (
@@ -510,7 +511,7 @@ func RemoveRunnerInstances(instancesBaseDir string) {
 		instanceDir := filepath.Join(instancesBaseDir, entry.Name())
 		if err := RemoveRunner(instanceDir); err != nil {
 			// Non-fatal: log and continue
-			log.Printf("failed to remove runner instance in %s: %v", instanceDir, err)
+			logger.Warnf("failed to remove runner instance in %s: %v", instanceDir, err)
 		}
 	}
 }
