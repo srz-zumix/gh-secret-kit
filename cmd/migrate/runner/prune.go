@@ -97,6 +97,7 @@ func runPrune(cmd *cobra.Command, args []string) error {
 		if pruneDryRun {
 			logger.Info(fmt.Sprintf("[dry-run] Would remove runner: %s (ID: %d, status: %s, busy: %v)",
 				name, runner.GetID(), status, busy))
+			removed++
 			continue
 		}
 
