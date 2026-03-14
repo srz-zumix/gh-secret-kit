@@ -237,13 +237,16 @@ gh secret-kit migrate runner prune --dry-run owner-org
 gh secret-kit migrate runner prune owner-org
 
 # Remove all gh-secret-kit- runners regardless of label
+# NOTE: The empty string argument must be passed explicitly; keep the quotes.
 gh secret-kit migrate runner prune --runner-label "" owner-org
+# or equivalently (no quotes required in most shells)
+gh secret-kit migrate runner prune --runner-label= owner-org
 ```
 
 | Option | Description |
 | --- | --- |
 | `--repo` / `-R` | Source repository (`owner/repo`). Omit to use org scope. |
-| `--runner-label` | Only remove runners with this label (default: `gh-secret-kit-migrate`; `""` = all gh-secret-kit runners) |
+| `--runner-label` | Only remove runners with this label (default: `gh-secret-kit-migrate`; pass an empty value as `--runner-label ""` (quotes required) or `--runner-label=` to target all gh-secret-kit runners) |
 | `--dry-run` / `-n` | Preview without deleting |
 
 ## Checking Migration Status Across an Organization
