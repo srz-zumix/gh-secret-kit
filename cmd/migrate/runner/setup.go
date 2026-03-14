@@ -11,7 +11,6 @@ import (
 	"github.com/srz-zumix/gh-secret-kit/pkg/migrate"
 	"github.com/srz-zumix/go-gh-extension/pkg/gh"
 	"github.com/srz-zumix/go-gh-extension/pkg/logger"
-	"github.com/srz-zumix/go-gh-extension/pkg/parser"
 )
 
 var (
@@ -59,27 +58,9 @@ func runSetup(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 	logger.Info("Setting up runner for migration")
 
-	var sourceRepo repository.Repository
-	var err error
-	if setupRepo != "" {
-		// -R/--repo specified: repository-scoped runner
-		logger.Debug(fmt.Sprintf("Repo: %s, Runner Label: %s", setupRepo, setupRunnerOpts.RunnerLabel))
-		sourceRepo, err = parser.Repository(parser.RepositoryInput(setupRepo))
-	} else if len(args) > 0 {
-		// First positional arg: organization-scoped runner
-		logger.Debug(fmt.Sprintf("Org: %s, Runner Label: %s", args[0], setupRunnerOpts.RunnerLabel))
-		sourceRepo, err = parser.Repository(parser.RepositoryOwnerWithHost(args[0]))
-	} else {
-		// Fall back to current repository's owner (org-scoped runner)
-		var currentRepo repository.Repository
-		currentRepo, err = parser.Repository(parser.RepositoryInput(""))
-		if err == nil {
-			sourceRepo = repository.Repository{Host: currentRepo.Host, Owner: currentRepo.Owner}
-			logger.Debug(fmt.Sprintf("Org: %s, Runner Label: %s (current repo owner)", sourceRepo.Owner, setupRunnerOpts.RunnerLabel))
-		}
-	}
+	sourceRepo, err := resolveSourceRepo(setupRepo, args, setupRunnerOpts.RunnerLabel)
 	if err != nil {
-		return fmt.Errorf("failed to parse source: %w", err)
+		return err
 	}
 
 	return setupNewRunner(ctx, sourceRepo)

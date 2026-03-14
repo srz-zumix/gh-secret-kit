@@ -10,12 +10,13 @@ func NewRunnerCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "runner",
 		Short: "Manage self-hosted runner for secret migration",
-		Long:  `Manage self-hosted runner lifecycle (setup/teardown) for secret migration.`,
+		Long:  `Manage self-hosted runner for secret migration (setup, teardown, prune).`,
 	}
 
 	// Add subcommands
 	cmd.AddCommand(runner.NewSetupCmd())
 	cmd.AddCommand(runner.NewTeardownCmd())
+	cmd.AddCommand(runner.NewPruneCmd())
 
 	return cmd
 }
