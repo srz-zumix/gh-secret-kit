@@ -16,6 +16,7 @@ func NewRunnerCmd() *cobra.Command {
 	// Add subcommands
 	cmd.AddCommand(runner.NewSetupCmd())
 	cmd.AddCommand(runner.NewTeardownCmd())
+	cmd.AddCommand(runner.NewPruneCmd())
 
 	return cmd
 }
