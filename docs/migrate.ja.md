@@ -99,6 +99,7 @@ gh secret-kit migrate runner setup owner-org
 | --- | --- |
 | `--repo` / `-R` | コピー元リポジトリ（`owner/repo`）。省略すると組織スコープになります |
 | `--runner-label` | ランナーのカスタムラベル（デフォルト: `gh-secret-kit-migrate`） |
+| `--max-runners` | 最大同時実行ランナー数（デフォルト: `2`） |
 
 ### ステップ 2：Init
 
@@ -223,6 +224,27 @@ gh secret-kit migrate runner teardown -R owner/source-repo
 # または組織スコープの場合
 gh secret-kit migrate runner teardown owner-org
 ```
+
+### 残留ランナーを削除する
+
+teardown を実行せずにセットアップが中断された場合、孤立したランナーが GitHub に残ることがあります。`runner prune` で削除できます：
+
+```sh
+# プレビュー（削除しない）
+gh secret-kit migrate runner prune --dry-run owner-org
+
+# デフォルトラベルの gh-secret-kit- ランナーをすべて削除
+gh secret-kit migrate runner prune owner-org
+
+# ラベルに関係なく gh-secret-kit- ランナーをすべて削除
+gh secret-kit migrate runner prune --runner-label "" owner-org
+```
+
+| オプション | 説明 |
+| --- | --- |
+| `--repo` / `-R` | コピー元リポジトリ（`owner/repo`）。省略すると組織スコープになります |
+| `--runner-label` | このラベルを持つランナーのみ削除（デフォルト: `gh-secret-kit-migrate`；`""` = すべての gh-secret-kit ランナー） |
+| `--dry-run` / `-n` | 削除せずにプレビューのみ表示 |
 
 ## 組織全体の移行状況を確認する
 

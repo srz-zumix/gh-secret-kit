@@ -4,12 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/cli/go-gh/v2/pkg/repository"
 	"github.com/spf13/cobra"
 	"github.com/srz-zumix/gh-secret-kit/cmd/migrate/types"
 	"github.com/srz-zumix/gh-secret-kit/pkg/migrate"
 	"github.com/srz-zumix/go-gh-extension/pkg/logger"
-	"github.com/srz-zumix/go-gh-extension/pkg/parser"
 )
 
 var (
@@ -49,25 +47,9 @@ func runTeardown(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 	logger.Info("Tearing down runner for migration")
 
-	var sourceRepo repository.Repository
-	var err error
-	if teardownRepo != "" {
-		logger.Debug(fmt.Sprintf("Repo: %s, Runner Label: %s", teardownRepo, teardownRunnerOpts.RunnerLabel))
-		sourceRepo, err = parser.Repository(parser.RepositoryInput(teardownRepo))
-	} else if len(args) > 0 {
-		logger.Debug(fmt.Sprintf("Org: %s, Runner Label: %s", args[0], teardownRunnerOpts.RunnerLabel))
-		sourceRepo, err = parser.Repository(parser.RepositoryOwnerWithHost(args[0]))
-	} else {
-		// Fall back to current repository's owner (org-scoped runner)
-		var currentRepo repository.Repository
-		currentRepo, err = parser.Repository(parser.RepositoryInput(""))
-		if err == nil {
-			sourceRepo = repository.Repository{Host: currentRepo.Host, Owner: currentRepo.Owner}
-			logger.Debug(fmt.Sprintf("Org: %s, Runner Label: %s (current repo owner)", sourceRepo.Owner, teardownRunnerOpts.RunnerLabel))
-		}
-	}
+	sourceRepo, err := resolveSourceRepo(teardownRepo, args, teardownRunnerOpts.RunnerLabel)
 	if err != nil {
-		return fmt.Errorf("failed to parse source: %w", err)
+		return err
 	}
 
 	// Try to load state from the state file

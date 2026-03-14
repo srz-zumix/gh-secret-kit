@@ -99,6 +99,7 @@ gh secret-kit migrate runner setup owner-org
 | --- | --- |
 | `--repo` / `-R` | Source repository (`owner/repo`). Omit to use org scope. |
 | `--runner-label` | Custom runner label (default: `gh-secret-kit-migrate`) |
+| `--max-runners` | Maximum concurrent runners (default: `2`) |
 
 ### Step 2: Init
 
@@ -223,6 +224,27 @@ gh secret-kit migrate runner teardown -R owner/source-repo
 # or for org scope
 gh secret-kit migrate runner teardown owner-org
 ```
+
+### Cleaning Up Leftover Runners
+
+If a previous setup was interrupted without teardown, orphaned runners may remain registered in GitHub. Use `runner prune` to remove them:
+
+```sh
+# Preview (no deletion)
+gh secret-kit migrate runner prune --dry-run owner-org
+
+# Remove all gh-secret-kit- runners with the default label
+gh secret-kit migrate runner prune owner-org
+
+# Remove all gh-secret-kit- runners regardless of label
+gh secret-kit migrate runner prune --runner-label "" owner-org
+```
+
+| Option | Description |
+| --- | --- |
+| `--repo` / `-R` | Source repository (`owner/repo`). Omit to use org scope. |
+| `--runner-label` | Only remove runners with this label (default: `gh-secret-kit-migrate`; `""` = all gh-secret-kit runners) |
+| `--dry-run` / `-n` | Preview without deleting |
 
 ## Checking Migration Status Across an Organization
 

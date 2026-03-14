@@ -519,7 +519,7 @@ Trigger the migration workflow by removing and re-adding the trigger label on th
 #### migrate runner setup
 
 ```sh
-gh secret-kit migrate runner setup [org] [flags]
+gh secret-kit migrate runner setup [[HOST]/ORG] [flags]
 ```
 
 Register a self-hosted runner and start a message session listener for secret migration. Creates a runner scale set on the source repository/organization, downloads the runner binary, and starts a foreground message session listener. The listener waits for job assignments, automatically starts an ephemeral runner via JIT config when a workflow job is dispatched, and loops continuously until interrupted. Run the workflow dispatch command from another terminal while this command is running.
@@ -533,15 +533,29 @@ Register a self-hosted runner and start a message session listener for secret mi
 #### migrate runner teardown
 
 ```sh
-gh secret-kit migrate runner teardown [org] [flags]
+gh secret-kit migrate runner teardown [[HOST]/ORG] [flags]
 ```
 
-Unregister and stop the self-hosted runner. Stops the runner process, deletes the runner scale set from the source repository/organization, and cleans up local runner files.
+Unregister and stop the self-hosted runner. Deregisters any leftover runner instances via `config.sh remove`, stops the runner process, deletes the runner scale set from the source repository/organization, and cleans up local runner files.
 
 **Options:**
 
 - `--repo string` / `-R`: Source repository (owner/repo); when omitted uses the first argument as org or falls back to the current repository
 - `--runner-label string`: Label of the runner to tear down (default: "gh-secret-kit-migrate")
+
+#### migrate runner prune
+
+```sh
+gh secret-kit migrate runner prune [[HOST]/ORG] [flags]
+```
+
+Remove self-hosted runners whose names start with `gh-secret-kit-` that were left behind by previous runs. Only runners matching `--runner-label` are targeted (pass `--runner-label ""` to match all `gh-secret-kit-` runners). Busy runners are skipped to avoid disrupting running jobs. Use `--dry-run` (`-n`) to preview without deleting.
+
+**Options:**
+
+- `--dry-run` / `-n`: Print runners that would be removed without deleting them (default: false)
+- `--repo string` / `-R`: Source repository (owner/repo); when omitted uses the first argument as org or falls back to the current repository
+- `--runner-label string`: Only remove runners that have this label (default: "gh-secret-kit-migrate"; empty string matches all gh-secret-kit runners)
 
 ### Examples
 

@@ -5,12 +5,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/cli/go-gh/v2/pkg/repository"
 	"github.com/spf13/cobra"
 	"github.com/srz-zumix/gh-secret-kit/cmd/migrate/types"
 	"github.com/srz-zumix/go-gh-extension/pkg/gh"
 	"github.com/srz-zumix/go-gh-extension/pkg/logger"
-	"github.com/srz-zumix/go-gh-extension/pkg/parser"
 )
 
 var (
@@ -52,21 +50,9 @@ Arguments:
 func runPrune(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 
-	var sourceRepo repository.Repository
-	var err error
-	if pruneRepo != "" {
-		sourceRepo, err = parser.Repository(parser.RepositoryInput(pruneRepo))
-	} else if len(args) > 0 {
-		sourceRepo, err = parser.Repository(parser.RepositoryOwnerWithHost(args[0]))
-	} else {
-		var currentRepo repository.Repository
-		currentRepo, err = parser.Repository(parser.RepositoryInput(""))
-		if err == nil {
-			sourceRepo = repository.Repository{Host: currentRepo.Host, Owner: currentRepo.Owner}
-		}
-	}
+	sourceRepo, err := resolveSourceRepo(pruneRepo, args, pruneRunnerOpts.RunnerLabel)
 	if err != nil {
-		return fmt.Errorf("failed to parse source: %w", err)
+		return err
 	}
 
 	client, err := gh.NewGitHubClientWithRepo(sourceRepo)
