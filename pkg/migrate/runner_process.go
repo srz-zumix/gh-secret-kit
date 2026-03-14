@@ -29,6 +29,9 @@ const (
 	RunnerReadyMessage = "Listening for Jobs"
 	// RunnerStartTimeout is the maximum time to wait for the runner to become ready
 	RunnerStartTimeout = 120 * time.Second
+	// RunnerNamePrefix is the common prefix for all runner names created by gh-secret-kit.
+	// Used both when generating names and when identifying runners to prune.
+	RunnerNamePrefix = "gh-secret-kit-"
 	// runnerDirName is the subdirectory name for runner binary storage
 	runnerDirName = "runner"
 )
@@ -139,7 +142,7 @@ func RunnerDirPath() (string, error) {
 func GenerateRunnerName() string {
 	b := make([]byte, 4)
 	_, _ = rand.Read(b)
-	return fmt.Sprintf("gh-secret-kit-%s", hex.EncodeToString(b))
+	return fmt.Sprintf("%s%s", RunnerNamePrefix, hex.EncodeToString(b))
 }
 
 // DownloadRunnerBinary downloads and extracts the runner binary to the specified directory
