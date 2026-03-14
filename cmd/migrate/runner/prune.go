@@ -34,7 +34,7 @@ Use --dry-run to preview which runners would be removed without actually
 deleting them.
 
 Arguments:
-  org   Organization name (optional). When omitted, uses the current repository's owner.`,
+  [HOST]/ORG   Organization name, optionally prefixed with a GitHub host. When omitted, uses the current repository's owner.`,
 		RunE: runPrune,
 		Args: cobra.MaximumNArgs(1),
 	}
