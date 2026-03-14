@@ -62,6 +62,28 @@ func RunDelete(ctx context.Context, config *DeleteConfig) error {
 
 	branch := config.Branch
 
+	// Cancel any pending/queued/in-progress workflow runs for the migration workflow
+	// before closing PRs and deleting the branch.
+	workflowFileName := config.WorkflowName + ".yml"
+	runs, listErr := gh.ListWorkflowRunsByFileName(ctx, client, sourceRepo, workflowFileName, &gh.ListWorkflowRunsOptions{
+		Branch: branch,
+	})
+	if listErr != nil && !gh.IsHTTPNotFound(listErr) {
+		return fmt.Errorf("failed to list workflow runs: %w", listErr)
+	}
+	for _, run := range runs {
+		if run.GetStatus() == "completed" {
+			continue
+		}
+		runID := run.GetID()
+		logger.Info(fmt.Sprintf("Cancelling workflow run #%d (status: %s)...", run.GetRunNumber(), run.GetStatus()))
+		if cerr := gh.ForceCancelWorkflowRunByID(ctx, client, sourceRepo, runID); cerr != nil {
+			logger.Warn(fmt.Sprintf("Failed to cancel workflow run #%d: %v", run.GetRunNumber(), cerr))
+		} else {
+			logger.Info(fmt.Sprintf("Workflow run #%d cancelled", run.GetRunNumber()))
+		}
+	}
+
 	// Close any open PRs from the topic branch
 	openPRs, err := gh.ListPullRequests(ctx, client, sourceRepo,
 		&gh.ListPullRequestsOptionHead{Head: fmt.Sprintf("%s:%s", sourceRepo.Owner, branch)},
@@ -82,7 +104,7 @@ func RunDelete(ctx context.Context, config *DeleteConfig) error {
 
 	// Delete the topic branch
 	logger.Info(fmt.Sprintf("Deleting branch %s...", branch))
-	err = gh.DeleteBranch(ctx, client, sourceRepo, branch)
+	err = gh.DeleteBranchIfExists(ctx, client, sourceRepo, branch)
 	if err != nil {
 		return fmt.Errorf("failed to delete branch %s: %w", branch, err)
 	}

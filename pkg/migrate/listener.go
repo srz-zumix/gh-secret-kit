@@ -312,29 +312,36 @@ func (s *migrateScaler) startRunner(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("failed to obtain registration token: %w", err)
 		}
+
+		// Create a per-runner instance directory as a hard-linked copy of the
+		// shared runner binary template. config.sh writes .runner/.credentials
+		// into the directory where config.sh lives, so each concurrent runner
+		// must have its own isolated directory to avoid overwriting each other's
+		// configuration files.
+		// Instance dirs live under RunnerInstancesBaseDir (a sibling of runnerDir)
+		// so that WalkDir in CreateRunnerInstanceDir does not recurse into them.
+		instanceDir := filepath.Join(RunnerInstancesBaseDir(s.runnerDir), runnerName)
+		logger.Info(fmt.Sprintf("Creating runner instance directory: %s", instanceDir))
+		if err := CreateRunnerInstanceDir(s.runnerDir, instanceDir); err != nil {
+			return fmt.Errorf("failed to create runner instance directory: %w", err)
+		}
+
 		logger.Info(fmt.Sprintf("Configuring runner via config.sh: %s (label: %s)", runnerName, s.runnerLabel))
-		if err := ConfigureRunner(s.runnerDir, s.configURL, token, runnerName, s.runnerLabel); err != nil {
+		if err := ConfigureRunner(instanceDir, instanceDir, s.configURL, token, runnerName, s.runnerLabel); err != nil {
 			return fmt.Errorf("failed to configure runner: %w", err)
 		}
 
 		logger.Info(fmt.Sprintf("Starting ephemeral runner: %s", runnerName))
-		logPath := filepath.Join(s.runnerDir, runnerName+".log")
-		cmd, err := StartRunner(s.runnerDir, "", logPath)
+		logPath := filepath.Join(instanceDir, runnerName+".log")
+		cmd, err := StartRunner(instanceDir, instanceDir, "", logPath)
 		if err != nil {
 			return fmt.Errorf("failed to start runner: %w", err)
 		}
 
 		s.runners.addIdle(runnerName, cmd)
 		logger.Info(fmt.Sprintf("Runner started: %s (PID: %d, log: %s)", runnerName, cmd.Process.Pid, logPath))
-		// Watch for unexpected process exit and remove from state so the next
-		// HandleDesiredRunnerCount call correctly reflects the actual runner count.
 		s.runnerWg.Add(1)
-		go func() {
-			defer s.runnerWg.Done()
-			_ = cmd.Wait()
-			logger.Info(fmt.Sprintf("Runner process exited: %s", runnerName))
-			s.runners.remove(runnerName)
-		}()
+		go s.watchRunner(ctx, runnerName, cmd, logPath)
 	} else {
 		// Use JIT config (github.com)
 		logger.Info(fmt.Sprintf("Generating JIT config for runner: %s", runnerName))
@@ -345,33 +352,69 @@ func (s *migrateScaler) startRunner(ctx context.Context) error {
 
 		logger.Info(fmt.Sprintf("Starting ephemeral runner: %s", runnerName))
 		logPath := filepath.Join(s.runnerDir, runnerName+".log")
-		cmd, err := StartRunner(s.runnerDir, jitConfig.EncodedJITConfig, logPath)
+		cmd, err := StartRunner(s.runnerDir, "", jitConfig.EncodedJITConfig, logPath)
 		if err != nil {
 			return fmt.Errorf("failed to start runner: %w", err)
 		}
 
 		s.runners.addIdle(runnerName, cmd)
 		logger.Info(fmt.Sprintf("Runner started: %s (PID: %d, log: %s)", runnerName, cmd.Process.Pid, logPath))
-		// Watch for unexpected process exit and remove from state so the next
-		// HandleDesiredRunnerCount call correctly reflects the actual runner count.
 		s.runnerWg.Add(1)
-		go func() {
-			defer s.runnerWg.Done()
-			_ = cmd.Wait()
-			logger.Info(fmt.Sprintf("Runner process exited: %s", runnerName))
-			s.runners.remove(runnerName)
-		}()
-	}
-
-	// Wait for runner to become ready before returning
-	logger.Info("Waiting for runner to become ready...")
-	if err := WaitForRunnerReady(ctx, s.runnerDir, RunnerStartTimeout); err != nil {
-		logger.Warn(fmt.Sprintf("Runner may not be fully ready: %v", err))
-	} else {
-		logger.Info("Runner is ready and listening for jobs")
+		go s.watchRunner(ctx, runnerName, cmd, logPath)
 	}
 
 	return nil
+}
+
+// watchRunner waits for a runner process to exit and logs readiness/completion.
+// It is launched as a goroutine (owns the s.runnerWg counter added by the caller).
+// The goroutine always blocks until procExitCh fires so that shutdown() →
+// runnerWg.Wait() does not return before the runner process has actually exited.
+// When ctx is cancelled, readyCtx is also cancelled (it is derived from ctx),
+// causing WaitForRunnerReady to return early via readyCh; the goroutine then
+// continues waiting for the process to exit (shutdown() sends SIGINT/kill).
+func (s *migrateScaler) watchRunner(ctx context.Context, runnerName string, cmd *exec.Cmd, logPath string) {
+	defer s.runnerWg.Done()
+
+	// readyCtx is cancelled when the runner exits, readiness completes, or the parent context is done.
+	readyCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	readyCh := make(chan error, 1)
+	procExitCh := make(chan error, 1)
+
+	go func() {
+		logger.Info(fmt.Sprintf("Waiting for runner to become ready: %s", runnerName))
+		readyCh <- WaitForRunnerReady(readyCtx, logPath, RunnerStartTimeout)
+	}()
+
+	go func() {
+		procExitCh <- cmd.Wait()
+	}()
+
+	for {
+		select {
+		case err := <-readyCh:
+			if err != nil {
+				logger.Warn(fmt.Sprintf("Runner may not be fully ready (%s): %v", runnerName, err))
+			} else {
+				logger.Info(fmt.Sprintf("Runner is ready and listening for jobs: %s", runnerName))
+			}
+			// Cancel readiness context and deactivate this case after the first result.
+			cancel()
+			readyCh = nil
+		case err := <-procExitCh:
+			if err != nil {
+				logger.Warn(fmt.Sprintf("Runner process exited with error (%s): %v", runnerName, err))
+			} else {
+				logger.Info(fmt.Sprintf("Runner process exited: %s", runnerName))
+			}
+			s.runners.remove(runnerName)
+			// Ensure readiness watcher is stopped when the process exits.
+			cancel()
+			return
+		}
+	}
 }
 
 // shutdown stops all running runner processes and waits for them to exit.
