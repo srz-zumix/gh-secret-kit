@@ -25,8 +25,9 @@ func NewPruneCmd() *cobra.Command {
 		Use:   "prune [[HOST]/ORG]",
 		Short: "Remove leftover self-hosted runners registered by gh-secret-kit",
 		Long: `Remove self-hosted runners whose names start with "gh-secret-kit-" that
-were left behind by previous runs. Runners currently online (busy/idle) are
-skipped unless --force is specified.
+were left behind by previous runs. Runners that are currently online and busy
+are skipped to avoid disrupting running jobs; idle and offline runners may be
+removed.
 
 By default, only runners matching the runner-label are removed. Use
 --runner-label "" to target all gh-secret-kit runners regardless of label.
