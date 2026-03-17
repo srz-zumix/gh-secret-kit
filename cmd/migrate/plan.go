@@ -125,18 +125,22 @@ func runPlan(ctx context.Context, config *planConfig) error {
 		currentRepoName = currentRepo.Name
 	}
 
-	// orgMigrationSrc is the "owner/repo" string passed as -s to "migrate org all".
-	var orgMigrationSrc string
+	// orgMigrationSrc is the source repo passed as -s to "migrate org all".
+	// We store the full repository.Repository (not just its name) so the host
+	// is preserved when building the command string.
+	var orgMigrationSrc *repository.Repository
 	var orgSourceFixed bool // true once the current repo has been selected
 
 	for _, m := range matches {
 		// Update org migration source selection: prefer current repo (a), then first
 		// matching repo regardless of secrets (b).
-		if orgMigrationSrc == "" {
-			orgMigrationSrc = m.SrcFullName
+		if orgMigrationSrc == nil {
+			ref := m.SrcRepoRef
+			orgMigrationSrc = &ref
 		}
 		if !orgSourceFixed && m.SrcName == currentRepoName {
-			orgMigrationSrc = m.SrcFullName
+			ref := m.SrcRepoRef
+			orgMigrationSrc = &ref
 			orgSourceFixed = true
 		}
 
@@ -156,7 +160,7 @@ func runPlan(ctx context.Context, config *planConfig) error {
 	// Check org secrets independently of repo/env secrets.
 	// A source repo is required to run the migration workflow, so skip only when
 	// no repository in srcOrg has a counterpart in dstOrg.
-	if orgMigrationSrc != "" {
+	if orgMigrationSrc != nil {
 		srcOrgSecrets, err := gh.ListOrgSecrets(ctx, src.Client, src.OwnerRepo)
 		if err != nil {
 			logger.Warn(fmt.Sprintf("Failed to list org secrets: %v", err))
@@ -165,8 +169,7 @@ func runPlan(ctx context.Context, config *planConfig) error {
 			for _, s := range srcOrgSecrets {
 				orgSecretNames = append(orgSecretNames, s.Name)
 			}
-			orgSrcRepo, _ := parser.Repository(parser.RepositoryInput(orgMigrationSrc))
-			cmd := buildOrgMigrateCmd(orgSrcRepo, dst.OwnerRepo, orgSecretNames, config)
+			cmd := buildOrgMigrateCmd(*orgMigrationSrc, dst.OwnerRepo, orgSecretNames, config)
 			result.OrgMigrate = cmd
 			logger.Info(fmt.Sprintf("Found org secrets: %d secrets", len(srcOrgSecrets)))
 		}
@@ -242,7 +245,7 @@ func buildOrgMigrateCmd(srcRepo repository.Repository, dstOrg repository.Reposit
 	parts = append(parts, "gh secret-kit migrate org all")
 	parts = append(parts, fmt.Sprintf("-s %s", shellQuote(repoArg(srcRepo))))
 	dstOrgArg := dstOrg.Owner
-	if dstOrg.Host != "" && dstOrg.Host != srcRepo.Host {
+	if dstOrg.Host != "" {
 		dstOrgArg = dstOrg.Host + "/" + dstOrg.Owner
 	}
 	parts = append(parts, fmt.Sprintf("-d %s", shellQuote(dstOrgArg)))
