@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/cli/go-gh/v2/pkg/repository"
-	migratePackage "github.com/srz-zumix/gh-secret-kit/pkg/migrate"
+	"github.com/srz-zumix/gh-secret-kit/pkg/migrator"
 	"github.com/srz-zumix/go-gh-extension/pkg/gh"
 	"github.com/srz-zumix/go-gh-extension/pkg/logger"
 	"github.com/srz-zumix/go-gh-extension/pkg/parser"
@@ -54,10 +54,10 @@ func RunCreate(ctx context.Context, config *CreateConfig) error {
 	secrets := config.Secrets
 	if len(secrets) == 0 {
 		switch scope {
-		case migratePackage.SecretScopeOrg:
+		case migrator.SecretScopeOrg:
 			logger.Info("No specific secrets specified, fetching org secrets from source...")
 			secrets, err = fetchOrgSecrets(ctx, client, sourceRepo)
-		case migratePackage.SecretScopeEnv:
+		case migrator.SecretScopeEnv:
 			logger.Info("No specific secrets specified, fetching env secrets from source...")
 			secrets, err = fetchEnvSecrets(ctx, client, sourceRepo, config.SourceEnv)
 		default:
@@ -101,7 +101,7 @@ func RunCreate(ctx context.Context, config *CreateConfig) error {
 	// Determine destination host: parse --dst to extract [HOST/]OWNER/REPO or [HOST/]ORG,
 	// then fall back to the source host.
 	var destRepo repository.Repository
-	if config.Scope == migratePackage.SecretScopeOrg {
+	if config.Scope == migrator.SecretScopeOrg {
 		destRepo, err = parser.Repository(parser.RepositoryOwnerWithHost(config.Destination))
 	} else {
 		destRepo, err = parser.Repository(parser.RepositoryInput(config.Destination))
@@ -128,7 +128,7 @@ func RunCreate(ctx context.Context, config *CreateConfig) error {
 		if err != nil {
 			return fmt.Errorf("failed to create destination GitHub client: %w", err)
 		}
-		if config.Scope == migratePackage.SecretScopeOrg {
+		if config.Scope == migrator.SecretScopeOrg {
 			if _, err := destClient.GetOrg(ctx, destRepo.Owner); err != nil {
 				return fmt.Errorf("destination organization %q not found or inaccessible: %w", destRepo.Owner, err)
 			}
@@ -142,14 +142,14 @@ func RunCreate(ctx context.Context, config *CreateConfig) error {
 	// Normalize destination: strip the host prefix so the generated workflow
 	// uses just OWNER/REPO (or ORG) and relies on GH_HOST for the host.
 	normalizedDst := config.Destination
-	if config.Scope == migratePackage.SecretScopeOrg {
+	if config.Scope == migrator.SecretScopeOrg {
 		normalizedDst = destRepo.Owner
 	} else if destRepo.Owner != "" && destRepo.Name != "" {
 		normalizedDst = destRepo.Owner + "/" + destRepo.Name
 	}
 
 	// Build workflow configuration
-	workflowConfig := migratePackage.WorkflowConfig{
+	workflowConfig := migrator.WorkflowConfig{
 		WorkflowName:           config.WorkflowName,
 		RunnerLabel:            config.RunnerLabel,
 		TriggerLabel:           config.Label,
@@ -167,7 +167,7 @@ func RunCreate(ctx context.Context, config *CreateConfig) error {
 
 	// Generate workflow YAML
 	logger.Info("Generating workflow YAML...")
-	workflowYAML, err := migratePackage.GenerateWorkflowYAML(workflowConfig)
+	workflowYAML, err := migrator.GenerateWorkflowYAML(workflowConfig)
 	if err != nil {
 		return fmt.Errorf("failed to generate workflow YAML: %w", err)
 	}

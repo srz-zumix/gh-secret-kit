@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/cli/go-gh/v2/pkg/repository"
-	migratePackage "github.com/srz-zumix/gh-secret-kit/pkg/migrate"
+	"github.com/srz-zumix/gh-secret-kit/pkg/migrator"
 	"github.com/srz-zumix/go-gh-extension/pkg/gh"
 	"github.com/srz-zumix/go-gh-extension/pkg/logger"
 	"github.com/srz-zumix/go-gh-extension/pkg/parser"
@@ -21,7 +21,7 @@ func RunCheck(ctx context.Context, config *CheckConfig) error {
 	var sourceRepo repository.Repository
 	var err error
 	switch config.Scope {
-	case migratePackage.SecretScopeOrg:
+	case migrator.SecretScopeOrg:
 		sourceRepo, err = parser.Repository(parser.RepositoryOwnerWithHost(config.Source))
 	default:
 		sourceRepo, err = parser.Repository(parser.RepositoryInput(config.Source))
@@ -39,7 +39,7 @@ func RunCheck(ctx context.Context, config *CheckConfig) error {
 	// Parse destination based on scope; host is extracted from the [HOST/]... prefix.
 	var destRepo repository.Repository
 	switch config.Scope {
-	case migratePackage.SecretScopeOrg:
+	case migrator.SecretScopeOrg:
 		destRepo, err = parser.Repository(parser.RepositoryOwnerWithHost(config.Destination))
 	default:
 		destRepo, err = parser.Repository(parser.RepositoryInput(config.Destination))
@@ -151,9 +151,9 @@ func RunCheck(ctx context.Context, config *CheckConfig) error {
 }
 
 // listSecretNamesByScope lists secret names based on the specified scope
-func listSecretNamesByScope(ctx context.Context, client *gh.GitHubClient, repo repository.Repository, scope migratePackage.SecretScope, env string) ([]string, error) {
+func listSecretNamesByScope(ctx context.Context, client *gh.GitHubClient, repo repository.Repository, scope migrator.SecretScope, env string) ([]string, error) {
 	switch scope {
-	case migratePackage.SecretScopeEnv:
+	case migrator.SecretScopeEnv:
 		repoInfo, err := gh.GetRepository(ctx, client, repo)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get repository info: %w", err)
@@ -167,7 +167,7 @@ func listSecretNamesByScope(ctx context.Context, client *gh.GitHubClient, repo r
 			names[i] = s.Name
 		}
 		return names, nil
-	case migratePackage.SecretScopeOrg:
+	case migrator.SecretScopeOrg:
 		secrets, err := gh.ListOrgSecrets(ctx, client, repo)
 		if err != nil {
 			return nil, err

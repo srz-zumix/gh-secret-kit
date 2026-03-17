@@ -6,13 +6,13 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/srz-zumix/gh-secret-kit/cmd/migrate/types"
 	"github.com/srz-zumix/gh-secret-kit/cmd/migrate/workflow"
-	"github.com/srz-zumix/gh-secret-kit/pkg/migrate"
+	"github.com/srz-zumix/gh-secret-kit/pkg/migrator"
 )
 
 // NewCreateCmd creates the repo create command
 func NewCreateCmd() *cobra.Command {
 	var config workflow.CreateConfig
-	config.Scope = migrate.SecretScopeRepo
+	config.Scope = migrator.SecretScopeRepo
 
 	cmd := &cobra.Command{
 		Use:   "create",

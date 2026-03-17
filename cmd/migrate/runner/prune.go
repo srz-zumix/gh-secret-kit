@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/srz-zumix/gh-secret-kit/cmd/migrate/types"
-	"github.com/srz-zumix/gh-secret-kit/pkg/migrate"
+	"github.com/srz-zumix/gh-secret-kit/pkg/migrator"
 	"github.com/srz-zumix/go-gh-extension/pkg/gh"
 	"github.com/srz-zumix/go-gh-extension/pkg/logger"
 )
@@ -73,7 +73,7 @@ func runPrune(cmd *cobra.Command, args []string) error {
 		name := runner.GetName()
 
 		// Only target runners created by gh-secret-kit
-		if !strings.HasPrefix(name, migrate.RunnerNamePrefix) {
+		if !strings.HasPrefix(name, migrator.RunnerNamePrefix) {
 			continue
 		}
 

@@ -8,7 +8,7 @@ import (
 	"github.com/cli/go-gh/v2/pkg/repository"
 	"github.com/spf13/cobra"
 	"github.com/srz-zumix/gh-secret-kit/cmd/migrate/types"
-	"github.com/srz-zumix/gh-secret-kit/pkg/migrate"
+	"github.com/srz-zumix/gh-secret-kit/pkg/migrator"
 	"github.com/srz-zumix/go-gh-extension/pkg/gh"
 	"github.com/srz-zumix/go-gh-extension/pkg/logger"
 )
@@ -68,7 +68,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 
 func setupNewRunner(ctx context.Context, sourceRepo repository.Repository) error {
 	// Check if migration state already exists
-	if migrate.StateExists() {
+	if migrator.StateExists() {
 		return fmt.Errorf("migration state already exists; run 'runner teardown' first or remove the state file")
 	}
 
@@ -79,18 +79,18 @@ func setupNewRunner(ctx context.Context, sourceRepo repository.Repository) error
 	}
 
 	// Build GitHub config URL for scaleset
-	configURL := migrate.BuildGitHubConfigURL(sourceRepo)
+	configURL := migrator.BuildGitHubConfigURL(sourceRepo)
 	logger.Info(fmt.Sprintf("Creating scale set client for: %s", configURL))
 
 	// Create scaleset client
-	scalesetClient, err := migrate.NewScaleSetClient(configURL)
+	scalesetClient, err := migrator.NewScaleSetClient(configURL)
 	if err != nil {
 		return fmt.Errorf("failed to create scaleset client: %w", err)
 	}
 
 	// Create runner scale set
 	logger.Info(fmt.Sprintf("Creating runner scale set: %s", setupRunnerOpts.RunnerLabel))
-	scaleSet, err := migrate.CreateRunnerScaleSet(ctx, scalesetClient, setupRunnerOpts.RunnerLabel)
+	scaleSet, err := migrator.CreateRunnerScaleSet(ctx, scalesetClient, setupRunnerOpts.RunnerLabel)
 	if err != nil {
 		return fmt.Errorf("failed to create runner scale set: %w", err)
 	}
@@ -102,7 +102,7 @@ func setupNewRunner(ctx context.Context, sourceRepo repository.Repository) error
 		scaleSet.ID, scaleSet.Name, scaleSet.RunnerGroupID, scaleSet.RunnerGroupName, labelNames))
 
 	// Verify runner group accessibility
-	runnerGroup, err := migrate.GetRunnerGroupByName(ctx, scalesetClient, "default")
+	runnerGroup, err := migrator.GetRunnerGroupByName(ctx, scalesetClient, "default")
 	if err != nil {
 		logger.Warn(fmt.Sprintf("Failed to verify runner group 'default': %v", err))
 	} else {
@@ -110,7 +110,7 @@ func setupNewRunner(ctx context.Context, sourceRepo repository.Repository) error
 	}
 
 	// Verify scale set by reading back
-	verifiedScaleSet, err := migrate.GetRunnerScaleSetByID(ctx, scalesetClient, scaleSet.ID)
+	verifiedScaleSet, err := migrator.GetRunnerScaleSetByID(ctx, scalesetClient, scaleSet.ID)
 	if err != nil {
 		logger.Warn(fmt.Sprintf("Failed to verify scale set by ID: %v", err))
 	} else {
@@ -123,10 +123,10 @@ func setupNewRunner(ctx context.Context, sourceRepo repository.Repository) error
 	}
 
 	// Update system info with scale set ID
-	migrate.SetScaleSetSystemInfo(scalesetClient, scaleSet.ID)
+	migrator.SetScaleSetSystemInfo(scalesetClient, scaleSet.ID)
 
 	// Determine runner directory
-	runnerDir, err := migrate.RunnerDirPath()
+	runnerDir, err := migrator.RunnerDirPath()
 	if err != nil {
 		cleanupScaleSet(ctx, scalesetClient, scaleSet.ID)
 		return fmt.Errorf("failed to determine runner directory: %w", err)
@@ -134,14 +134,14 @@ func setupNewRunner(ctx context.Context, sourceRepo repository.Repository) error
 
 	// Download runner binary
 	logger.Info("Detecting runner binary for current platform...")
-	binaryInfo, err := migrate.DetectRunnerBinary("")
+	binaryInfo, err := migrator.DetectRunnerBinary("")
 	if err != nil {
 		cleanupScaleSet(ctx, scalesetClient, scaleSet.ID)
 		return fmt.Errorf("failed to detect runner binary: %w", err)
 	}
 
 	logger.Info(fmt.Sprintf("Downloading runner binary: %s", binaryInfo.Filename))
-	if err := migrate.DownloadRunnerBinary(ctx, binaryInfo.URL, runnerDir); err != nil {
+	if err := migrator.DownloadRunnerBinary(ctx, binaryInfo.URL, runnerDir); err != nil {
 		cleanupScaleSet(ctx, scalesetClient, scaleSet.ID)
 		return fmt.Errorf("failed to download runner binary: %w", err)
 	}
@@ -151,7 +151,7 @@ func setupNewRunner(ctx context.Context, sourceRepo repository.Repository) error
 	if sourceRepo.Name != "" {
 		sourceString = sourceRepo.Owner + "/" + sourceRepo.Name
 	}
-	state := &migrate.MigrateState{
+	state := &migrator.MigrateState{
 		Source:       sourceString,
 		ScaleSetID:   scaleSet.ID,
 		ScaleSetName: scaleSet.Name,
@@ -159,7 +159,7 @@ func setupNewRunner(ctx context.Context, sourceRepo repository.Repository) error
 		ConfigURL:    configURL,
 		CreatedAt:    time.Now(),
 	}
-	if err := migrate.SaveState(state); err != nil {
+	if err := migrator.SaveState(state); err != nil {
 		logger.Warn(fmt.Sprintf("Failed to save migration state: %v", err))
 	}
 
@@ -195,7 +195,7 @@ func setupNewRunner(ctx context.Context, sourceRepo repository.Repository) error
 	logger.Info("")
 
 	// Run the message session listener loop (blocks until job completes or interrupted)
-	listenerConfig := &migrate.ListenerConfig{
+	listenerConfig := &migrator.ListenerConfig{
 		Client:         scalesetClient,
 		ScaleSetID:     scaleSet.ID,
 		RunnerDir:      runnerDir,
@@ -204,7 +204,7 @@ func setupNewRunner(ctx context.Context, sourceRepo repository.Repository) error
 		TokenRefresher: tokenRefresher,
 		MaxRunners:     setupRunnerOpts.MaxRunners,
 	}
-	listenerErr := migrate.RunListenerLoop(ctx, listenerConfig)
+	listenerErr := migrator.RunListenerLoop(ctx, listenerConfig)
 
 	// After listener exits, show teardown instructions
 	logger.Info("")

@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"github.com/srz-zumix/gh-secret-kit/pkg/migrate"
+	"github.com/srz-zumix/gh-secret-kit/pkg/migrator"
 	"github.com/srz-zumix/go-gh-extension/pkg/gh"
 	"github.com/srz-zumix/go-gh-extension/pkg/logger"
 	"github.com/srz-zumix/go-gh-extension/pkg/parser"
@@ -61,14 +61,14 @@ func runMigrateList(cmd *cobra.Command, args []string) error {
 }
 
 func runMigrateListOrg(ctx context.Context, source string) error {
-	oc, err := migrate.ParseOrg(source)
+	oc, err := migrator.ParseOrg(source)
 	if err != nil {
 		return err
 	}
 
 	logger.Debug(fmt.Sprintf("Listing repositories for owner: %s", oc.OwnerRepo.Owner))
 
-	results, err := migrate.ScanOrgRepos(ctx, oc)
+	results, err := migrator.ScanOrgRepos(ctx, oc)
 	if err != nil {
 		return err
 	}
