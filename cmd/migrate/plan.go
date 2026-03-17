@@ -128,19 +128,19 @@ func runPlan(ctx context.Context, config *planConfig) error {
 	// orgMigrationSrc is the source repo passed as -s to "migrate org all".
 	// We store the full repository.Repository (not just its name) so the host
 	// is preserved when building the command string.
-	var orgMigrationSrc *repository.Repository
+	var orgMigrationSrc repository.Repository
+	var orgMigrationSrcSet bool
 	var orgSourceFixed bool // true once the current repo has been selected
 
 	for _, m := range matches {
 		// Update org migration source selection: prefer current repo (a), then first
 		// matching repo regardless of secrets (b).
-		if orgMigrationSrc == nil {
-			ref := m.SrcRepoRef
-			orgMigrationSrc = &ref
+		if !orgMigrationSrcSet {
+			orgMigrationSrc = m.SrcRepoRef
+			orgMigrationSrcSet = true
 		}
 		if !orgSourceFixed && m.SrcName == currentRepoName {
-			ref := m.SrcRepoRef
-			orgMigrationSrc = &ref
+			orgMigrationSrc = m.SrcRepoRef
 			orgSourceFixed = true
 		}
 
@@ -160,7 +160,7 @@ func runPlan(ctx context.Context, config *planConfig) error {
 	// Check org secrets independently of repo/env secrets.
 	// A source repo is required to run the migration workflow, so skip only when
 	// no repository in srcOrg has a counterpart in dstOrg.
-	if orgMigrationSrc != nil {
+	if orgMigrationSrcSet {
 		srcOrgSecrets, err := gh.ListOrgSecrets(ctx, src.Client, src.OwnerRepo)
 		if err != nil {
 			logger.Warn(fmt.Sprintf("Failed to list org secrets: %v", err))
@@ -169,7 +169,7 @@ func runPlan(ctx context.Context, config *planConfig) error {
 			for _, s := range srcOrgSecrets {
 				orgSecretNames = append(orgSecretNames, s.Name)
 			}
-			cmd := buildOrgMigrateCmd(*orgMigrationSrc, dst.OwnerRepo, orgSecretNames, config)
+			cmd := buildOrgMigrateCmd(orgMigrationSrc, dst.OwnerRepo, orgSecretNames, config)
 			result.OrgMigrate = cmd
 			logger.Info(fmt.Sprintf("Found org secrets: %d secrets", len(srcOrgSecrets)))
 		}
