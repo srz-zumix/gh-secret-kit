@@ -3,7 +3,7 @@ package workflow
 import (
 	"time"
 
-	"github.com/srz-zumix/gh-secret-kit/pkg/migrate"
+	"github.com/srz-zumix/gh-secret-kit/pkg/migrator"
 )
 
 // InitConfig holds configuration for the init operation
@@ -27,7 +27,7 @@ type CreateConfig struct {
 	Rename                 []string
 	Overwrite              bool
 	DestinationTokenSecret string
-	Scope                  migrate.SecretScope
+	Scope                  migrator.SecretScope
 	RunnerLabel            string
 	WorkflowName           string
 	Branch                 string
@@ -77,7 +77,7 @@ type CheckConfig struct {
 	Secrets          []string
 	Rename           []string
 	DestinationToken string
-	Scope            migrate.SecretScope
+	Scope            migrator.SecretScope
 }
 
 // AllConfig holds configuration for the all-in-one operation that runs
@@ -94,7 +94,7 @@ type AllConfig struct {
 	Overwrite              bool
 	DestinationTokenSecret string
 	DestinationToken       string
-	Scope                  migrate.SecretScope
+	Scope                  migrator.SecretScope
 	RunnerLabel            string
 	WorkflowName           string
 	Branch                 string

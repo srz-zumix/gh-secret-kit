@@ -6,7 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/srz-zumix/gh-secret-kit/cmd/migrate/types"
-	"github.com/srz-zumix/gh-secret-kit/pkg/migrate"
+	"github.com/srz-zumix/gh-secret-kit/pkg/migrator"
 	"github.com/srz-zumix/go-gh-extension/pkg/logger"
 )
 
@@ -53,13 +53,13 @@ func runTeardown(cmd *cobra.Command, args []string) error {
 	}
 
 	// Try to load state from the state file
-	state, stateErr := migrate.LoadState()
+	state, stateErr := migrator.LoadState()
 
 	// Build GitHub config URL for scaleset
-	configURL := migrate.BuildGitHubConfigURL(sourceRepo)
+	configURL := migrator.BuildGitHubConfigURL(sourceRepo)
 
 	// Create scaleset client
-	scalesetClient, err := migrate.NewScaleSetClient(configURL)
+	scalesetClient, err := migrator.NewScaleSetClient(configURL)
 	if err != nil {
 		return fmt.Errorf("failed to create scaleset client: %w", err)
 	}
@@ -67,7 +67,7 @@ func runTeardown(cmd *cobra.Command, args []string) error {
 	// Stop runner process if state has a PID (legacy or interrupted listener)
 	if stateErr == nil && state.RunnerPID > 0 {
 		logger.Info(fmt.Sprintf("Stopping runner process (PID: %d)...", state.RunnerPID))
-		if err := migrate.StopRunner(state.RunnerPID); err != nil {
+		if err := migrator.StopRunner(state.RunnerPID); err != nil {
 			logger.Warn(fmt.Sprintf("Failed to stop runner process: %v", err))
 		} else {
 			logger.Info("Runner process stopped")
@@ -79,7 +79,7 @@ func runTeardown(cmd *cobra.Command, args []string) error {
 	if stateErr == nil && state.ScaleSetID > 0 {
 		// Use scale set ID from state
 		logger.Info(fmt.Sprintf("Deleting runner scale set (ID: %d)...", state.ScaleSetID))
-		if err := migrate.DeleteRunnerScaleSet(ctx, scalesetClient, state.ScaleSetID); err != nil {
+		if err := migrator.DeleteRunnerScaleSet(ctx, scalesetClient, state.ScaleSetID); err != nil {
 			logger.Warn(fmt.Sprintf("Failed to delete scale set by ID: %v", err))
 		} else {
 			scaleSetDeleted = true
@@ -90,12 +90,12 @@ func runTeardown(cmd *cobra.Command, args []string) error {
 	if !scaleSetDeleted {
 		// Try to find and delete by name
 		logger.Info(fmt.Sprintf("Looking up runner scale set by name: %s", teardownRunnerOpts.RunnerLabel))
-		scaleSet, err := migrate.FindRunnerScaleSet(ctx, scalesetClient, teardownRunnerOpts.RunnerLabel)
+		scaleSet, err := migrator.FindRunnerScaleSet(ctx, scalesetClient, teardownRunnerOpts.RunnerLabel)
 		if err != nil {
 			logger.Warn(fmt.Sprintf("Failed to find scale set by name: %v", err))
 		} else if scaleSet != nil {
 			logger.Info(fmt.Sprintf("Deleting runner scale set (ID: %d)...", scaleSet.ID))
-			if err := migrate.DeleteRunnerScaleSet(ctx, scalesetClient, scaleSet.ID); err != nil {
+			if err := migrator.DeleteRunnerScaleSet(ctx, scalesetClient, scaleSet.ID); err != nil {
 				logger.Warn(fmt.Sprintf("Failed to delete scale set: %v", err))
 			} else {
 				scaleSetDeleted = true
@@ -111,29 +111,29 @@ func runTeardown(cmd *cobra.Command, args []string) error {
 	if stateErr == nil && state.RunnerDir != "" {
 		runnerDir = state.RunnerDir
 	} else {
-		runnerDir, _ = migrate.RunnerDirPath()
+		runnerDir, _ = migrator.RunnerDirPath()
 	}
 
 	if runnerDir != "" {
 		// Deregister any leftover runner instances before removing files
-		instancesDir := migrate.RunnerInstancesBaseDir(runnerDir)
+		instancesDir := migrator.RunnerInstancesBaseDir(runnerDir)
 		logger.Info(fmt.Sprintf("Removing registered runners in: %s", instancesDir))
-		migrate.RemoveRunnerInstances(instancesDir)
+		migrator.RemoveRunnerInstances(instancesDir)
 
 		// Also deregister the template runner dir itself if it was configured
-		if err := migrate.RemoveRunner(runnerDir); err != nil {
+		if err := migrator.RemoveRunner(runnerDir); err != nil {
 			logger.Warn(fmt.Sprintf("Failed to remove runner from template dir: %v", err))
 		}
 
 		logger.Info(fmt.Sprintf("Cleaning up runner directory: %s", runnerDir))
-		if err := migrate.CleanupRunnerDir(runnerDir); err != nil {
+		if err := migrator.CleanupRunnerDir(runnerDir); err != nil {
 			logger.Warn(fmt.Sprintf("Failed to clean up runner directory: %v", err))
 		} else {
 			logger.Info("Runner directory cleaned up")
 		}
 
 		// Clean up runner instance directories (sibling of runnerDir)
-		if err := migrate.CleanupRunnerDir(instancesDir); err != nil {
+		if err := migrator.CleanupRunnerDir(instancesDir); err != nil {
 			logger.Warn(fmt.Sprintf("Failed to clean up runner instances directory: %v", err))
 		} else {
 			logger.Info(fmt.Sprintf("Runner instances directory cleaned up: %s", instancesDir))
@@ -141,7 +141,7 @@ func runTeardown(cmd *cobra.Command, args []string) error {
 	}
 
 	// Remove state file
-	if err := migrate.RemoveState(); err != nil {
+	if err := migrator.RemoveState(); err != nil {
 		logger.Warn(fmt.Sprintf("Failed to remove state file: %v", err))
 	}
 

@@ -1,4 +1,4 @@
-package migrate
+package migrator
 
 import (
 	"archive/tar"

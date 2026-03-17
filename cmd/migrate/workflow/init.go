@@ -6,7 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/srz-zumix/gh-secret-kit/cmd/migrate/types"
-	migratePackage "github.com/srz-zumix/gh-secret-kit/pkg/migrate"
+	"github.com/srz-zumix/gh-secret-kit/pkg/migrator"
 	"github.com/srz-zumix/go-gh-extension/pkg/gh"
 	"github.com/srz-zumix/go-gh-extension/pkg/logger"
 	"github.com/srz-zumix/go-gh-extension/pkg/parser"
@@ -85,7 +85,7 @@ func RunInit(ctx context.Context, config *InitConfig) (int, error) {
 	workflowPath := fmt.Sprintf(".github/workflows/%s.yml", config.WorkflowName)
 
 	// Generate stub workflow YAML
-	stubYAML, err := migratePackage.GenerateStubWorkflowYAML(config.WorkflowName)
+	stubYAML, err := migrator.GenerateStubWorkflowYAML(config.WorkflowName)
 	if err != nil {
 		return 0, fmt.Errorf("failed to generate stub workflow YAML: %w", err)
 	}

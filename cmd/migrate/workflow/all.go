@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/srz-zumix/gh-secret-kit/pkg/migrator"
 	"github.com/srz-zumix/go-gh-extension/pkg/gh"
 	"github.com/srz-zumix/go-gh-extension/pkg/logger"
 	"github.com/srz-zumix/go-gh-extension/pkg/parser"
@@ -64,8 +65,17 @@ func RunAll(ctx context.Context, config *AllConfig) error {
 		Unarchive:        false,
 		SkipArchiveCheck: true,
 	}
+	// For org scope, RunCheck expects [HOST/]owner, not a full repository path.
+	checkSource := config.Source
+	if config.Scope == migrator.SecretScopeOrg {
+		if sourceRepo.Host != "" {
+			checkSource = sourceRepo.Host + "/" + sourceRepo.Owner
+		} else {
+			checkSource = sourceRepo.Owner
+		}
+	}
 	checkConfig := &CheckConfig{
-		Source:           config.Source,
+		Source:           checkSource,
 		Destination:      config.Destination,
 		SourceEnv:        config.SourceEnv,
 		DestinationEnv:   config.DestinationEnv,

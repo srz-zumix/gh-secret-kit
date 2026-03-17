@@ -5,13 +5,13 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/srz-zumix/gh-secret-kit/cmd/migrate/workflow"
-	"github.com/srz-zumix/gh-secret-kit/pkg/migrate"
+	"github.com/srz-zumix/gh-secret-kit/pkg/migrator"
 )
 
 // NewCheckCmd creates the env check command
 func NewCheckCmd() *cobra.Command {
 	var config workflow.CheckConfig
-	config.Scope = migrate.SecretScopeEnv
+	config.Scope = migrator.SecretScopeEnv
 
 	cmd := &cobra.Command{
 		Use:   "check",

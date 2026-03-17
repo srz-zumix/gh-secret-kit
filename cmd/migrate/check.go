@@ -6,7 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/srz-zumix/gh-secret-kit/cmd/migrate/workflow"
-	"github.com/srz-zumix/gh-secret-kit/pkg/migrate"
+	"github.com/srz-zumix/gh-secret-kit/pkg/migrator"
 	"github.com/srz-zumix/go-gh-extension/pkg/gh"
 	"github.com/srz-zumix/go-gh-extension/pkg/logger"
 )
@@ -63,7 +63,7 @@ Arguments:
 }
 
 func runCheck(ctx context.Context, config *checkConfig) error {
-	src, dst, err := migrate.ParseOrgPair(config.Source, config.Destination)
+	src, dst, err := migrator.ParseOrgPair(config.Source, config.Destination)
 	if err != nil {
 		return err
 	}
@@ -71,7 +71,7 @@ func runCheck(ctx context.Context, config *checkConfig) error {
 	logger.Info(fmt.Sprintf("Scanning source organization: %s", src.OwnerRepo.Owner))
 	logger.Info(fmt.Sprintf("Checking against destination organization: %s", dst.OwnerRepo.Owner))
 
-	matches, err := migrate.ScanMatchingRepos(ctx, src, dst)
+	matches, err := migrator.ScanMatchingRepos(ctx, src, dst)
 	if err != nil {
 		return err
 	}
@@ -84,7 +84,7 @@ func runCheck(ctx context.Context, config *checkConfig) error {
 			checkCfg := &workflow.CheckConfig{
 				Source:      repoArg(m.SrcRepoRef),
 				Destination: repoArg(m.DstRepoRef),
-				Scope:       migrate.SecretScopeRepo,
+				Scope:       migrator.SecretScopeRepo,
 			}
 			cerr := workflow.RunCheck(ctx, checkCfg)
 			results = append(results, CheckResult{
@@ -102,7 +102,7 @@ func runCheck(ctx context.Context, config *checkConfig) error {
 				Destination:    repoArg(m.DstRepoRef),
 				SourceEnv:      env.Name,
 				DestinationEnv: env.Name,
-				Scope:          migrate.SecretScopeEnv,
+				Scope:          migrator.SecretScopeEnv,
 			}
 			cerr := workflow.RunCheck(ctx, checkCfg)
 			results = append(results, CheckResult{
@@ -129,7 +129,7 @@ func runCheck(ctx context.Context, config *checkConfig) error {
 		checkCfg := &workflow.CheckConfig{
 			Source:      srcOrg,
 			Destination: dstOrgArg,
-			Scope:       migrate.SecretScopeOrg,
+			Scope:       migrator.SecretScopeOrg,
 		}
 		if src.OwnerRepo.Host != "" {
 			checkCfg.Source = fmt.Sprintf("%s/%s", src.OwnerRepo.Host, srcOrg)

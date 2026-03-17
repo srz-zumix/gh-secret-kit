@@ -6,13 +6,13 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/srz-zumix/gh-secret-kit/cmd/migrate/types"
 	"github.com/srz-zumix/gh-secret-kit/cmd/migrate/workflow"
-	"github.com/srz-zumix/gh-secret-kit/pkg/migrate"
+	"github.com/srz-zumix/gh-secret-kit/pkg/migrator"
 )
 
 // NewAllCmd creates the repo all command
 func NewAllCmd() *cobra.Command {
 	var config workflow.AllConfig
-	config.Scope = migrate.SecretScopeRepo
+	config.Scope = migrator.SecretScopeRepo
 
 	cmd := &cobra.Command{
 		Use:   "all",

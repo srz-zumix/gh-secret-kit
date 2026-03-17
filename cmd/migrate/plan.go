@@ -8,7 +8,7 @@ import (
 	"github.com/cli/go-gh/v2/pkg/repository"
 	"github.com/spf13/cobra"
 	"github.com/srz-zumix/gh-secret-kit/cmd/migrate/types"
-	"github.com/srz-zumix/gh-secret-kit/pkg/migrate"
+	"github.com/srz-zumix/gh-secret-kit/pkg/migrator"
 	"github.com/srz-zumix/go-gh-extension/pkg/gh"
 	"github.com/srz-zumix/go-gh-extension/pkg/logger"
 	"github.com/srz-zumix/go-gh-extension/pkg/parser"
@@ -77,7 +77,7 @@ Arguments:
 }
 
 func runPlan(ctx context.Context, config *planConfig) error {
-	src, dst, err := migrate.ParseOrgPair(config.Source, config.Destination)
+	src, dst, err := migrator.ParseOrgPair(config.Source, config.Destination)
 	if err != nil {
 		return err
 	}
@@ -88,7 +88,7 @@ func runPlan(ctx context.Context, config *planConfig) error {
 	logger.Info(fmt.Sprintf("Scanning source organization: %s", srcOrg))
 	logger.Info(fmt.Sprintf("Checking against destination organization: %s", dstOrg))
 
-	matches, err := migrate.ScanMatchingRepos(ctx, src, dst)
+	matches, err := migrator.ScanMatchingRepos(ctx, src, dst)
 	if err != nil {
 		return err
 	}
