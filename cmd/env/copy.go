@@ -17,7 +17,7 @@ func NewCopyCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "copy <dst> [dst...]",
 		Short: "Copy a GitHub Actions environment to one or more destination repositories",
-		Long: `Copy a GitHub Actions environment (settings and deployment branch policies) from a
+		Long: `Copy a GitHub Actions environment (settings, deployment branch policies, and environment variables) from a
 source repository to one or more destination repositories.
 
 The source repository is specified via --repo (defaults to the current repository).
@@ -25,6 +25,7 @@ The source environment is specified via --src-env (required).
 The destination environment is specified via --dst-env (defaults to the value of --src-env).
 Each destination argument must be in owner/repo format.
 Use --dst-host to apply a host to destination arguments that do not specify one.
+When copying environment variables, existing variables at the destination are preserved unless --overwrite is specified.
 
 Note: Secrets cannot be copied because their values are not accessible via the GitHub API.`,
 		Args: cobra.MinimumNArgs(1),
