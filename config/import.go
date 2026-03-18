@@ -1,0 +1,167 @@
+package config
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/cli/go-gh/v2/pkg/repository"
+	"github.com/google/go-github/v79/github"
+	"github.com/srz-zumix/go-gh-extension/pkg/gh"
+	"github.com/srz-zumix/go-gh-extension/pkg/gh/client"
+)
+
+// ImportOptions controls the behaviour of Importer.Import.
+type ImportOptions struct {
+	// TargetEnv overrides the environment name for single-environment configs.
+	// It must be empty when cfgs contains more than one entry.
+	TargetEnv string
+	// Overwrite allows existing variables to be overwritten.
+	Overwrite bool
+	// DryRun prints planned changes without making any API calls.
+	DryRun bool
+}
+
+// Importer applies a GitHub Actions environment configuration to a repository.
+type Importer struct {
+	ctx    context.Context
+	client *client.GitHubClient
+	Repo   repository.Repository
+}
+
+// NewImporter creates an Importer for the given repository.
+func NewImporter(repo repository.Repository) (*Importer, error) {
+	c, err := gh.NewGitHubClientWithRepo(repo)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GitHub client: %w", err)
+	}
+	return &Importer{
+		ctx:    context.Background(),
+		client: c,
+		Repo:   repo,
+	}, nil
+}
+
+// Import applies cfgs to the repository according to opts.
+// When opts.TargetEnv is set, only configs whose Name matches TargetEnv are imported.
+// Returns the filtered list of configs that were processed.
+// When opts.DryRun is true, planned changes are printed without making any API calls.
+func (i *Importer) Import(cfgs []*EnvironmentConfig, opts ImportOptions) ([]*EnvironmentConfig, error) {
+	targets := cfgs
+	if opts.TargetEnv != "" {
+		targets = make([]*EnvironmentConfig, 0, len(cfgs))
+		for _, cfg := range cfgs {
+			if cfg.Name == opts.TargetEnv {
+				targets = append(targets, cfg)
+			}
+		}
+		if len(targets) == 0 {
+			return nil, fmt.Errorf("no environment named %q found in config", opts.TargetEnv)
+		}
+	}
+
+	for _, cfg := range targets {
+		if err := i.importOne(cfg, opts); err != nil {
+			return nil, err
+		}
+	}
+	return targets, nil
+}
+
+// importOne applies a single EnvironmentConfig to the repository.
+func (i *Importer) importOne(cfg *EnvironmentConfig, opts ImportOptions) error {
+	targetEnv := cfg.Name
+
+	envReq, err := i.buildCreateUpdateRequest(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to resolve reviewers: %w", err)
+	}
+
+	if opts.DryRun {
+		fmt.Printf("[dryrun] Would create/update environment %q in %s/%s\n", targetEnv, i.Repo.Owner, i.Repo.Name)
+		for _, p := range cfg.BranchPolicies {
+			fmt.Printf("[dryrun] Would add branch policy: %s (%s)\n", p.Name, p.Type)
+		}
+		for _, v := range cfg.Variables {
+			fmt.Printf("[dryrun] Would set variable: %s\n", v.Name)
+		}
+		return nil
+	}
+
+	if _, err := gh.CreateUpdateEnvironment(i.ctx, i.client, i.Repo, targetEnv, envReq); err != nil {
+		return fmt.Errorf("failed to create/update environment %q: %w", targetEnv, err)
+	}
+	fmt.Printf("Applied environment: %s/%s (env: %s)\n", i.Repo.Owner, i.Repo.Name, targetEnv)
+
+	// Apply custom branch policies when the env uses custom policies
+	if cfg.DeploymentBranchPolicy != nil && cfg.DeploymentBranchPolicy.CustomBranchPolicies {
+		for _, p := range cfg.BranchPolicies {
+			refType := p.Type
+			if refType == "" {
+				refType = "branch"
+			}
+			if _, pErr := gh.CreateDeploymentBranchPolicy(i.ctx, i.client, i.Repo, targetEnv, p.Name, refType); pErr != nil {
+				return fmt.Errorf("failed to add branch policy %q to environment %q: %w", p.Name, targetEnv, pErr)
+			}
+			fmt.Printf("Applied branch policy: %s (%s)\n", p.Name, refType)
+		}
+	}
+
+	// Apply variables
+	for _, v := range cfg.Variables {
+		actVar := &github.ActionsVariable{Name: v.Name, Value: v.Value}
+		if err := gh.CreateOrUpdateEnvVariable(i.ctx, i.client, i.Repo, targetEnv, actVar, opts.Overwrite); err != nil {
+			return fmt.Errorf("failed to set variable %q in environment %q: %w", v.Name, targetEnv, err)
+		}
+		fmt.Printf("Applied variable: %s\n", v.Name)
+	}
+
+	return nil
+}
+
+// buildCreateUpdateRequest constructs a CreateUpdateEnvironment from the config.
+// Reviewer names are resolved to IDs via the GitHub API.
+func (i *Importer) buildCreateUpdateRequest(cfg *EnvironmentConfig) (*github.CreateUpdateEnvironment, error) {
+	waitTimer := cfg.WaitTimer
+	preventSelfReview := cfg.PreventSelfReview
+	canAdminsBypass := cfg.CanAdminsBypass
+
+	req := &github.CreateUpdateEnvironment{
+		CanAdminsBypass:   &canAdminsBypass,
+		WaitTimer:         &waitTimer,
+		PreventSelfReview: &preventSelfReview,
+		Reviewers:         []*github.EnvReviewers{},
+	}
+
+	if cfg.DeploymentBranchPolicy != nil {
+		req.DeploymentBranchPolicy = &github.BranchPolicy{
+			ProtectedBranches:    &cfg.DeploymentBranchPolicy.ProtectedBranches,
+			CustomBranchPolicies: &cfg.DeploymentBranchPolicy.CustomBranchPolicies,
+		}
+	}
+
+	for _, rev := range cfg.Reviewers {
+		reviewer := &github.EnvReviewers{Type: &rev.Type}
+		switch rev.Type {
+		case "User":
+			user, err := gh.FindUser(i.ctx, i.client, rev.Name)
+			if err != nil {
+				return nil, fmt.Errorf("failed to find user %q: %w", rev.Name, err)
+			}
+			reviewer.ID = user.ID
+		case "Team":
+			r := repository.Repository{Owner: i.Repo.Owner, Host: i.Repo.Host}
+			team, err := gh.GetTeamBySlug(i.ctx, i.client, r, rev.Name)
+			if err != nil {
+				return nil, fmt.Errorf("failed to find team %q: %w", rev.Name, err)
+			}
+			reviewer.ID = team.ID
+		default:
+			continue
+		}
+		if reviewer.ID != nil {
+			req.Reviewers = append(req.Reviewers, reviewer)
+		}
+	}
+
+	return req, nil
+}

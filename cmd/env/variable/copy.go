@@ -17,7 +17,7 @@ func NewCopyCmd() *cobra.Command {
 	var overwrite bool
 
 	cmd := &cobra.Command{
-		Use:   "copy <dst> [dst...] [flags]",
+		Use:   "copy <dst> [dst...]",
 		Short: "Copy environment variables from a source environment to one or more destinations",
 		Long: `Copy GitHub Actions environment variables from a source repository environment to
 one or more destination repository environments.

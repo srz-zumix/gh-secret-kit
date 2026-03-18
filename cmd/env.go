@@ -13,6 +13,11 @@ func NewEnvCmd() *cobra.Command {
 		Long:  "Manage GitHub Actions environment resources such as variables for repository environments.",
 	}
 
+	cmd.AddCommand(env.NewCopyCmd())
+	cmd.AddCommand(env.NewExportCmd())
+	cmd.AddCommand(env.NewGetCmd())
+	cmd.AddCommand(env.NewImportCmd())
+	cmd.AddCommand(env.NewListCmd())
 	cmd.AddCommand(env.NewVariableCmd())
 
 	return cmd
