@@ -29,7 +29,7 @@ func NewImportCmd() *cobra.Command {
 policies, and variables) from a YAML or JSON file or stdin.
 
 The repository is specified via --repo (defaults to the current repository).
-The destination environment name is taken from --env (defaults to the name field in the config).
+If --env is set, only environments whose name matches the value are imported; if omitted, all environments in the config are considered and their names are used as-is (environments are not renamed).
 Specify "-" as input to read from stdin.
 Use --dryrun to preview what would be applied without making any changes.
 Use --format to specify the input format (yaml or json; default: yaml).
@@ -79,7 +79,7 @@ Note: Secrets are not included in the import because their values are not access
 
 	f := cmd.Flags()
 	f.StringVarP(&repo, "repo", "R", "", "Destination repository (e.g., owner/repo; defaults to current repository)")
-	f.StringVar(&dstEnv, "env", "", "Destination environment name (defaults to the name field in the config file)")
+	f.StringVar(&dstEnv, "env", "", "Filter environments to import by name; if empty, all environments in the config file are considered (does not rename environments)")
 	f.BoolVar(&overwrite, "overwrite", false, "Overwrite existing variables at destination (default: false)")
 	f.BoolVarP(&dryrun, "dryrun", "n", false, "Preview changes without applying them")
 
