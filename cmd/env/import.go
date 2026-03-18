@@ -26,20 +26,20 @@ func NewImportCmd() *cobra.Command {
 		Use:   "import <input>",
 		Short: "Import a GitHub Actions environment configuration from a file",
 		Long: `Read and apply a GitHub Actions environment configuration (settings, deployment branch
-policies, and variables) from a YAML or JSON file or stdin.
+policies, and variables) from a YAML file or stdin.
 
 The repository is specified via --repo (defaults to the current repository).
 If --env is set, only environments whose name matches the value are imported; if omitted, all environments in the config are considered and their names are used as-is (environments are not renamed).
 Specify "-" as input to read from stdin.
 Use --dryrun to preview what would be applied without making any changes.
-Use --format to specify the input format (yaml or json; default: yaml).
+Use --format to specify the output format (yaml or json; default: yaml).
 
 Note: Secrets are not included in the import because their values are not accessible via the GitHub API.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			input := args[0]
 
-			cfgs, err := config.ReadEnvironmentConfigs(input, format)
+			cfgs, err := config.ReadEnvironmentConfigs(input)
 			if err != nil {
 				return fmt.Errorf("failed to read environment config: %w", err)
 			}

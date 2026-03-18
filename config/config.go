@@ -1,7 +1,6 @@
 package config
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -137,8 +136,8 @@ func WriteEnvironmentConfigsToFile(cfgs []*EnvironmentConfig, output string) (er
 }
 
 // ReadEnvironmentConfigs reads one or more EnvironmentConfigs from a file or stdin.
-// Handles both single-object and array YAML/JSON formats.
-func ReadEnvironmentConfigs(input, format string) (_ []*EnvironmentConfig, err error) {
+// Handles both single-object and array YAML formats.
+func ReadEnvironmentConfigs(input string) (_ []*EnvironmentConfig, err error) {
 	var r io.Reader
 	if input == "-" {
 		r = os.Stdin
@@ -163,28 +162,15 @@ func ReadEnvironmentConfigs(input, format string) (_ []*EnvironmentConfig, err e
 		return nil, fmt.Errorf("error reading input: %w", err)
 	}
 
-	switch format {
-	case "json":
-		var cfgs []*EnvironmentConfig
-		if err := json.Unmarshal(data, &cfgs); err == nil && len(cfgs) > 0 {
-			return cfgs, nil
-		}
-		var cfg EnvironmentConfig
-		if err := json.Unmarshal(data, &cfg); err != nil {
-			return nil, fmt.Errorf("error parsing JSON input: %w", err)
-		}
-		return []*EnvironmentConfig{&cfg}, nil
-	default:
-		var cfgs []*EnvironmentConfig
-		if err := yaml.Unmarshal(data, &cfgs); err == nil && len(cfgs) > 0 && cfgs[0] != nil {
-			return cfgs, nil
-		}
-		var cfg EnvironmentConfig
-		if err := yaml.Unmarshal(data, &cfg); err != nil {
-			return nil, fmt.Errorf("error parsing YAML input: %w", err)
-		}
-		return []*EnvironmentConfig{&cfg}, nil
+	var cfgs []*EnvironmentConfig
+	if err := yaml.Unmarshal(data, &cfgs); err == nil && len(cfgs) > 0 && cfgs[0] != nil {
+		return cfgs, nil
 	}
+	var cfg EnvironmentConfig
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return nil, fmt.Errorf("error parsing YAML input: %w", err)
+	}
+	return []*EnvironmentConfig{&cfg}, nil
 }
 
 // WriteFile writes the EnvironmentConfig to a file in YAML format.
@@ -212,47 +198,6 @@ func (c *EnvironmentConfig) Write(w io.Writer) error {
 		return fmt.Errorf("error encoding environment config: %w", err)
 	}
 	return enc.Close()
-}
-
-// ReadEnvironmentConfig reads an EnvironmentConfig from a file or stdin ("-").
-// Accepts YAML or JSON format, as specified by the format parameter ("json" for JSON, otherwise YAML).
-func ReadEnvironmentConfig(input string, format string) (_ *EnvironmentConfig, err error) {
-	var r io.Reader
-	if input == "-" {
-		r = os.Stdin
-	} else {
-		f, openErr := os.Open(input)
-		if openErr != nil {
-			return nil, fmt.Errorf("error opening input file: %w", openErr)
-		}
-		defer func() {
-			closeErr := f.Close()
-			if err == nil {
-				err = closeErr
-			} else if closeErr != nil {
-				err = fmt.Errorf("read error: %w; error closing file: %v", err, closeErr)
-			}
-		}()
-		r = f
-	}
-
-	data, err := io.ReadAll(r)
-	if err != nil {
-		return nil, fmt.Errorf("error reading input: %w", err)
-	}
-
-	var cfg EnvironmentConfig
-	switch format {
-	case "json":
-		if err := json.Unmarshal(data, &cfg); err != nil {
-			return nil, fmt.Errorf("error parsing JSON input: %w", err)
-		}
-	default:
-		if err := yaml.Unmarshal(data, &cfg); err != nil {
-			return nil, fmt.Errorf("error parsing YAML input: %w", err)
-		}
-	}
-	return &cfg, nil
 }
 
 func ptrStr(s *string) string {

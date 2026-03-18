@@ -142,7 +142,7 @@ Note: Secrets are not included in the import because their values are not access
 
 - `--dryrun`: Preview changes without applying them (default: false)
 - `--env string`: Filter by environment name — only imports environments matching this name from the config file
-- `--format string`: Input format: `{yaml|json}` (default: `yaml`)
+- `--format string`: Output format: `{json|yaml}` (default: `yaml`)
 - `--overwrite`: Overwrite existing variables at destination (default: false)
 - `--repo string` / `-R`: Destination repository (e.g., `owner/repo`; defaults to current repository)
 
