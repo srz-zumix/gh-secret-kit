@@ -71,11 +71,6 @@ func (i *Importer) Import(cfgs []*EnvironmentConfig, opts ImportOptions) ([]*Env
 func (i *Importer) importOne(cfg *EnvironmentConfig, opts ImportOptions) error {
 	targetEnv := cfg.Name
 
-	envReq, err := i.buildCreateUpdateRequest(cfg)
-	if err != nil {
-		return fmt.Errorf("failed to resolve reviewers: %w", err)
-	}
-
 	if opts.DryRun {
 		fmt.Printf("[dryrun] Would create/update environment %q in %s/%s\n", targetEnv, i.Repo.Owner, i.Repo.Name)
 		for _, p := range cfg.BranchPolicies {
@@ -85,6 +80,11 @@ func (i *Importer) importOne(cfg *EnvironmentConfig, opts ImportOptions) error {
 			fmt.Printf("[dryrun] Would set variable: %s\n", v.Name)
 		}
 		return nil
+	}
+
+	envReq, err := i.buildCreateUpdateRequest(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to resolve reviewers: %w", err)
 	}
 
 	if _, err := gh.CreateUpdateEnvironment(i.ctx, i.client, i.Repo, targetEnv, envReq); err != nil {
