@@ -208,7 +208,7 @@ func (c *EnvironmentConfig) Write(w io.Writer) error {
 }
 
 // ReadEnvironmentConfig reads an EnvironmentConfig from a file or stdin ("-").
-// Accepts YAML or JSON format (detected automatically via format parameter).
+// Accepts YAML or JSON format, as specified by the format parameter ("json" for JSON, otherwise YAML).
 func ReadEnvironmentConfig(input string, format string) (*EnvironmentConfig, error) {
 	var r io.Reader
 	if input == "-" {
