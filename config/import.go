@@ -12,8 +12,8 @@ import (
 
 // ImportOptions controls the behaviour of Importer.Import.
 type ImportOptions struct {
-	// TargetEnv overrides the environment name for single-environment configs.
-	// It must be empty when cfgs contains more than one entry.
+	// TargetEnv, when non-empty, restricts imports to environments whose Name matches TargetEnv.
+	// If no environment with the given name exists in cfgs, Import returns an error.
 	TargetEnv string
 	// Overwrite allows existing variables to be overwritten.
 	Overwrite bool
@@ -42,8 +42,8 @@ func NewImporter(repo repository.Repository) (*Importer, error) {
 }
 
 // Import applies cfgs to the repository according to opts.
-// When opts.TargetEnv is set, only configs whose Name matches TargetEnv are imported.
-// Returns the filtered list of configs that were processed.
+// When opts.TargetEnv is non-empty, only configs whose Name matches TargetEnv are imported.
+// It returns the list of configs that were processed after any filtering.
 // When opts.DryRun is true, planned changes are printed without making any API calls.
 func (i *Importer) Import(cfgs []*EnvironmentConfig, opts ImportOptions) ([]*EnvironmentConfig, error) {
 	targets := cfgs
