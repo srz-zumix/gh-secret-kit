@@ -138,16 +138,23 @@ func WriteEnvironmentConfigsToFile(cfgs []*EnvironmentConfig, output string) (er
 
 // ReadEnvironmentConfigs reads one or more EnvironmentConfigs from a file or stdin.
 // Handles both single-object and array YAML/JSON formats.
-func ReadEnvironmentConfigs(input, format string) ([]*EnvironmentConfig, error) {
+func ReadEnvironmentConfigs(input, format string) (_ []*EnvironmentConfig, err error) {
 	var r io.Reader
 	if input == "-" {
 		r = os.Stdin
 	} else {
-		f, err := os.Open(input)
-		if err != nil {
-			return nil, fmt.Errorf("error opening input file: %w", err)
+		f, openErr := os.Open(input)
+		if openErr != nil {
+			return nil, fmt.Errorf("error opening input file: %w", openErr)
 		}
-		defer f.Close()
+		defer func() {
+			closeErr := f.Close()
+			if err == nil {
+				err = closeErr
+			} else if closeErr != nil {
+				err = fmt.Errorf("read error: %w; error closing file: %v", err, closeErr)
+			}
+		}()
 		r = f
 	}
 
@@ -209,16 +216,23 @@ func (c *EnvironmentConfig) Write(w io.Writer) error {
 
 // ReadEnvironmentConfig reads an EnvironmentConfig from a file or stdin ("-").
 // Accepts YAML or JSON format, as specified by the format parameter ("json" for JSON, otherwise YAML).
-func ReadEnvironmentConfig(input string, format string) (*EnvironmentConfig, error) {
+func ReadEnvironmentConfig(input string, format string) (_ *EnvironmentConfig, err error) {
 	var r io.Reader
 	if input == "-" {
 		r = os.Stdin
 	} else {
-		f, err := os.Open(input)
-		if err != nil {
-			return nil, fmt.Errorf("error opening input file: %w", err)
+		f, openErr := os.Open(input)
+		if openErr != nil {
+			return nil, fmt.Errorf("error opening input file: %w", openErr)
 		}
-		defer f.Close()
+		defer func() {
+			closeErr := f.Close()
+			if err == nil {
+				err = closeErr
+			} else if closeErr != nil {
+				err = fmt.Errorf("read error: %w; error closing file: %v", err, closeErr)
+			}
+		}()
 		r = f
 	}
 
