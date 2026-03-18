@@ -120,7 +120,7 @@ Note: Secrets cannot be copied because their values are not accessible via the G
 	f.StringVar(&srcEnv, "src-env", "", "Source environment name (required)")
 	f.StringVar(&dstEnv, "dst-env", "", "Destination environment name (defaults to --src-env)")
 	f.StringVar(&dstHost, "dst-host", "", "Host to apply to destination arguments that do not specify one (e.g., github.com)")
-	f.BoolVar(&overwrite, "overwrite", false, "Overwrite existing variables at destination (used with --with-variables)")
+	f.BoolVar(&overwrite, "overwrite", false, "Overwrite existing environment variables at the destination")
 
 	_ = cmd.MarkFlagRequired("src-env")
 
