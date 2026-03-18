@@ -131,7 +131,6 @@ Read and apply one or more GitHub Actions environment configurations (settings, 
 Specify `-` as `<input>` to read from stdin.
 Both single-environment and multi-environment (array) formats are supported.
 Use `--dryrun` to preview what would be applied without making any changes.
-If `--env` is specified, it overrides the environment name and can only be used when the config contains a single environment.
 
 Note: Secrets are not included in the import because their values are not accessible via the GitHub API.
 
