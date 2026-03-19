@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/google/go-github/v79/github"
 	"gopkg.in/yaml.v3"
@@ -162,10 +163,22 @@ func ReadEnvironmentConfigs(input string) (_ []*EnvironmentConfig, err error) {
 		return nil, fmt.Errorf("error reading input: %w", err)
 	}
 
-	var cfgs []*EnvironmentConfig
-	if err := yaml.Unmarshal(data, &cfgs); err == nil && len(cfgs) > 0 && cfgs[0] != nil {
-		return cfgs, nil
+	trimmed := strings.TrimSpace(string(data))
+	if trimmed == "" {
+		return nil, fmt.Errorf("no environment configs found in input")
 	}
+
+	var cfgs []*EnvironmentConfig
+	if err := yaml.Unmarshal(data, &cfgs); err == nil {
+		if len(cfgs) == 0 {
+			// Handle an empty YAML array as a valid "no configs" case
+			return []*EnvironmentConfig{}, nil
+		}
+		if cfgs[0] != nil {
+			return cfgs, nil
+		}
+	}
+
 	var cfg EnvironmentConfig
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("error parsing YAML input: %w", err)
