@@ -8,6 +8,7 @@ import (
 	"github.com/google/go-github/v79/github"
 	"github.com/srz-zumix/go-gh-extension/pkg/gh"
 	"github.com/srz-zumix/go-gh-extension/pkg/gh/client"
+	"github.com/srz-zumix/go-gh-extension/pkg/logger"
 )
 
 // ImportOptions controls the behaviour of Importer.Import.
@@ -75,12 +76,12 @@ func (i *Importer) importOne(cfg *EnvironmentConfig, opts ImportOptions) error {
 	}
 
 	if opts.DryRun {
-		fmt.Printf("[dryrun] Would create/update environment %q in %s/%s\n", targetEnv, i.Repo.Owner, i.Repo.Name)
+		logger.Info("[dryrun] Would create/update environment", "env", targetEnv, "owner", i.Repo.Owner, "repo", i.Repo.Name)
 		for _, p := range cfg.BranchPolicies {
-			fmt.Printf("[dryrun] Would add branch policy: %s (%s)\n", p.Name, p.Type)
+			logger.Info("[dryrun] Would add branch policy", "name", p.Name, "type", p.Type)
 		}
 		for _, v := range cfg.Variables {
-			fmt.Printf("[dryrun] Would set variable: %s\n", v.Name)
+			logger.Info("[dryrun] Would set variable", "name", v.Name)
 		}
 		return nil
 	}
@@ -93,7 +94,7 @@ func (i *Importer) importOne(cfg *EnvironmentConfig, opts ImportOptions) error {
 	if _, err := gh.CreateUpdateEnvironment(i.ctx, i.client, i.Repo, targetEnv, envReq); err != nil {
 		return fmt.Errorf("failed to create/update environment %q: %w", targetEnv, err)
 	}
-	fmt.Printf("Applied environment: %s/%s (env: %s)\n", i.Repo.Owner, i.Repo.Name, targetEnv)
+	logger.Info("Applied environment", "owner", i.Repo.Owner, "repo", i.Repo.Name, "env", targetEnv)
 
 	// Apply custom branch policies when the env uses custom policies
 	if cfg.DeploymentBranchPolicy != nil && cfg.DeploymentBranchPolicy.CustomBranchPolicies {
@@ -105,7 +106,7 @@ func (i *Importer) importOne(cfg *EnvironmentConfig, opts ImportOptions) error {
 			if _, pErr := gh.CreateDeploymentBranchPolicy(i.ctx, i.client, i.Repo, targetEnv, p.Name, refType); pErr != nil {
 				return fmt.Errorf("failed to add branch policy %q to environment %q: %w", p.Name, targetEnv, pErr)
 			}
-			fmt.Printf("Applied branch policy: %s (%s)\n", p.Name, refType)
+			logger.Info("Applied branch policy", "name", p.Name, "type", refType)
 		}
 	}
 
@@ -115,7 +116,7 @@ func (i *Importer) importOne(cfg *EnvironmentConfig, opts ImportOptions) error {
 		if err := gh.CreateOrUpdateEnvVariable(i.ctx, i.client, i.Repo, targetEnv, actVar, opts.Overwrite); err != nil {
 			return fmt.Errorf("failed to set variable %q in environment %q: %w", v.Name, targetEnv, err)
 		}
-		fmt.Printf("Applied variable: %s\n", v.Name)
+		logger.Info("Applied variable", "name", v.Name)
 	}
 
 	return nil
