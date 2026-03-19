@@ -68,15 +68,17 @@ type EnvMatch struct {
 	SecretNames []string
 }
 
-// RepoMatch represents a matched src/dst repo pair with secret metadata.
+// RepoMatch represents a matched src/dst repo pair with secret and variable metadata.
 type RepoMatch struct {
-	SrcRepoRef      repository.Repository
-	SrcFullName     string
-	SrcName         string
-	DstRepoRef      repository.Repository
-	RepoSecretCount int
-	RepoSecretNames []string
-	EnvMatches      []EnvMatch
+	SrcRepoRef        repository.Repository
+	SrcFullName       string
+	SrcName           string
+	DstRepoRef        repository.Repository
+	RepoSecretCount   int
+	RepoSecretNames   []string
+	EnvMatches        []EnvMatch
+	RepoVariableCount int
+	RepoVariableNames []string
 }
 
 // ScanMatchingRepos scans the source org and finds repos that have matching
@@ -157,14 +159,26 @@ func ScanMatchingRepos(ctx context.Context, src, dst *OrgContext) ([]RepoMatch, 
 			}
 		}
 
+		// Get source repo variables
+		variables, err := gh.ListRepoVariables(ctx, src.Client, srcRepoRef)
+		if err != nil {
+			logger.Warn(fmt.Sprintf("Skipping variables for %s: failed to list variables: %v", fullName, err))
+		}
+		var repoVariableNames []string
+		for _, v := range variables {
+			repoVariableNames = append(repoVariableNames, v.Name)
+		}
+
 		results = append(results, RepoMatch{
-			SrcRepoRef:      srcRepoRef,
-			SrcFullName:     fullName,
-			SrcName:         repoName,
-			DstRepoRef:      dstRepoRef,
-			RepoSecretCount: len(secrets),
-			RepoSecretNames: repoSecretNames,
-			EnvMatches:      envMatches,
+			SrcRepoRef:        srcRepoRef,
+			SrcFullName:       fullName,
+			SrcName:           repoName,
+			DstRepoRef:        dstRepoRef,
+			RepoSecretCount:   len(secrets),
+			RepoSecretNames:   repoSecretNames,
+			EnvMatches:        envMatches,
+			RepoVariableCount: len(variables),
+			RepoVariableNames: repoVariableNames,
 		})
 	}
 
