@@ -28,11 +28,13 @@ type PlanEntry struct {
 
 // PlanResult represents the migration plan result
 type PlanResult struct {
-	RunnerSetup    string
-	RepoMigrates   []PlanEntry
-	EnvMigrates    []PlanEntry
-	OrgMigrate     PlanEntry
-	RunnerTeardown string
+	RunnerSetup          string
+	RepoMigrates         []PlanEntry
+	EnvMigrates          []PlanEntry
+	OrgMigrate           PlanEntry
+	RepoVariableCopies   []PlanEntry
+	OrgVariableCopy      PlanEntry
+	RunnerTeardown       string
 }
 
 // NewPlanCmd creates the migrate plan command
@@ -53,6 +55,8 @@ The output includes:
 - repo all commands for each matching repository with repository secrets
 - env all commands for each matching repository/environment pair
 - org all command if org secrets exist
+- variable copy commands for each matching repository with repository variables
+- variable copy command for the source organization if org variables exist
 - runner teardown command
 
 Arguments:
@@ -155,6 +159,12 @@ func runPlan(ctx context.Context, config *planConfig) error {
 			result.EnvMigrates = append(result.EnvMigrates, cmd)
 			logger.Info(fmt.Sprintf("Found matching env with secrets: %s/%s (%d secrets)", m.SrcName, env.Name, env.SecretCount))
 		}
+
+		if m.RepoVariableCount > 0 {
+			cmd := buildRepoVariableCopyCmd(m.SrcRepoRef, m.DstRepoRef, m.RepoVariableNames)
+			result.RepoVariableCopies = append(result.RepoVariableCopies, cmd)
+			logger.Info(fmt.Sprintf("Found matching repo with variables: %s (%d variables)", m.SrcName, m.RepoVariableCount))
+		}
 	}
 
 	// Check org secrets independently of repo/env secrets.
@@ -172,6 +182,19 @@ func runPlan(ctx context.Context, config *planConfig) error {
 			cmd := buildOrgMigrateCmd(orgMigrationSrc, dst.OwnerRepo, orgSecretNames, config)
 			result.OrgMigrate = cmd
 			logger.Info(fmt.Sprintf("Found org secrets: %d secrets", len(srcOrgSecrets)))
+		}
+
+		srcOrgVariables, err := gh.ListOrgVariables(ctx, src.Client, src.OwnerRepo)
+		if err != nil {
+			logger.Warn(fmt.Sprintf("Failed to list org variables: %v", err))
+		} else if len(srcOrgVariables) > 0 {
+			var orgVariableNames []string
+			for _, v := range srcOrgVariables {
+				orgVariableNames = append(orgVariableNames, v.Name)
+			}
+			cmd := buildOrgVariableCopyCmd(src.OwnerRepo, dst.OwnerRepo, orgVariableNames)
+			result.OrgVariableCopy = cmd
+			logger.Info(fmt.Sprintf("Found org variables: %d variables", len(srcOrgVariables)))
 		}
 	}
 
@@ -255,8 +278,66 @@ func buildOrgMigrateCmd(srcRepo repository.Repository, dstOrg repository.Reposit
 	return PlanEntry{Comment: secretsComment(secretNames), Cmd: strings.Join(parts, " ")}
 }
 
+func variablesComment(names []string) string {
+	if len(names) == 0 {
+		return ""
+	}
+	const prefix = "# variables: "
+	const cont   = "#            " // aligned with first variable name
+
+	var lines []string
+	currentPrefix := prefix
+	currentLen := len(prefix)
+	var current []string
+
+	for _, name := range names {
+		needed := len(name)
+		if len(current) > 0 {
+			needed += 2 // ", " separator
+		}
+		if len(current) > 0 && currentLen+needed > secretsCommentMaxWidth {
+			lines = append(lines, currentPrefix+strings.Join(current, ", "))
+			current = current[:0]
+			currentPrefix = cont
+			currentLen = len(cont)
+			needed = len(name)
+		}
+		current = append(current, name)
+		currentLen += needed
+	}
+	if len(current) > 0 {
+		lines = append(lines, currentPrefix+strings.Join(current, ", "))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func buildRepoVariableCopyCmd(src, dst repository.Repository, varNames []string) PlanEntry {
+	var parts []string
+	parts = append(parts, "gh secret-kit variable copy")
+	parts = append(parts, shellQuote(repoArg(dst)))
+	parts = append(parts, fmt.Sprintf("--repo %s", shellQuote(repoArg(src))))
+	return PlanEntry{Comment: variablesComment(varNames), Cmd: strings.Join(parts, " ")}
+}
+
+func buildOrgVariableCopyCmd(srcOrg, dstOrg repository.Repository, varNames []string) PlanEntry {
+	var parts []string
+	parts = append(parts, "gh secret-kit variable copy")
+	dstOrgArg := dstOrg.Owner
+	if dstOrg.Host != "" {
+		dstOrgArg = dstOrg.Host + "/" + dstOrg.Owner
+	}
+	parts = append(parts, shellQuote(dstOrgArg))
+	srcOrgArg := srcOrg.Owner
+	if srcOrg.Host != "" {
+		srcOrgArg = srcOrg.Host + "/" + srcOrg.Owner
+	}
+	parts = append(parts, fmt.Sprintf("--owner %s", shellQuote(srcOrgArg)))
+	return PlanEntry{Comment: variablesComment(varNames), Cmd: strings.Join(parts, " ")}
+}
+
 func printPlan(result *PlanResult) {
-	if len(result.RepoMigrates) == 0 && len(result.EnvMigrates) == 0 && result.OrgMigrate.Cmd == "" {
+	if len(result.RepoMigrates) == 0 && len(result.EnvMigrates) == 0 && result.OrgMigrate.Cmd == "" &&
+		len(result.RepoVariableCopies) == 0 && result.OrgVariableCopy.Cmd == "" {
 		fmt.Println("# No matching repositories or environments found for migration")
 		return
 	}
@@ -297,6 +378,26 @@ func printPlan(result *PlanResult) {
 			fmt.Println(result.OrgMigrate.Comment)
 		}
 		fmt.Println(result.OrgMigrate.Cmd)
+		fmt.Println()
+	}
+
+	if len(result.RepoVariableCopies) > 0 {
+		fmt.Println("# Repository variable copies")
+		for _, entry := range result.RepoVariableCopies {
+			if entry.Comment != "" {
+				fmt.Println(entry.Comment)
+			}
+			fmt.Println(entry.Cmd)
+		}
+		fmt.Println()
+	}
+
+	if result.OrgVariableCopy.Cmd != "" {
+		fmt.Println("# Organization variable copy")
+		if result.OrgVariableCopy.Comment != "" {
+			fmt.Println(result.OrgVariableCopy.Comment)
+		}
+		fmt.Println(result.OrgVariableCopy.Cmd)
 		fmt.Println()
 	}
 
