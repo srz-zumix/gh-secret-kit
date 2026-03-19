@@ -284,6 +284,7 @@ The scope of secrets is determined by the subcommand:
 #### Workflow Trigger Design Constraints
 
 The generated workflow is pushed to a **topic branch** (not the default branch). This is intentional:
+
 - The migration workflow contains sensitive secret names and must not be committed to the default branch (e.g., `main`).
 - The PR keeps the workflow active for the duration of the migration and is deleted in the `delete` step.
 - Because `workflow_dispatch` requires the workflow file to be on the **default branch**, that trigger cannot be used here. Triggering via `pull_request: labeled` on a topic branch is the required approach.
