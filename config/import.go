@@ -70,6 +70,9 @@ func (i *Importer) Import(cfgs []*EnvironmentConfig, opts ImportOptions) ([]*Env
 // importOne applies a single EnvironmentConfig to the repository.
 func (i *Importer) importOne(cfg *EnvironmentConfig, opts ImportOptions) error {
 	targetEnv := cfg.Name
+	if targetEnv == "" {
+		return fmt.Errorf("environment name is required in configuration")
+	}
 
 	if opts.DryRun {
 		fmt.Printf("[dryrun] Would create/update environment %q in %s/%s\n", targetEnv, i.Repo.Owner, i.Repo.Name)
