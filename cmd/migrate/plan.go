@@ -183,19 +183,20 @@ func runPlan(ctx context.Context, config *planConfig) error {
 			result.OrgMigrate = cmd
 			logger.Info(fmt.Sprintf("Found org secrets: %d secrets", len(srcOrgSecrets)))
 		}
+	}
 
-		srcOrgVariables, err := gh.ListOrgVariables(ctx, src.Client, src.OwnerRepo)
-		if err != nil {
-			logger.Warn(fmt.Sprintf("Failed to list org variables: %v", err))
-		} else if len(srcOrgVariables) > 0 {
-			var orgVariableNames []string
-			for _, v := range srcOrgVariables {
-				orgVariableNames = append(orgVariableNames, v.Name)
-			}
-			cmd := buildOrgVariableCopyCmd(src.OwnerRepo, dst.OwnerRepo, orgVariableNames)
-			result.OrgVariableCopy = cmd
-			logger.Info(fmt.Sprintf("Found org variables: %d variables", len(srcOrgVariables)))
+	// Org variables do not require a workflow source repository, so they are always scanned.
+	srcOrgVariables, err := gh.ListOrgVariables(ctx, src.Client, src.OwnerRepo)
+	if err != nil {
+		logger.Warn(fmt.Sprintf("Failed to list org variables: %v", err))
+	} else if len(srcOrgVariables) > 0 {
+		var orgVariableNames []string
+		for _, v := range srcOrgVariables {
+			orgVariableNames = append(orgVariableNames, v.Name)
 		}
+		cmd := buildOrgVariableCopyCmd(src.OwnerRepo, dst.OwnerRepo, orgVariableNames)
+		result.OrgVariableCopy = cmd
+		logger.Info(fmt.Sprintf("Found org variables: %d variables", len(srcOrgVariables)))
 	}
 
 	// Output the plan
