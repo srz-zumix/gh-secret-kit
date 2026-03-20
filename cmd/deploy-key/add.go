@@ -70,10 +70,11 @@ The repository is specified via --repo (defaults to the current repository).`,
 		},
 	}
 
-	cmd.Flags().StringVarP(&repo, "repo", "R", "", "Repository to add the deploy key to (e.g., owner/repo; defaults to current repository)")
-	cmd.Flags().StringVarP(&title, "title", "t", "", "Title (label) for the deploy key")
-	cmd.Flags().StringVarP(&keyFile, "key-file", "f", "", "Path to the public key file")
-	cmd.Flags().BoolVar(&readOnly, "read-only", false, "Create a read-only deploy key (default: false, i.e., read-write)")
+	f := cmd.Flags()
+	f.StringVarP(&repo, "repo", "R", "", "Repository to add the deploy key to (e.g., owner/repo; defaults to current repository)")
+	f.StringVarP(&title, "title", "t", "", "Title (label) for the deploy key")
+	f.StringVarP(&keyFile, "key-file", "f", "", "Path to the public key file")
+	f.BoolVar(&readOnly, "read-only", false, "Create a read-only deploy key (default: false, i.e., read-write)")
 
 	return cmd
 }
