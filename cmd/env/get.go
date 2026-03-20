@@ -15,8 +15,9 @@ func NewGetCmd() *cobra.Command {
 	var repo string
 
 	cmd := &cobra.Command{
-		Use:   "get <environment> [flags]",
-		Short: "Get details of a GitHub Actions environment",
+		Use:     "get <environment> [flags]",
+		Short:   "Get details of a GitHub Actions environment",
+		Aliases: []string{"view"},
 		Long: `Show detailed information about a specific GitHub Actions environment.
 
 The output includes environment settings such as wait timer, reviewers,
