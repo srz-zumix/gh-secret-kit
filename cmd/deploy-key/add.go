@@ -19,7 +19,7 @@ func NewAddCmd() *cobra.Command {
 	var readOnly bool
 
 	cmd := &cobra.Command{
-		Use:   "add <public-key>",
+		Use:   "add [public-key]",
 		Short: "Add a deploy key to a repository",
 		Long: `Add a deploy key to a repository.
 
