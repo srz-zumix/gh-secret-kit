@@ -59,18 +59,9 @@ keys across different hosts (e.g., github.com to a GitHub Enterprise Server inst
 			}
 
 			for _, key := range keys {
-				title := ""
-				if key.Title != nil {
-					title = *key.Title
-				}
-				keyStr := ""
-				if key.Key != nil {
-					keyStr = *key.Key
-				}
-				readOnly := false
-				if key.ReadOnly != nil {
-					readOnly = *key.ReadOnly
-				}
+				title := key.GetTitle()
+				keyStr := key.GetKey()
+				readOnly := key.GetReadOnly()
 				if _, copyErr := gh.CreateDeployKey(ctx, dstClient, dst, title, keyStr, readOnly); copyErr != nil {
 					return fmt.Errorf("failed to migrate deploy key %q to %s/%s: %w", title, dst.Owner, dst.Name, copyErr)
 				}

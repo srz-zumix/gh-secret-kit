@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/srz-zumix/go-gh-extension/pkg/gh"
@@ -31,12 +32,17 @@ The repository is specified via --repo (defaults to the current repository).`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var keyStr string
-			if keyFile != "" {
+			if keyFile != "" && len(args) == 1 {
+				return fmt.Errorf("provide the public key either as an argument or via --key-file, not both")
+			} else if keyFile != "" {
 				data, err := os.ReadFile(keyFile)
 				if err != nil {
 					return fmt.Errorf("failed to read key file %q: %w", keyFile, err)
 				}
-				keyStr = string(data)
+				keyStr = strings.TrimSpace(string(data))
+				if keyStr == "" {
+					return fmt.Errorf("key file %q is empty", keyFile)
+				}
 			} else if len(args) == 1 {
 				keyStr = args[0]
 			} else {
