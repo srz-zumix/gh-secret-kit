@@ -15,9 +15,10 @@ import (
 )
 
 type planConfig struct {
-	Source      string
-	Destination string
-	RunnerLabel string
+	Source       string
+	Destination  string
+	RunnerLabel  string
+	NoDeployKeys bool
 }
 
 // PlanEntry represents a single migration command with an optional comment listing secrets.
@@ -34,6 +35,7 @@ type PlanResult struct {
 	OrgMigrate           PlanEntry
 	RepoVariableCopies   []PlanEntry
 	OrgVariableCopy      PlanEntry
+	DeployKeyMigrates    []PlanEntry
 	RunnerTeardown       string
 }
 
@@ -74,6 +76,7 @@ Arguments:
 	f := cmd.Flags()
 	f.StringVarP(&config.Destination, "dst", "d", "", "Destination organization (e.g., org or HOST/org)")
 	f.StringVar(&config.RunnerLabel, "runner-label", types.DefaultRunnerLabel, "Runner label for the workflow")
+	f.BoolVar(&config.NoDeployKeys, "no-deploy-keys", false, "Skip deploy key scanning (avoids extra API calls per repository)")
 
 	_ = cmd.MarkFlagRequired("dst")
 
@@ -164,6 +167,19 @@ func runPlan(ctx context.Context, config *planConfig) error {
 			cmd := buildRepoVariableCopyCmd(m.SrcRepoRef, m.DstRepoRef, m.RepoVariableNames)
 			result.RepoVariableCopies = append(result.RepoVariableCopies, cmd)
 			logger.Info(fmt.Sprintf("Found matching repo with variables: %s (%d variables)", m.SrcName, m.RepoVariableCount))
+		}
+
+		// Deploy key migration is only meaningful when src and dst are on different hosts.
+		// Skipped when --no-deploy-keys is set to avoid extra API calls per repository.
+		if !config.NoDeployKeys && m.SrcRepoRef.Host != m.DstRepoRef.Host {
+			keys, err := gh.ListDeployKeys(ctx, src.Client, m.SrcRepoRef)
+			if err != nil {
+				logger.Warn(fmt.Sprintf("Skipping deploy keys for %s: %v", m.SrcName, err))
+			} else if len(keys) > 0 {
+				cmd := buildDeployKeyMigrateCmd(m.SrcRepoRef, m.DstRepoRef)
+				result.DeployKeyMigrates = append(result.DeployKeyMigrates, cmd)
+				logger.Info(fmt.Sprintf("Found matching repo with deploy keys: %s (%d keys)", m.SrcName, len(keys)))
+			}
 		}
 	}
 
@@ -312,6 +328,14 @@ func variablesComment(names []string) string {
 	return strings.Join(lines, "\n")
 }
 
+func buildDeployKeyMigrateCmd(src, dst repository.Repository) PlanEntry {
+	var parts []string
+	parts = append(parts, "gh secret-kit deploy-key migrate")
+	parts = append(parts, fmt.Sprintf("--repo %s", shellQuote(repoArg(src))))
+	parts = append(parts, shellQuote(repoArg(dst)))
+	return PlanEntry{Cmd: strings.Join(parts, " ")}
+}
+
 func buildRepoVariableCopyCmd(src, dst repository.Repository, varNames []string) PlanEntry {
 	var parts []string
 	parts = append(parts, "gh secret-kit variable copy")
@@ -338,7 +362,7 @@ func buildOrgVariableCopyCmd(srcOrg, dstOrg repository.Repository, varNames []st
 
 func printPlan(result *PlanResult) {
 	if len(result.RepoMigrates) == 0 && len(result.EnvMigrates) == 0 && result.OrgMigrate.Cmd == "" &&
-		len(result.RepoVariableCopies) == 0 && result.OrgVariableCopy.Cmd == "" {
+		len(result.RepoVariableCopies) == 0 && result.OrgVariableCopy.Cmd == "" && len(result.DeployKeyMigrates) == 0 {
 		fmt.Println("# No matching repositories or environments found for migration")
 		return
 	}
@@ -388,6 +412,14 @@ func printPlan(result *PlanResult) {
 			if entry.Comment != "" {
 				fmt.Println(entry.Comment)
 			}
+			fmt.Println(entry.Cmd)
+		}
+		fmt.Println()
+	}
+
+	if len(result.DeployKeyMigrates) > 0 {
+		fmt.Println("# Deploy key migrations (cross-host only)")
+		for _, entry := range result.DeployKeyMigrates {
 			fmt.Println(entry.Cmd)
 		}
 		fmt.Println()

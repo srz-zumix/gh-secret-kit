@@ -47,7 +47,8 @@ The repository is specified via --repo (defaults to the current repository).`,
 		},
 	}
 
-	cmd.Flags().StringVarP(&repo, "repo", "R", "", "Repository to delete the deploy key from (e.g., owner/repo; defaults to current repository)")
+	f := cmd.Flags()
+	f.StringVarP(&repo, "repo", "R", "", "Repository to delete the deploy key from (e.g., owner/repo; defaults to current repository)")
 
 	return cmd
 }
