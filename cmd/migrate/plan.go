@@ -15,9 +15,10 @@ import (
 )
 
 type planConfig struct {
-	Source      string
-	Destination string
-	RunnerLabel string
+	Source       string
+	Destination  string
+	RunnerLabel  string
+	NoDeployKeys bool
 }
 
 // PlanEntry represents a single migration command with an optional comment listing secrets.
@@ -75,6 +76,7 @@ Arguments:
 	f := cmd.Flags()
 	f.StringVarP(&config.Destination, "dst", "d", "", "Destination organization (e.g., org or HOST/org)")
 	f.StringVar(&config.RunnerLabel, "runner-label", types.DefaultRunnerLabel, "Runner label for the workflow")
+	f.BoolVar(&config.NoDeployKeys, "no-deploy-keys", false, "Skip deploy key scanning (avoids extra API calls per repository)")
 
 	_ = cmd.MarkFlagRequired("dst")
 
@@ -168,7 +170,8 @@ func runPlan(ctx context.Context, config *planConfig) error {
 		}
 
 		// Deploy key migration is only meaningful when src and dst are on different hosts.
-		if m.SrcRepoRef.Host != m.DstRepoRef.Host {
+		// Skipped when --no-deploy-keys is set to avoid extra API calls per repository.
+		if !config.NoDeployKeys && m.SrcRepoRef.Host != m.DstRepoRef.Host {
 			keys, err := gh.ListDeployKeys(ctx, src.Client, m.SrcRepoRef)
 			if err != nil {
 				logger.Warn(fmt.Sprintf("Skipping deploy keys for %s: %v", m.SrcName, err))
