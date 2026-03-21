@@ -456,6 +456,8 @@ Scan source organization for repositories with secrets, check if matching reposi
 
 This command does not perform any migration; it only outputs the commands that would be needed to migrate secrets from source to destination. Each migration command is preceded by a comment listing the secret names that will be migrated.
 
+When the source and destination organizations are on different hosts, deploy key migration commands (`deploy-key migrate`) are also included for each matching repository that has deploy keys. Use `--no-deploy-keys` to skip this extra per-repository API call.
+
 **Arguments:**
 
 - `[org]`: Source organization name (e.g., org or HOST/org). Defaults to current repository owner.
@@ -463,6 +465,7 @@ This command does not perform any migration; it only outputs the commands that w
 **Options:**
 
 - `--dst string` / `-d`: Destination organization (e.g., org or HOST/org) (required)
+- `--no-deploy-keys`: Skip deploy key scanning (avoids extra API calls per repository) (default: false)
 - `--runner-label string`: Runner label for the workflow (default: "gh-secret-kit-migrate")
 
 #### migrate org
