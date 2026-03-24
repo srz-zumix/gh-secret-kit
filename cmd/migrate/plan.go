@@ -19,6 +19,7 @@ type planConfig struct {
 	Destination  string
 	RunnerLabel  string
 	NoDeployKeys bool
+	Overwrite    bool
 }
 
 // PlanEntry represents a single migration command with an optional comment listing secrets.
@@ -91,6 +92,7 @@ Arguments:
 	f.StringVarP(&config.Destination, "dst", "d", "", "Destination organization (e.g., org or HOST/org)")
 	f.StringVar(&config.RunnerLabel, "runner-label", types.DefaultRunnerLabel, "Runner label for the workflow")
 	f.BoolVar(&config.NoDeployKeys, "no-deploy-keys", false, "Skip deploy key scanning (avoids extra API calls per repository)")
+	f.BoolVar(&config.Overwrite, "overwrite", false, "Add --overwrite to all generated migration and copy commands")
 
 	_ = cmd.MarkFlagRequired("dst")
 
@@ -178,7 +180,7 @@ func runPlan(ctx context.Context, config *planConfig) error {
 		}
 
 		if m.RepoVariableCount > 0 {
-			cmd := buildRepoVariableCopyCmd(m.SrcRepoRef, m.DstRepoRef, m.RepoVariableNames)
+			cmd := buildRepoVariableCopyCmd(m.SrcRepoRef, m.DstRepoRef, m.RepoVariableNames, config)
 			result.RepoVariableCopies = append(result.RepoVariableCopies, cmd)
 			logger.Info(fmt.Sprintf("Found matching repo with variables: %s (%d variables)", m.SrcName, m.RepoVariableCount))
 		}
@@ -239,7 +241,7 @@ func runPlan(ctx context.Context, config *planConfig) error {
 		for _, v := range srcOrgVariables {
 			orgVariableNames = append(orgVariableNames, v.Name)
 		}
-		cmd := buildOrgVariableCopyCmd(src.OwnerRepo, dst.OwnerRepo, orgVariableNames)
+		cmd := buildOrgVariableCopyCmd(src.OwnerRepo, dst.OwnerRepo, orgVariableNames, config)
 		result.OrgVariableCopy = cmd
 		logger.Info(fmt.Sprintf("Found org variables: %d variables", len(srcOrgVariables)))
 	}
@@ -293,6 +295,9 @@ func buildRepoMigrateCmd(src, dst repository.Repository, secretNames []string, c
 	if config.RunnerLabel != "" && config.RunnerLabel != types.DefaultRunnerLabel {
 		parts = append(parts, fmt.Sprintf("--runner-label %s", shellQuote(config.RunnerLabel)))
 	}
+	if config.Overwrite {
+		parts = append(parts, "--overwrite")
+	}
 	return PlanEntry{Comment: secretsComment(secretNames), Cmd: strings.Join(parts, " ")}
 }
 
@@ -307,6 +312,9 @@ func buildEnvPlanEntry(src, dst repository.Repository, envName string, secretNam
 	if config.RunnerLabel != "" && config.RunnerLabel != types.DefaultRunnerLabel {
 		migrateParts = append(migrateParts, fmt.Sprintf("--runner-label %s", shellQuote(config.RunnerLabel)))
 	}
+	if config.Overwrite {
+		migrateParts = append(migrateParts, "--overwrite")
+	}
 
 	// Build env export | import pipeline (handles settings and variables)
 	exportImportCmd := fmt.Sprintf(
@@ -315,6 +323,9 @@ func buildEnvPlanEntry(src, dst repository.Repository, envName string, secretNam
 		shellQuote(repoArg(src)),
 		shellQuote(repoArg(dst)),
 	)
+	if config.Overwrite {
+		exportImportCmd += " --overwrite"
+	}
 
 	return EnvPlanEntry{
 		SecretComment:   secretsComment(secretNames),
@@ -336,6 +347,9 @@ func buildOrgMigrateCmd(srcRepo repository.Repository, dstOrg repository.Reposit
 	parts = append(parts, fmt.Sprintf("-d %s", shellQuote(dstOrgArg)))
 	if config.RunnerLabel != "" && config.RunnerLabel != types.DefaultRunnerLabel {
 		parts = append(parts, fmt.Sprintf("--runner-label %s", shellQuote(config.RunnerLabel)))
+	}
+	if config.Overwrite {
+		parts = append(parts, "--overwrite")
 	}
 	return PlanEntry{Comment: secretsComment(secretNames), Cmd: strings.Join(parts, " ")}
 }
@@ -381,15 +395,18 @@ func buildDeployKeyMigrateCmd(src, dst repository.Repository) PlanEntry {
 	return PlanEntry{Cmd: strings.Join(parts, " ")}
 }
 
-func buildRepoVariableCopyCmd(src, dst repository.Repository, varNames []string) PlanEntry {
+func buildRepoVariableCopyCmd(src, dst repository.Repository, varNames []string, config *planConfig) PlanEntry {
 	var parts []string
 	parts = append(parts, "gh secret-kit variable copy")
 	parts = append(parts, shellQuote(repoArg(dst)))
 	parts = append(parts, fmt.Sprintf("--repo %s", shellQuote(repoArg(src))))
+	if config.Overwrite {
+		parts = append(parts, "--overwrite")
+	}
 	return PlanEntry{Comment: variablesComment(varNames), Cmd: strings.Join(parts, " ")}
 }
 
-func buildOrgVariableCopyCmd(srcOrg, dstOrg repository.Repository, varNames []string) PlanEntry {
+func buildOrgVariableCopyCmd(srcOrg, dstOrg repository.Repository, varNames []string, config *planConfig) PlanEntry {
 	var parts []string
 	parts = append(parts, "gh secret-kit variable copy")
 	dstOrgArg := dstOrg.Owner
@@ -402,6 +419,9 @@ func buildOrgVariableCopyCmd(srcOrg, dstOrg repository.Repository, varNames []st
 		srcOrgArg = srcOrg.Host + "/" + srcOrg.Owner
 	}
 	parts = append(parts, fmt.Sprintf("--owner %s", shellQuote(srcOrgArg)))
+	if config.Overwrite {
+		parts = append(parts, "--overwrite")
+	}
 	return PlanEntry{Comment: variablesComment(varNames), Cmd: strings.Join(parts, " ")}
 }
 
