@@ -92,7 +92,7 @@ Arguments:
 	f.StringVarP(&config.Destination, "dst", "d", "", "Destination organization (e.g., org or HOST/org)")
 	f.StringVar(&config.RunnerLabel, "runner-label", types.DefaultRunnerLabel, "Runner label for the workflow")
 	f.BoolVar(&config.NoDeployKeys, "no-deploy-keys", false, "Skip deploy key scanning (avoids extra API calls per repository)")
-	f.BoolVar(&config.Overwrite, "overwrite", false, "Add --overwrite to all generated migration and copy commands")
+	f.BoolVar(&config.Overwrite, "overwrite", false, "Add --overwrite to generated migration and copy commands that support it")
 
 	_ = cmd.MarkFlagRequired("dst")
 
