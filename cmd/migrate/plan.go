@@ -27,16 +27,30 @@ type PlanEntry struct {
 	Cmd     string
 }
 
+// EnvPlanEntry represents a migration plan entry for an environment.
+// Output rules:
+//   - HasReviewers=true: all commands emitted as comments (reviewer names may not exist in dst org)
+//   - HasReviewers=false, DstEnvExists=false: ExportImportCmd executable (creates env), MigrateAllCmd executable
+//   - HasReviewers=false, DstEnvExists=true: ExportImportCmd commented, MigrateAllCmd executable
+type EnvPlanEntry struct {
+	SecretComment   string // # secrets: ... (may be empty)
+	ExportImportCmd string // env export | import pipeline
+	MigrateAllCmd   string // migrate env all command
+	HasReviewers    bool
+	DstEnvExists    bool // true when the destination environment already exists
+}
+
 // PlanResult represents the migration plan result
 type PlanResult struct {
-	RunnerSetup          string
-	RepoMigrates         []PlanEntry
-	EnvMigrates          []PlanEntry
-	OrgMigrate           PlanEntry
-	RepoVariableCopies   []PlanEntry
-	OrgVariableCopy      PlanEntry
-	DeployKeyMigrates    []PlanEntry
-	RunnerTeardown       string
+	RunnerSetup            string
+	RepoMigrates           []PlanEntry
+	EnvMigrates            []EnvPlanEntry
+	OrgMigrate             PlanEntry
+	RepoVariableCopies     []PlanEntry
+	OrgVariableCopy        PlanEntry
+	DeployKeyMigrates      []PlanEntry
+	DstDeployKeySettingCmd string // non-empty when dst org has deploy keys disabled
+	RunnerTeardown         string
 }
 
 // NewPlanCmd creates the migrate plan command
@@ -158,7 +172,7 @@ func runPlan(ctx context.Context, config *planConfig) error {
 		}
 
 		for _, env := range m.EnvMatches {
-			cmd := buildEnvMigrateCmd(m.SrcRepoRef, m.DstRepoRef, env.Name, env.SecretNames, config)
+			cmd := buildEnvPlanEntry(m.SrcRepoRef, m.DstRepoRef, env.Name, env.SecretNames, env.HasReviewers, env.DstEnvExists, config)
 			result.EnvMigrates = append(result.EnvMigrates, cmd)
 			logger.Info(fmt.Sprintf("Found matching env with secrets: %s/%s (%d secrets)", m.SrcName, env.Name, env.SecretCount))
 		}
@@ -180,6 +194,21 @@ func runPlan(ctx context.Context, config *planConfig) error {
 				result.DeployKeyMigrates = append(result.DeployKeyMigrates, cmd)
 				logger.Info(fmt.Sprintf("Found matching repo with deploy keys: %s (%d keys)", m.SrcName, len(keys)))
 			}
+		}
+	}
+
+	// When there are deploy key migrations, check whether the destination org has deploy keys enabled.
+	if len(result.DeployKeyMigrates) > 0 && result.DstDeployKeySettingCmd == "" {
+		enabled, err := gh.GetOrgDeployKeysEnabled(ctx, dst.Client, dst.OwnerRepo)
+		if err != nil {
+			logger.Warn(fmt.Sprintf("Could not check deploy keys setting for destination org: %v", err))
+		} else if !enabled {
+			dstOrgArg := dst.OwnerRepo.Owner
+			if dst.OwnerRepo.Host != "" {
+				dstOrgArg = dst.OwnerRepo.Host + "/" + dst.OwnerRepo.Owner
+			}
+			result.DstDeployKeySettingCmd = fmt.Sprintf("gh secret-kit deploy-key setting --set enable %s", shellQuote(dstOrgArg))
+			logger.Info("Deploy keys are disabled in the destination organization")
 		}
 	}
 
@@ -228,7 +257,7 @@ func secretsComment(names []string) string {
 		return ""
 	}
 	const prefix = "# secrets: "
-	const cont   = "#          " // same width as prefix, aligned with first secret name
+	const cont = "#          " // same width as prefix, aligned with first secret name
 
 	var lines []string
 	currentPrefix := prefix
@@ -267,17 +296,33 @@ func buildRepoMigrateCmd(src, dst repository.Repository, secretNames []string, c
 	return PlanEntry{Comment: secretsComment(secretNames), Cmd: strings.Join(parts, " ")}
 }
 
-func buildEnvMigrateCmd(src, dst repository.Repository, envName string, secretNames []string, config *planConfig) PlanEntry {
-	var parts []string
-	parts = append(parts, "gh secret-kit migrate env all")
-	parts = append(parts, fmt.Sprintf("-s %s", shellQuote(repoArg(src))))
-	parts = append(parts, fmt.Sprintf("--src-env %s", shellQuote(envName)))
-	parts = append(parts, fmt.Sprintf("-d %s", shellQuote(repoArg(dst))))
-	parts = append(parts, fmt.Sprintf("--dst-env %s", shellQuote(envName)))
+func buildEnvPlanEntry(src, dst repository.Repository, envName string, secretNames []string, hasReviewers bool, dstEnvExists bool, config *planConfig) EnvPlanEntry {
+	// Build migrate env all command (handles secrets via workflow)
+	var migrateParts []string
+	migrateParts = append(migrateParts, "gh secret-kit migrate env all")
+	migrateParts = append(migrateParts, fmt.Sprintf("-s %s", shellQuote(repoArg(src))))
+	migrateParts = append(migrateParts, fmt.Sprintf("--src-env %s", shellQuote(envName)))
+	migrateParts = append(migrateParts, fmt.Sprintf("-d %s", shellQuote(repoArg(dst))))
+	migrateParts = append(migrateParts, fmt.Sprintf("--dst-env %s", shellQuote(envName)))
 	if config.RunnerLabel != "" && config.RunnerLabel != types.DefaultRunnerLabel {
-		parts = append(parts, fmt.Sprintf("--runner-label %s", shellQuote(config.RunnerLabel)))
+		migrateParts = append(migrateParts, fmt.Sprintf("--runner-label %s", shellQuote(config.RunnerLabel)))
 	}
-	return PlanEntry{Comment: secretsComment(secretNames), Cmd: strings.Join(parts, " ")}
+
+	// Build env export | import pipeline (handles settings and variables)
+	exportImportCmd := fmt.Sprintf(
+		"gh secret-kit env export --env %s -R %s | gh secret-kit env import - -R %s --overwrite",
+		shellQuote(envName),
+		shellQuote(repoArg(src)),
+		shellQuote(repoArg(dst)),
+	)
+
+	return EnvPlanEntry{
+		SecretComment:   secretsComment(secretNames),
+		ExportImportCmd: exportImportCmd,
+		MigrateAllCmd:   strings.Join(migrateParts, " "),
+		HasReviewers:    hasReviewers,
+		DstEnvExists:    dstEnvExists,
+	}
 }
 
 func buildOrgMigrateCmd(srcRepo repository.Repository, dstOrg repository.Repository, secretNames []string, config *planConfig) PlanEntry {
@@ -300,7 +345,7 @@ func variablesComment(names []string) string {
 		return ""
 	}
 	const prefix = "# variables: "
-	const cont   = "#            " // aligned with first variable name
+	const cont = "#            " // aligned with first variable name
 
 	var lines []string
 	currentPrefix := prefix
@@ -389,10 +434,35 @@ func printPlan(result *PlanResult) {
 	if len(result.EnvMigrates) > 0 {
 		fmt.Println("# Environment secret migrations")
 		for _, entry := range result.EnvMigrates {
-			if entry.Comment != "" {
-				fmt.Println(entry.Comment)
+			switch {
+			case entry.HasReviewers:
+				// Reviewer names may not exist in the destination org – emit everything as
+				// comments so the operator can manually adjust before running.
+				fmt.Println("# NOTE: environment has reviewers - manual resolution required")
+				if entry.SecretComment != "" {
+					for _, line := range strings.Split(entry.SecretComment, "\n") {
+						fmt.Println("# " + line)
+					}
+				}
+				fmt.Println("# " + entry.ExportImportCmd)
+				fmt.Println("# " + entry.MigrateAllCmd)
+			case !entry.DstEnvExists:
+				// Destination environment does not exist: export|import creates it first,
+				// then migrate env all can migrate secrets.
+				if entry.SecretComment != "" {
+					fmt.Println(entry.SecretComment)
+				}
+				fmt.Println(entry.ExportImportCmd)
+				fmt.Println(entry.MigrateAllCmd)
+			default:
+				// Destination environment already exists: export|import would overwrite existing
+				// settings, so comment it out; run migrate env all for secrets only.
+				if entry.SecretComment != "" {
+					fmt.Println(entry.SecretComment)
+				}
+				fmt.Println("# " + entry.ExportImportCmd)
+				fmt.Println(entry.MigrateAllCmd)
 			}
-			fmt.Println(entry.Cmd)
 		}
 		fmt.Println()
 	}
@@ -419,6 +489,10 @@ func printPlan(result *PlanResult) {
 
 	if len(result.DeployKeyMigrates) > 0 {
 		fmt.Println("# Deploy key migrations (cross-host only)")
+		if result.DstDeployKeySettingCmd != "" {
+			fmt.Println("# NOTE: deploy keys are disabled in the destination org - enable before migrating")
+			fmt.Println(result.DstDeployKeySettingCmd)
+		}
 		for _, entry := range result.DeployKeyMigrates {
 			fmt.Println(entry.Cmd)
 		}

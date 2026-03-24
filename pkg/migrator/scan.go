@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/cli/go-gh/v2/pkg/repository"
+	"github.com/google/go-github/v84/github"
 	"github.com/srz-zumix/go-gh-extension/pkg/gh"
 	"github.com/srz-zumix/go-gh-extension/pkg/logger"
 	"github.com/srz-zumix/go-gh-extension/pkg/parser"
@@ -63,9 +64,11 @@ func ParseOrgPair(srcStr, dstStr string) (src, dst *OrgContext, err error) {
 
 // EnvMatch represents a matched environment pair with its secret metadata.
 type EnvMatch struct {
-	Name        string
-	SecretCount int
-	SecretNames []string
+	Name         string
+	SecretCount  int
+	SecretNames  []string
+	HasReviewers bool // true when the source environment has required_reviewers protection rules
+	DstEnvExists bool // true when the destination environment already exists
 }
 
 // RepoMatch represents a matched src/dst repo pair with secret and variable metadata.
@@ -117,6 +120,7 @@ func ScanMatchingRepos(ctx context.Context, src, dst *OrgContext) ([]RepoMatch, 
 			logger.Debug(fmt.Sprintf("Skipping %s: no matching repository in destination", repoName))
 			continue
 		}
+		_ = dstRepoInfo
 
 		// Get source repo secrets
 		secrets, err := gh.ListRepoSecrets(ctx, src.Client, srcRepoRef)
@@ -129,32 +133,41 @@ func ScanMatchingRepos(ctx context.Context, src, dst *OrgContext) ([]RepoMatch, 
 			repoSecretNames = append(repoSecretNames, s.Name)
 		}
 
-		// Get source env secrets and match with destination
-		envSecrets, err := gh.CollectEnvSecrets(ctx, src.Client, srcRepo)
+		// Get source env secrets and match with destination.
+		// collectEnvSecretsWithReviewers fetches environments only once to avoid
+		// the extra ListEnvironments call that CollectEnvSecrets would make.
+		srcEnvSecrets, srcEnvReviewers, err := collectEnvSecretsWithReviewers(ctx, src.Client, srcRepoRef, srcRepo)
 		if err != nil {
 			logger.Warn(fmt.Sprintf("Skipping environments for %s: %v", fullName, err))
 		}
 
 		var envMatches []EnvMatch
-		if len(envSecrets) > 0 {
-			dstEnvSecrets, err := gh.CollectEnvSecrets(ctx, dst.Client, dstRepoInfo)
-			if err != nil {
-				logger.Warn(fmt.Sprintf("Skipping env check for %s: %v", repoName, err))
+		if len(srcEnvSecrets) > 0 {
+			// List destination environments to check existence (secrets are not needed here).
+			dstEnvSet := make(map[string]bool)
+			dstEnvs, dstEnvListErr := gh.ListEnvironments(ctx, dst.Client, dstRepoRef)
+			if dstEnvListErr != nil {
+				logger.Warn(fmt.Sprintf("Could not list destination environments for %s: %v", repoName, dstEnvListErr))
 			} else {
-				for envName, srcEnvSecs := range envSecrets {
-					if _, exists := dstEnvSecrets[envName]; exists {
-						var envSecretNames []string
-						for _, s := range srcEnvSecs {
-							envSecretNames = append(envSecretNames, s.Name)
-						}
-						envMatches = append(envMatches, EnvMatch{
-							Name:        envName,
-							SecretCount: len(srcEnvSecs),
-							SecretNames: envSecretNames,
-						})
-					} else {
-						logger.Debug(fmt.Sprintf("Skipping env %s/%s: no matching environment in destination", repoName, envName))
-					}
+				for _, e := range dstEnvs {
+					dstEnvSet[e.GetName()] = true
+				}
+			}
+
+			for envName, srcEnvSecs := range srcEnvSecrets {
+				var envSecretNames []string
+				for _, s := range srcEnvSecs {
+					envSecretNames = append(envSecretNames, s.Name)
+				}
+				envMatches = append(envMatches, EnvMatch{
+					Name:         envName,
+					SecretCount:  len(srcEnvSecs),
+					SecretNames:  envSecretNames,
+					HasReviewers: srcEnvReviewers[envName],
+					DstEnvExists: dstEnvSet[envName],
+				})
+				if !dstEnvSet[envName] {
+					logger.Debug(fmt.Sprintf("Env %s/%s: no matching environment in destination (will use export|import to create)", repoName, envName))
 				}
 			}
 		}
@@ -183,6 +196,52 @@ func ScanMatchingRepos(ctx context.Context, src, dst *OrgContext) ([]RepoMatch, 
 	}
 
 	return results, nil
+}
+
+// collectEnvSecretsWithReviewers lists all environments once and concurrently
+// collects both secrets and reviewer presence without a duplicate ListEnvironments call.
+// It returns a map of env name -> secrets and a map of env name -> hasReviewers.
+func collectEnvSecretsWithReviewers(
+	ctx context.Context,
+	g *gh.GitHubClient,
+	repoRef repository.Repository,
+	repo *github.Repository,
+) (map[string][]*github.Secret, map[string]bool, error) {
+	envs, err := gh.ListEnvironments(ctx, g, repoRef)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to list environments: %w", err)
+	}
+	if len(envs) == 0 {
+		return nil, nil, nil
+	}
+
+	envSecrets := make(map[string][]*github.Secret)
+	envReviewers := make(map[string]bool)
+	for _, env := range envs {
+		name := env.GetName()
+		envReviewers[name] = envHasReviewers(env)
+		secrets, err := gh.ListEnvSecrets(ctx, g, repo, name)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to list secrets for environment %s: %w", name, err)
+		}
+		if len(secrets) > 0 {
+			envSecrets[name] = secrets
+		}
+	}
+	return envSecrets, envReviewers, nil
+}
+
+// envHasReviewers reports whether the environment has at least one required reviewer.
+func envHasReviewers(env *github.Environment) bool {
+	for _, rule := range env.ProtectionRules {
+		if rule.Type == nil {
+			continue
+		}
+		if *rule.Type == "required_reviewers" && len(rule.Reviewers) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // ScanOrgRepos scans an org's repositories and returns those with secrets.
