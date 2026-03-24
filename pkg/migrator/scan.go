@@ -198,7 +198,7 @@ func ScanMatchingRepos(ctx context.Context, src, dst *OrgContext) ([]RepoMatch, 
 	return results, nil
 }
 
-// collectEnvSecretsWithReviewers lists all environments once and concurrently
+// collectEnvSecretsWithReviewers lists all environments once and then
 // collects both secrets and reviewer presence without a duplicate ListEnvironments call.
 // It returns a map of env name -> secrets and a map of env name -> hasReviewers.
 func collectEnvSecretsWithReviewers(
