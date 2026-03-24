@@ -475,10 +475,11 @@ Scan source organization for repositories with secrets, check if matching reposi
 
 This command does not perform any migration; it only outputs the commands that would be needed to migrate secrets from source to destination. Each migration command is preceded by a comment listing the secret names that will be migrated.
 
-For each environment with secrets, the plan also outputs an `env export | env import` pipeline and a `migrate env all` command. The output depends on the destination environment state:
+For each environment with secrets, the plan also outputs an `env export | env import` pipeline and a `migrate env all` command. The output depends on the destination environment state and whether `--overwrite` is specified:
 
 - **Destination environment does not exist**: Both `env export | env import` (creates the environment) and `migrate env all` are output as executable commands.
-- **Destination environment exists**: `env export | env import` is commented out to avoid overwriting existing settings; `migrate env all` is output as an executable command.
+- **Destination environment exists, `--overwrite` not set**: `env export | env import` is commented out to avoid overwriting existing settings; `migrate env all` is output as an executable command.
+- **Destination environment exists, `--overwrite` set**: Both `env export | env import` (with `--overwrite`) and `migrate env all` (with `--overwrite`) are output as executable commands.
 - **Environment has required reviewers**: All commands are commented out because reviewer names may not be resolvable in the destination organization. Manual adjustment is required before running.
 
 When the source and destination organizations are on different hosts, deploy key migration commands (`deploy-key migrate`) are also included for each matching repository that has deploy keys. Use `--no-deploy-keys` to skip this extra per-repository API call.

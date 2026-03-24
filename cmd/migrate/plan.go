@@ -32,7 +32,8 @@ type PlanEntry struct {
 // Output rules:
 //   - HasReviewers=true: all commands emitted as comments (reviewer names may not exist in dst org)
 //   - HasReviewers=false, DstEnvExists=false: ExportImportCmd executable (creates env), MigrateAllCmd executable
-//   - HasReviewers=false, DstEnvExists=true: ExportImportCmd commented, MigrateAllCmd executable
+//   - HasReviewers=false, DstEnvExists=true, Overwrite=false: ExportImportCmd commented out, MigrateAllCmd executable
+//   - HasReviewers=false, DstEnvExists=true, Overwrite=true: ExportImportCmd executable, MigrateAllCmd executable
 type EnvPlanEntry struct {
 	SecretComment   string // # secrets: ... (may be empty)
 	ExportImportCmd string // env export | import pipeline
@@ -476,7 +477,8 @@ func printPlan(result *PlanResult) {
 				fmt.Println(entry.MigrateAllCmd)
 			default:
 				// Destination environment already exists: comment out export|import to avoid
-				// overwriting existing settings, unless --overwrite was specified.
+				// overwriting existing settings, unless --overwrite was specified in which
+				// case both commands are emitted as executable.
 				if entry.SecretComment != "" {
 					fmt.Println(entry.SecretComment)
 				}
