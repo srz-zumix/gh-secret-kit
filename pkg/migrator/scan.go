@@ -115,12 +115,11 @@ func ScanMatchingRepos(ctx context.Context, src, dst *OrgContext) ([]RepoMatch, 
 			Name:  repoName,
 			Host:  dst.OwnerRepo.Host,
 		}
-		dstRepoInfo, dstErr := gh.GetRepository(ctx, dst.Client, dstRepoRef)
+		_, dstErr := gh.GetRepository(ctx, dst.Client, dstRepoRef)
 		if dstErr != nil {
 			logger.Debug(fmt.Sprintf("Skipping %s: no matching repository in destination", repoName))
 			continue
 		}
-		_ = dstRepoInfo
 
 		// Get source repo secrets
 		secrets, err := gh.ListRepoSecrets(ctx, src.Client, srcRepoRef)

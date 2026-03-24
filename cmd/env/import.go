@@ -80,7 +80,7 @@ Note: Secrets are not included in the import because their values are not access
 	f := cmd.Flags()
 	f.StringVarP(&repo, "repo", "R", "", "Destination repository (e.g., owner/repo; defaults to current repository)")
 	f.StringVar(&dstEnv, "env", "", "Filter environments to import by name; if empty, all environments in the config file are considered (does not rename environments)")
-	f.BoolVar(&overwrite, "overwrite", false, "Overwrite existing variables at destination (default: false)")
+	f.BoolVar(&overwrite, "overwrite", false, "Overwrite existing environments at destination (default: false; skips environments that already exist)")
 	f.BoolVarP(&dryrun, "dryrun", "n", false, "Preview changes without applying them")
 
 	cmdutil.AddFormatFlags(cmd, &opts.Exporter)

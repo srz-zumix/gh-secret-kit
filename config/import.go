@@ -16,7 +16,8 @@ type ImportOptions struct {
 	// TargetEnv, when non-empty, restricts imports to environments whose Name matches TargetEnv.
 	// If no environment with the given name exists in cfgs, Import returns an error.
 	TargetEnv string
-	// Overwrite allows existing variables to be overwritten.
+	// Overwrite allows existing environments to be overwritten.
+	// When false, an environment that already exists in the destination repository is skipped.
 	Overwrite bool
 	// DryRun prints planned changes without making any API calls.
 	DryRun bool
@@ -75,6 +76,17 @@ func (i *Importer) importOne(cfg *EnvironmentConfig, opts ImportOptions) error {
 		return fmt.Errorf("environment name is required in configuration")
 	}
 
+	existing, err := gh.GetEnvironment(i.ctx, i.client, i.Repo, targetEnv)
+	// Skip existing environments unless --overwrite is specified
+	if err == nil && existing != nil && !opts.Overwrite {
+		if opts.DryRun {
+			logger.Info("[dryrun] Would skip existing environment", "env", targetEnv)
+		} else {
+			logger.Info("Skipping existing environment (use --overwrite to replace)", "env", targetEnv)
+		}
+		return nil
+	}
+
 	if opts.DryRun {
 		logger.Info("[dryrun] Would create/update environment", "env", targetEnv, "owner", i.Repo.Owner, "repo", i.Repo.Name)
 		for _, p := range cfg.BranchPolicies {
@@ -113,7 +125,7 @@ func (i *Importer) importOne(cfg *EnvironmentConfig, opts ImportOptions) error {
 	// Apply variables
 	for _, v := range cfg.Variables {
 		actVar := &github.ActionsVariable{Name: v.Name, Value: v.Value}
-		if err := gh.CreateOrUpdateEnvVariable(i.ctx, i.client, i.Repo, targetEnv, actVar, opts.Overwrite); err != nil {
+		if err := gh.CreateOrUpdateEnvVariable(i.ctx, i.client, i.Repo, targetEnv, actVar, true); err != nil {
 			return fmt.Errorf("failed to set variable %q in environment %q: %w", v.Name, targetEnv, err)
 		}
 		logger.Info("Applied variable", "name", v.Name)
