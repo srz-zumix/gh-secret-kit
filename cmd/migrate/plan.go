@@ -310,7 +310,7 @@ func buildEnvPlanEntry(src, dst repository.Repository, envName string, secretNam
 
 	// Build env export | import pipeline (handles settings and variables)
 	exportImportCmd := fmt.Sprintf(
-		"gh secret-kit env export --env %s -R %s | gh secret-kit env import - -R %s --overwrite",
+		"gh secret-kit env export --env %s -R %s | gh secret-kit env import - -R %s",
 		shellQuote(envName),
 		shellQuote(repoArg(src)),
 		shellQuote(repoArg(dst)),
