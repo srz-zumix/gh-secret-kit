@@ -39,6 +39,7 @@ type EnvPlanEntry struct {
 	MigrateAllCmd   string // migrate env all command
 	HasReviewers    bool
 	DstEnvExists    bool // true when the destination environment already exists
+	Overwrite       bool // true when --overwrite was specified
 }
 
 // PlanResult represents the migration plan result
@@ -333,6 +334,7 @@ func buildEnvPlanEntry(src, dst repository.Repository, envName string, secretNam
 		MigrateAllCmd:   strings.Join(migrateParts, " "),
 		HasReviewers:    hasReviewers,
 		DstEnvExists:    dstEnvExists,
+		Overwrite:       config.Overwrite,
 	}
 }
 
@@ -473,12 +475,16 @@ func printPlan(result *PlanResult) {
 				fmt.Println(entry.ExportImportCmd)
 				fmt.Println(entry.MigrateAllCmd)
 			default:
-				// Destination environment already exists: export|import would overwrite existing
-				// settings, so comment it out; run migrate env all for secrets only.
+				// Destination environment already exists: comment out export|import to avoid
+				// overwriting existing settings, unless --overwrite was specified.
 				if entry.SecretComment != "" {
 					fmt.Println(entry.SecretComment)
 				}
-				fmt.Println("# " + entry.ExportImportCmd)
+				if entry.Overwrite {
+					fmt.Println(entry.ExportImportCmd)
+				} else {
+					fmt.Println("# " + entry.ExportImportCmd)
+				}
 				fmt.Println(entry.MigrateAllCmd)
 			}
 		}
