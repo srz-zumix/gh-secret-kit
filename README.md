@@ -141,6 +141,25 @@ Note: GitHub does not allow the same public key to be registered as a deploy key
 
 - `--repo string` / `-R`: Source repository (e.g., `owner/repo`; defaults to current repository)
 
+#### deploy-key setting
+
+```sh
+gh secret-kit deploy-key setting [org] [flags]
+```
+
+Get or set whether deploy keys are enabled for repositories in an organization. When `--set` is omitted, the current value of `deploy_keys_enabled_for_repositories` is printed. Passing `--set enable` or `--set disable` updates the setting.
+
+Note: Deploy keys must be enabled at the organization level before they can be added to individual repositories.
+
+**Arguments:**
+
+- `[org]`: Organization name (e.g., `myorg` or `HOST/myorg`; defaults to current repository owner)
+
+**Options:**
+
+- `--owner string`: Organization (e.g., `owner` or `HOST/owner`; defaults to current repository owner)
+- `--set string`: Set deploy keys setting: `enable` or `disable` (omit to get current value)
+
 ### Manage GitHub Actions Environment Resources
 
 Manage GitHub Actions environment resources such as variables for repository environments.
@@ -232,7 +251,7 @@ Note: Secrets are not included in the import because their values are not access
 - `--dryrun`: Preview changes without applying them (default: false)
 - `--env string`: Filter by environment name — only imports environments matching this name from the config file
 - `--format string`: Output format: `{json|yaml}` (default: `yaml`)
-- `--overwrite`: Overwrite existing variables at destination (default: false)
+- `--overwrite`: Overwrite existing environments at destination (default: false; skips environments that already exist)
 - `--repo string` / `-R`: Destination repository (e.g., `owner/repo`; defaults to current repository)
 
 #### env list
@@ -455,6 +474,12 @@ gh secret-kit migrate plan [org] [flags]
 Scan source organization for repositories with secrets, check if matching repositories exist in the destination organization, and output the migration commands for all matching pairs.
 
 This command does not perform any migration; it only outputs the commands that would be needed to migrate secrets from source to destination. Each migration command is preceded by a comment listing the secret names that will be migrated.
+
+For each environment with secrets, the plan also outputs an `env export | env import` pipeline and a `migrate env all` command. The output depends on the destination environment state:
+
+- **Destination environment does not exist**: Both `env export | env import` (creates the environment) and `migrate env all` are output as executable commands.
+- **Destination environment exists**: `env export | env import` is commented out to avoid overwriting existing settings; `migrate env all` is output as an executable command.
+- **Environment has required reviewers**: All commands are commented out because reviewer names may not be resolvable in the destination organization. Manual adjustment is required before running.
 
 When the source and destination organizations are on different hosts, deploy key migration commands (`deploy-key migrate`) are also included for each matching repository that has deploy keys. Use `--no-deploy-keys` to skip this extra per-repository API call.
 

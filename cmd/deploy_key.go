@@ -18,6 +18,7 @@ func NewDeployKeyCmd() *cobra.Command {
 	cmd.AddCommand(deploykey.NewGetCmd())
 	cmd.AddCommand(deploykey.NewListCmd())
 	cmd.AddCommand(deploykey.NewMigrateCmd())
+	cmd.AddCommand(deploykey.NewSettingCmd())
 
 	return cmd
 }
