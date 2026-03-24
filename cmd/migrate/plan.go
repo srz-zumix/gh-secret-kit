@@ -440,9 +440,7 @@ func printPlan(result *PlanResult) {
 				// comments so the operator can manually adjust before running.
 				fmt.Println("# NOTE: environment has reviewers - manual resolution required")
 				if entry.SecretComment != "" {
-					for _, line := range strings.Split(entry.SecretComment, "\n") {
-						fmt.Println("# " + line)
-					}
+					fmt.Println(entry.SecretComment)
 				}
 				fmt.Println("# " + entry.ExportImportCmd)
 				fmt.Println("# " + entry.MigrateAllCmd)
