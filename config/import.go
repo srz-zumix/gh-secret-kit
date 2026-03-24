@@ -77,6 +77,10 @@ func (i *Importer) importOne(cfg *EnvironmentConfig, opts ImportOptions) error {
 	}
 
 	existing, err := gh.GetEnvironment(i.ctx, i.client, i.Repo, targetEnv)
+	if err != nil && !gh.IsHTTPNotFound(err) {
+		return fmt.Errorf("failed to get environment %q: %w", targetEnv, err)
+	}
+
 	// Skip existing environments unless --overwrite is specified
 	if err == nil && existing != nil && !opts.Overwrite {
 		if opts.DryRun {
