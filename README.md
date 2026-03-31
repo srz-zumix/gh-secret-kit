@@ -494,6 +494,7 @@ When the source and destination organizations are on different hosts, deploy key
 - `--no-deploy-keys`: Skip deploy key scanning (avoids extra API calls per repository) (default: false)
 - `--overwrite`: Add `--overwrite` to generated migration and copy commands that support it (default: false)
 - `--runner-label string`: Runner label for the workflow (default: "gh-secret-kit-migrate")
+- `--unarchive`: Add `--unarchive` to generated migration commands (default: false)
 
 #### migrate org
 

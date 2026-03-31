@@ -20,6 +20,7 @@ type planConfig struct {
 	RunnerLabel  string
 	NoDeployKeys bool
 	Overwrite    bool
+	Unarchive    bool
 }
 
 // PlanEntry represents a single migration command with an optional comment listing secrets.
@@ -95,6 +96,7 @@ Arguments:
 	f.StringVar(&config.RunnerLabel, "runner-label", types.DefaultRunnerLabel, "Runner label for the workflow")
 	f.BoolVar(&config.NoDeployKeys, "no-deploy-keys", false, "Skip deploy key scanning (avoids extra API calls per repository)")
 	f.BoolVar(&config.Overwrite, "overwrite", false, "Add --overwrite to generated migration and copy commands that support it and make env export | env import pipelines executable for existing destination environments")
+	f.BoolVar(&config.Unarchive, "unarchive", false, "Add --unarchive to generated migration commands")
 
 	_ = cmd.MarkFlagRequired("dst")
 
@@ -300,6 +302,9 @@ func buildRepoMigrateCmd(src, dst repository.Repository, secretNames []string, c
 	if config.Overwrite {
 		parts = append(parts, "--overwrite")
 	}
+	if config.Unarchive {
+		parts = append(parts, "--unarchive")
+	}
 	return PlanEntry{Comment: secretsComment(secretNames), Cmd: strings.Join(parts, " ")}
 }
 
@@ -316,6 +321,9 @@ func buildEnvPlanEntry(src, dst repository.Repository, envName string, secretNam
 	}
 	if config.Overwrite {
 		migrateParts = append(migrateParts, "--overwrite")
+	}
+	if config.Unarchive {
+		migrateParts = append(migrateParts, "--unarchive")
 	}
 
 	// Build env export | import pipeline (handles settings and variables)
@@ -353,6 +361,9 @@ func buildOrgMigrateCmd(srcRepo repository.Repository, dstOrg repository.Reposit
 	}
 	if config.Overwrite {
 		parts = append(parts, "--overwrite")
+	}
+	if config.Unarchive {
+		parts = append(parts, "--unarchive")
 	}
 	return PlanEntry{Comment: secretsComment(secretNames), Cmd: strings.Join(parts, " ")}
 }
