@@ -9,6 +9,7 @@ import (
 	"github.com/srz-zumix/go-gh-extension/pkg/gh"
 	"github.com/srz-zumix/go-gh-extension/pkg/gh/client"
 	"github.com/srz-zumix/go-gh-extension/pkg/logger"
+	"github.com/srz-zumix/go-gh-extension/pkg/settings"
 )
 
 // ImportOptions controls the behaviour of Importer.Import.
@@ -21,6 +22,9 @@ type ImportOptions struct {
 	Overwrite bool
 	// DryRun prints planned changes without making any API calls.
 	DryRun bool
+	// UserMap, when non-nil, is used to resolve reviewer user logins.
+	// Source logins are mapped to destination logins before looking up user IDs.
+	UserMap *settings.CompiledMappings
 }
 
 // Importer applies a GitHub Actions environment configuration to a repository.
@@ -102,7 +106,7 @@ func (i *Importer) importOne(cfg *EnvironmentConfig, opts ImportOptions) error {
 		return nil
 	}
 
-	envReq, err := i.buildCreateUpdateRequest(cfg)
+	envReq, err := i.buildCreateUpdateRequest(cfg, opts)
 	if err != nil {
 		return fmt.Errorf("failed to resolve reviewers: %w", err)
 	}
@@ -140,7 +144,8 @@ func (i *Importer) importOne(cfg *EnvironmentConfig, opts ImportOptions) error {
 
 // buildCreateUpdateRequest constructs a CreateUpdateEnvironment from the config.
 // Reviewer names are resolved to IDs via the GitHub API.
-func (i *Importer) buildCreateUpdateRequest(cfg *EnvironmentConfig) (*github.CreateUpdateEnvironment, error) {
+// When opts.UserMap is set, User reviewer logins are mapped before resolution.
+func (i *Importer) buildCreateUpdateRequest(cfg *EnvironmentConfig, opts ImportOptions) (*github.CreateUpdateEnvironment, error) {
 	waitTimer := cfg.WaitTimer
 	preventSelfReview := cfg.PreventSelfReview
 	canAdminsBypass := cfg.CanAdminsBypass
@@ -163,9 +168,15 @@ func (i *Importer) buildCreateUpdateRequest(cfg *EnvironmentConfig) (*github.Cre
 		reviewer := &github.EnvReviewers{Type: &rev.Type}
 		switch rev.Type {
 		case "User":
-			user, err := gh.FindUser(i.ctx, i.client, rev.Name)
+			login := rev.Name
+			if opts.UserMap != nil {
+				if mapped, ok := opts.UserMap.ResolveSrc(login); ok {
+					login = mapped
+				}
+			}
+			user, err := gh.FindUser(i.ctx, i.client, login)
 			if err != nil {
-				return nil, fmt.Errorf("failed to find user %q: %w", rev.Name, err)
+				return nil, fmt.Errorf("failed to find user %q: %w", login, err)
 			}
 			reviewer.ID = user.ID
 		case "Team":
