@@ -33,15 +33,17 @@ type PlanEntry struct {
 // Output rules:
 //   - HasReviewers=true: all commands emitted as comments (reviewer names may not exist in dst org)
 //   - HasReviewers=false, DstEnvExists=false: ExportImportCmd executable (creates env), MigrateAllCmd executable
-//   - HasReviewers=false, DstEnvExists=true, Overwrite=false: ExportImportCmd commented out, MigrateAllCmd executable
-//   - HasReviewers=false, DstEnvExists=true, Overwrite=true: ExportImportCmd executable, MigrateAllCmd executable
+//   - HasReviewers=false, DstEnvExists=true, Overwrite=false: ExportImportCmd commented out, EnvVariableCopyCmd executable, MigrateAllCmd executable
+//   - HasReviewers=false, DstEnvExists=true, Overwrite=true: ExportImportCmd executable (handles vars), MigrateAllCmd executable
 type EnvPlanEntry struct {
-	SecretComment   string // # secrets: ... (may be empty)
-	ExportImportCmd string // env export | import pipeline
-	MigrateAllCmd   string // migrate env all command
-	HasReviewers    bool
-	DstEnvExists    bool // true when the destination environment already exists
-	Overwrite       bool // true when --overwrite was specified
+	SecretComment      string // # secrets: ... (may be empty)
+	VariablesComment   string // # variables: ... (may be empty)
+	ExportImportCmd    string // env export | import pipeline
+	EnvVariableCopyCmd string // env variable copy command (non-empty when variables exist)
+	MigrateAllCmd      string // migrate env all command
+	HasReviewers       bool
+	DstEnvExists       bool // true when the destination environment already exists
+	Overwrite          bool // true when --overwrite was specified
 }
 
 // PlanResult represents the migration plan result
@@ -178,9 +180,9 @@ func runPlan(ctx context.Context, config *planConfig) error {
 		}
 
 		for _, env := range m.EnvMatches {
-			cmd := buildEnvPlanEntry(m.SrcRepoRef, m.DstRepoRef, env.Name, env.SecretNames, env.HasReviewers, env.DstEnvExists, config)
+			cmd := buildEnvPlanEntry(m.SrcRepoRef, m.DstRepoRef, env.Name, env.SecretNames, env.VariableNames, env.HasReviewers, env.DstEnvExists, config)
 			result.EnvMigrates = append(result.EnvMigrates, cmd)
-			logger.Info(fmt.Sprintf("Found matching env with secrets: %s/%s (%d secrets)", m.SrcName, env.Name, env.SecretCount))
+			logger.Info(fmt.Sprintf("Found matching env: %s/%s (%d secrets, %d variables)", m.SrcName, env.Name, env.SecretCount, env.VariableCount))
 		}
 
 		if m.RepoVariableCount > 0 {
@@ -308,7 +310,7 @@ func buildRepoMigrateCmd(src, dst repository.Repository, secretNames []string, c
 	return PlanEntry{Comment: secretsComment(secretNames), Cmd: strings.Join(parts, " ")}
 }
 
-func buildEnvPlanEntry(src, dst repository.Repository, envName string, secretNames []string, hasReviewers bool, dstEnvExists bool, config *planConfig) EnvPlanEntry {
+func buildEnvPlanEntry(src, dst repository.Repository, envName string, secretNames []string, variableNames []string, hasReviewers bool, dstEnvExists bool, config *planConfig) EnvPlanEntry {
 	// Build migrate env all command (handles secrets via workflow)
 	var migrateParts []string
 	migrateParts = append(migrateParts, "gh secret-kit migrate env all")
@@ -326,6 +328,24 @@ func buildEnvPlanEntry(src, dst repository.Repository, envName string, secretNam
 		migrateParts = append(migrateParts, "--unarchive")
 	}
 
+	// Build env variable copy command (used when destination env already exists and --overwrite is not set)
+	var envVariableCopyCmd string
+	if len(variableNames) > 0 {
+		var varParts []string
+		varParts = append(varParts, "gh secret-kit env variable copy")
+		varParts = append(varParts, shellQuote(repoArg(dst)))
+		varParts = append(varParts, fmt.Sprintf("--repo %s", shellQuote(repoArg(src))))
+		varParts = append(varParts, fmt.Sprintf("--src-env %s", shellQuote(envName)))
+		varParts = append(varParts, fmt.Sprintf("--dst-env %s", shellQuote(envName)))
+		if config.Overwrite {
+			varParts = append(varParts, "--overwrite")
+		}
+		envVariableCopyCmd = strings.Join(varParts, " ")
+	}
+	if config.Unarchive {
+		migrateParts = append(migrateParts, "--unarchive")
+	}
+
 	// Build env export | import pipeline (handles settings and variables)
 	exportImportCmd := fmt.Sprintf(
 		"gh secret-kit env export --env %s -R %s | gh secret-kit env import - -R %s",
@@ -338,12 +358,14 @@ func buildEnvPlanEntry(src, dst repository.Repository, envName string, secretNam
 	}
 
 	return EnvPlanEntry{
-		SecretComment:   secretsComment(secretNames),
-		ExportImportCmd: exportImportCmd,
-		MigrateAllCmd:   strings.Join(migrateParts, " "),
-		HasReviewers:    hasReviewers,
-		DstEnvExists:    dstEnvExists,
-		Overwrite:       config.Overwrite,
+		SecretComment:      secretsComment(secretNames),
+		VariablesComment:   variablesComment(variableNames),
+		ExportImportCmd:    exportImportCmd,
+		EnvVariableCopyCmd: envVariableCopyCmd,
+		MigrateAllCmd:      strings.Join(migrateParts, " "),
+		HasReviewers:       hasReviewers,
+		DstEnvExists:       dstEnvExists,
+		Overwrite:          config.Overwrite,
 	}
 }
 
@@ -476,6 +498,9 @@ func printPlan(result *PlanResult) {
 				if entry.SecretComment != "" {
 					fmt.Println(entry.SecretComment)
 				}
+				if entry.VariablesComment != "" {
+					fmt.Println(entry.VariablesComment)
+				}
 				fmt.Println("# " + entry.ExportImportCmd)
 				fmt.Println("# " + entry.MigrateAllCmd)
 			case !entry.DstEnvExists:
@@ -484,19 +509,28 @@ func printPlan(result *PlanResult) {
 				if entry.SecretComment != "" {
 					fmt.Println(entry.SecretComment)
 				}
+				if entry.VariablesComment != "" {
+					fmt.Println(entry.VariablesComment)
+				}
 				fmt.Println(entry.ExportImportCmd)
 				fmt.Println(entry.MigrateAllCmd)
 			default:
 				// Destination environment already exists: comment out export|import to avoid
 				// overwriting existing settings, unless --overwrite was specified in which
-				// case both commands are emitted as executable.
+				// case export|import (with --overwrite) handles variables too.
 				if entry.SecretComment != "" {
 					fmt.Println(entry.SecretComment)
+				}
+				if entry.VariablesComment != "" {
+					fmt.Println(entry.VariablesComment)
 				}
 				if entry.Overwrite {
 					fmt.Println(entry.ExportImportCmd)
 				} else {
 					fmt.Println("# " + entry.ExportImportCmd)
+					if entry.EnvVariableCopyCmd != "" {
+						fmt.Println(entry.EnvVariableCopyCmd)
+					}
 				}
 				fmt.Println(entry.MigrateAllCmd)
 			}
