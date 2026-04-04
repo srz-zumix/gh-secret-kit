@@ -135,9 +135,9 @@ func ScanMatchingRepos(ctx context.Context, src, dst *OrgContext) ([]RepoMatch, 
 		}
 
 		// Get source env secrets, variables, and match with destination.
-		// collectEnvSecretsWithReviewers fetches environments only once to avoid
+		// collectEnvDataWithReviewers fetches environments only once to avoid
 		// the extra ListEnvironments call that CollectEnvSecrets would make.
-		srcEnvSecrets, srcEnvVariables, srcEnvReviewers, err := collectEnvSecretsWithReviewers(ctx, src.Client, srcRepoRef, srcRepo)
+		srcEnvSecrets, srcEnvVariables, srcEnvReviewers, err := collectEnvDataWithReviewers(ctx, src.Client, srcRepoRef, srcRepo)
 		if err != nil {
 			logger.Warn(fmt.Sprintf("Skipping environments for %s: %v", fullName, err))
 		}
@@ -216,10 +216,10 @@ func ScanMatchingRepos(ctx context.Context, src, dst *OrgContext) ([]RepoMatch, 
 	return results, nil
 }
 
-// collectEnvSecretsWithReviewers lists all environments once and then collects
+// collectEnvDataWithReviewers lists all environments once and then collects
 // secrets, variables, and reviewer presence without a duplicate ListEnvironments call.
 // It returns a map of env name -> secrets, a map of env name -> variables, and a map of env name -> hasReviewers.
-func collectEnvSecretsWithReviewers(
+func collectEnvDataWithReviewers(
 	ctx context.Context,
 	g *gh.GitHubClient,
 	repoRef repository.Repository,

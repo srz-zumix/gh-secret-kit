@@ -498,6 +498,9 @@ func printPlan(result *PlanResult) {
 				if entry.SecretComment != "" {
 					fmt.Println(entry.SecretComment)
 				}
+				if entry.VariablesComment != "" {
+					fmt.Println(entry.VariablesComment)
+				}
 				fmt.Println("# " + entry.ExportImportCmd)
 				fmt.Println("# " + entry.MigrateAllCmd)
 			case !entry.DstEnvExists:
@@ -505,6 +508,9 @@ func printPlan(result *PlanResult) {
 				// then migrate env all can migrate secrets.
 				if entry.SecretComment != "" {
 					fmt.Println(entry.SecretComment)
+				}
+				if entry.VariablesComment != "" {
+					fmt.Println(entry.VariablesComment)
 				}
 				fmt.Println(entry.ExportImportCmd)
 				fmt.Println(entry.MigrateAllCmd)
@@ -515,13 +521,13 @@ func printPlan(result *PlanResult) {
 				if entry.SecretComment != "" {
 					fmt.Println(entry.SecretComment)
 				}
+				if entry.VariablesComment != "" {
+					fmt.Println(entry.VariablesComment)
+				}
 				if entry.Overwrite {
 					fmt.Println(entry.ExportImportCmd)
 				} else {
 					fmt.Println("# " + entry.ExportImportCmd)
-					if entry.VariablesComment != "" {
-						fmt.Println(entry.VariablesComment)
-					}
 					if entry.EnvVariableCopyCmd != "" {
 						fmt.Println(entry.EnvVariableCopyCmd)
 					}
