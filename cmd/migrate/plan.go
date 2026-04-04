@@ -342,6 +342,9 @@ func buildEnvPlanEntry(src, dst repository.Repository, envName string, secretNam
 		}
 		envVariableCopyCmd = strings.Join(varParts, " ")
 	}
+	if config.Unarchive {
+		migrateParts = append(migrateParts, "--unarchive")
+	}
 
 	// Build env export | import pipeline (handles settings and variables)
 	exportImportCmd := fmt.Sprintf(
