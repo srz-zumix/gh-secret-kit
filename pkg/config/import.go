@@ -165,7 +165,8 @@ func (i *Importer) buildCreateUpdateRequest(cfg *EnvironmentConfig, opts ImportO
 	}
 
 	for _, rev := range cfg.Reviewers {
-		reviewer := &github.EnvReviewers{Type: &rev.Type}
+		reviewerType := rev.Type
+		reviewer := &github.EnvReviewers{Type: &reviewerType}
 		switch rev.Type {
 		case "User":
 			login := rev.Name
