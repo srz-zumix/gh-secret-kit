@@ -176,6 +176,9 @@ func (i *Importer) buildCreateUpdateRequest(cfg *EnvironmentConfig, opts ImportO
 			}
 			user, err := gh.FindUser(i.ctx, i.client, login)
 			if err != nil {
+				if login != rev.Name {
+					return nil, fmt.Errorf("failed to find user %q (mapped from %q): %w", login, rev.Name, err)
+				}
 				return nil, fmt.Errorf("failed to find user %q: %w", login, err)
 			}
 			reviewer.ID = user.ID
