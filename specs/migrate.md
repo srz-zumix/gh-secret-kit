@@ -135,9 +135,26 @@ Positional argument: `[org]` — Source organization name (e.g., org or HOST/org
 | Option | Short | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- | --- |
 | `--dst` | `-d` | string | Yes | - | Destination organization (e.g., org or HOST/org) |
+| `--no-deploy-keys` | - | bool | No | false | Skip deploy key scanning (avoids extra API calls per repository) |
+| `--overwrite` | - | bool | No | false | Add `--overwrite` to generated migration and copy commands; also makes `env export \| env import` executable for existing destination environments |
 | `--runner-label` | - | string | No | `gh-secret-kit-migrate` | Runner label for the workflow |
+| `--unarchive` | - | bool | No | false | Add `--unarchive` to generated migration commands |
+| `--usermap` | - | string | No | - | Add `--usermap` to generated `env export \| env import` commands and make those pipelines executable even for existing destination environments |
 
 Positional argument: `[org]` — Source organization name (e.g., org or HOST/org). Defaults to current repository owner.
+
+#### plan Environment Output Rules
+
+For each source environment with secrets or variables, the plan outputs an `env export | env import` pipeline, an `env variable copy` command (when applicable), and a `migrate env all` command. The exact set of executable vs. commented-out commands depends on the flags and destination state:
+
+| Condition | `env export \| env import` | `env variable copy` | `migrate env all` |
+| --- | --- | --- | --- |
+| Destination env does not exist | executable | — | executable |
+| Destination env exists, no `--overwrite`, no `--usermap` | commented out | executable (if vars exist) | executable |
+| Destination env exists, `--overwrite` set | executable (with `--overwrite`) | — | executable (with `--overwrite`) |
+| Destination env exists, `--usermap` set | executable (with `--usermap`) | — | executable |
+| Has required reviewers, no `--usermap` | commented out | — | commented out |
+| Has required reviewers, `--usermap` set | executable (with `--usermap`) | — | executable |
 
 ### migrate list Options
 
