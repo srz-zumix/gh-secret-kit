@@ -10,6 +10,7 @@ import (
 	"github.com/srz-zumix/go-gh-extension/pkg/cmdflags"
 	"github.com/srz-zumix/go-gh-extension/pkg/parser"
 	"github.com/srz-zumix/go-gh-extension/pkg/render"
+	"github.com/srz-zumix/go-gh-extension/pkg/settings"
 )
 
 type ImportOptions struct {
@@ -20,6 +21,7 @@ type ImportOptions struct {
 func NewImportCmd() *cobra.Command {
 	var repo, dstEnv, format string
 	var overwrite, dryrun bool
+	var mapFile string
 	var opts ImportOptions
 
 	cmd := &cobra.Command{
@@ -33,6 +35,7 @@ If --env is set, only environments whose name matches the value are imported; if
 Specify "-" as input to read from stdin.
 Use --dryrun to preview what would be applied without making any changes.
 Use --format to specify the output format (yaml or json; default: yaml).
+Use --usermap to specify a user mapping file that converts reviewer logins during import (as produced by 'gh team-kit user map').
 
 Note: Secrets are not included in the import because their values are not accessible via the GitHub API.`,
 		Args: cobra.ExactArgs(1),
@@ -59,6 +62,13 @@ Note: Secrets are not included in the import because their values are not access
 				Overwrite: overwrite,
 				DryRun:    dryrun,
 			}
+			if mapFile != "" {
+				compiledMappings, err := settings.NewCompiledMappingsFromFile(mapFile)
+				if err != nil {
+					return fmt.Errorf("failed to load usermap file %q: %w", mapFile, err)
+				}
+				importOpts.UserMap = compiledMappings
+			}
 			imported, err := cfgImporter.Import(cfgs, importOpts)
 			if err != nil {
 				return fmt.Errorf("failed to import environment config: %w", err)
@@ -82,6 +92,7 @@ Note: Secrets are not included in the import because their values are not access
 	f.StringVar(&dstEnv, "env", "", "Filter environments to import by name; if empty, all environments in the config file are considered (does not rename environments)")
 	f.BoolVar(&overwrite, "overwrite", false, "Overwrite existing environments at destination (default: false; skips environments that already exist)")
 	f.BoolVarP(&dryrun, "dryrun", "n", false, "Preview changes without applying them")
+	f.StringVar(&mapFile, "usermap", "", "User mapping file for reviewer login conversion during import (as produced by 'gh team-kit user map')")
 
 	cmdutil.AddFormatFlags(cmd, &opts.Exporter)
 	cmdflags.SetupFormatFlagWithNonJSONFormats(cmd, &opts.Exporter, &format, "", []string{"yaml"})

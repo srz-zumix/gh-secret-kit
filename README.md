@@ -239,6 +239,7 @@ Read and apply one or more GitHub Actions environment configurations (settings, 
 Specify `-` as `<input>` to read from stdin.
 Both single-environment and multi-environment (array) formats are supported.
 Use `--dryrun` to preview what would be applied without making any changes.
+Use `--usermap` to specify a user mapping file that converts reviewer logins during import (as produced by `gh team-kit user map`).
 
 Note: Secrets are not included in the import because their values are not accessible via the GitHub API.
 
@@ -253,6 +254,7 @@ Note: Secrets are not included in the import because their values are not access
 - `--format string`: Output format: `{json|yaml}` (default: `yaml`)
 - `--overwrite`: Overwrite existing environments at destination (default: false; skips environments that already exist)
 - `--repo string` / `-R`: Destination repository (e.g., `owner/repo`; defaults to current repository)
+- `--usermap string`: User mapping file for reviewer login conversion during import
 
 #### env list
 
