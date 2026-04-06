@@ -21,6 +21,7 @@ type planConfig struct {
 	NoDeployKeys bool
 	Overwrite    bool
 	Unarchive    bool
+	UserMap      string
 }
 
 // PlanEntry represents a single migration command with an optional comment listing secrets.
@@ -31,10 +32,12 @@ type PlanEntry struct {
 
 // EnvPlanEntry represents a migration plan entry for an environment.
 // Output rules:
-//   - HasReviewers=true: all commands emitted as comments (reviewer names may not exist in dst org)
+//   - HasReviewers=true, UserMap empty: all commands emitted as comments (reviewer names may not exist in dst org)
+//   - HasReviewers=true, UserMap non-empty: ExportImportCmd executable (with --usermap), MigrateAllCmd executable
 //   - HasReviewers=false, DstEnvExists=false: ExportImportCmd executable (creates env), MigrateAllCmd executable
-//   - HasReviewers=false, DstEnvExists=true, Overwrite=false: ExportImportCmd commented out, EnvVariableCopyCmd executable, MigrateAllCmd executable
-//   - HasReviewers=false, DstEnvExists=true, Overwrite=true: ExportImportCmd executable (handles vars), MigrateAllCmd executable
+//   - HasReviewers=false, DstEnvExists=true, Overwrite=false, UserMap empty: ExportImportCmd commented out, EnvVariableCopyCmd executable, MigrateAllCmd executable
+//   - HasReviewers=false, DstEnvExists=true, Overwrite=false, UserMap non-empty: ExportImportCmd executable (with --usermap, handles vars), MigrateAllCmd executable
+//   - HasReviewers=false, DstEnvExists=true, Overwrite=true: ExportImportCmd executable (with --overwrite, handles vars), MigrateAllCmd executable
 type EnvPlanEntry struct {
 	SecretComment      string // # secrets: ... (may be empty)
 	VariablesComment   string // # variables: ... (may be empty)
@@ -42,8 +45,9 @@ type EnvPlanEntry struct {
 	EnvVariableCopyCmd string // env variable copy command (non-empty when variables exist)
 	MigrateAllCmd      string // migrate env all command
 	HasReviewers       bool
-	DstEnvExists       bool // true when the destination environment already exists
-	Overwrite          bool // true when --overwrite was specified
+	DstEnvExists       bool   // true when the destination environment already exists
+	Overwrite          bool   // true when --overwrite was specified
+	UserMap            string // non-empty when --usermap was specified
 }
 
 // PlanResult represents the migration plan result
@@ -99,6 +103,7 @@ Arguments:
 	f.BoolVar(&config.NoDeployKeys, "no-deploy-keys", false, "Skip deploy key scanning (avoids extra API calls per repository)")
 	f.BoolVar(&config.Overwrite, "overwrite", false, "Add --overwrite to generated migration and copy commands that support it and make env export | env import pipelines executable for existing destination environments")
 	f.BoolVar(&config.Unarchive, "unarchive", false, "Add --unarchive to generated migration commands")
+	f.StringVar(&config.UserMap, "usermap", "", "Add --usermap to generated env export | env import commands and make those pipelines executable even for existing destination environments")
 
 	_ = cmd.MarkFlagRequired("dst")
 
@@ -328,7 +333,7 @@ func buildEnvPlanEntry(src, dst repository.Repository, envName string, secretNam
 		migrateParts = append(migrateParts, "--unarchive")
 	}
 
-	// Build env variable copy command (used when destination env already exists and --overwrite is not set)
+	// Build env variable copy command (used when destination env already exists and --overwrite and --usermap are not set)
 	var envVariableCopyCmd string
 	if len(variableNames) > 0 {
 		var varParts []string
@@ -342,9 +347,7 @@ func buildEnvPlanEntry(src, dst repository.Repository, envName string, secretNam
 		}
 		envVariableCopyCmd = strings.Join(varParts, " ")
 	}
-	if config.Unarchive {
-		migrateParts = append(migrateParts, "--unarchive")
-	}
+
 
 	// Build env export | import pipeline (handles settings and variables)
 	exportImportCmd := fmt.Sprintf(
@@ -356,6 +359,9 @@ func buildEnvPlanEntry(src, dst repository.Repository, envName string, secretNam
 	if config.Overwrite {
 		exportImportCmd += " --overwrite"
 	}
+	if config.UserMap != "" {
+		exportImportCmd += fmt.Sprintf(" --usermap %s", shellQuote(config.UserMap))
+	}
 
 	return EnvPlanEntry{
 		SecretComment:      secretsComment(secretNames),
@@ -366,6 +372,7 @@ func buildEnvPlanEntry(src, dst repository.Repository, envName string, secretNam
 		HasReviewers:       hasReviewers,
 		DstEnvExists:       dstEnvExists,
 		Overwrite:          config.Overwrite,
+		UserMap:            config.UserMap,
 	}
 }
 
@@ -491,7 +498,7 @@ func printPlan(result *PlanResult) {
 		fmt.Println("# Environment secret migrations")
 		for _, entry := range result.EnvMigrates {
 			switch {
-			case entry.HasReviewers:
+			case entry.HasReviewers && entry.UserMap == "":
 				// Reviewer names may not exist in the destination org – emit everything as
 				// comments so the operator can manually adjust before running.
 				fmt.Println("# NOTE: environment has reviewers - manual resolution required")
@@ -515,16 +522,16 @@ func printPlan(result *PlanResult) {
 				fmt.Println(entry.ExportImportCmd)
 				fmt.Println(entry.MigrateAllCmd)
 			default:
-				// Destination environment already exists: comment out export|import to avoid
-				// overwriting existing settings, unless --overwrite was specified in which
-				// case export|import (with --overwrite) handles variables too.
+				// Destination environment already exists.
+				// With --overwrite or --usermap: export|import is executable and handles variables.
+				// Without either: export|import is commented out; env variable copy is emitted if variables exist.
 				if entry.SecretComment != "" {
 					fmt.Println(entry.SecretComment)
 				}
 				if entry.VariablesComment != "" {
 					fmt.Println(entry.VariablesComment)
 				}
-				if entry.Overwrite {
+				if entry.Overwrite || entry.UserMap != "" {
 					fmt.Println(entry.ExportImportCmd)
 				} else {
 					fmt.Println("# " + entry.ExportImportCmd)

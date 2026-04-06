@@ -477,12 +477,14 @@ Scan source organization for repositories with secrets, check if matching reposi
 
 This command does not perform any migration; it only outputs the commands that would be needed to migrate secrets from source to destination. Each migration command is preceded by a comment listing the secret names that will be migrated.
 
-For each environment with secrets or variables, the plan also outputs an `env export | env import` pipeline, an `env variable copy` command, and a `migrate env all` command. The output depends on the destination environment state and whether `--overwrite` is specified:
+For each environment with secrets or variables, the plan also outputs an `env export | env import` pipeline, an `env variable copy` command, and a `migrate env all` command. The output depends on the destination environment state and the flags specified:
 
 - **Destination environment does not exist**: Both `env export | env import` (creates the environment and copies variables) and `migrate env all` are output as executable commands.
-- **Destination environment exists, `--overwrite` not set**: `env export | env import` is commented out to avoid overwriting existing settings; `env variable copy` (if the environment has variables) and `migrate env all` are output as executable commands.
+- **Destination environment exists, `--overwrite` not set, `--usermap` not set**: `env export | env import` is commented out to avoid overwriting existing settings; `env variable copy` (if the environment has variables) and `migrate env all` are output as executable commands.
 - **Destination environment exists, `--overwrite` set**: Both `env export | env import` (with `--overwrite`, handles variables) and `migrate env all` (with `--overwrite`) are output as executable commands.
-- **Environment has required reviewers**: All commands are commented out because reviewer names may not be resolvable in the destination organization. Manual adjustment is required before running.
+- **Destination environment exists, `--usermap` set**: Both `env export | env import` (with `--usermap`, handles reviewer mapping and variables) and `migrate env all` are output as executable commands.
+- **Environment has required reviewers, `--usermap` not set**: All commands are commented out because reviewer names may not be resolvable in the destination organization. Manual adjustment is required before running.
+- **Environment has required reviewers, `--usermap` set**: `env export | env import` (with `--usermap`) and `migrate env all` are output as executable commands.
 
 When the source and destination organizations are on different hosts, deploy key migration commands (`deploy-key migrate`) are also included for each matching repository that has deploy keys. Use `--no-deploy-keys` to skip this extra per-repository API call.
 
@@ -497,6 +499,7 @@ When the source and destination organizations are on different hosts, deploy key
 - `--overwrite`: Add `--overwrite` to generated migration and copy commands that support it (default: false)
 - `--runner-label string`: Runner label for the workflow (default: "gh-secret-kit-migrate")
 - `--unarchive`: Add `--unarchive` to generated migration commands (default: false)
+- `--usermap string`: Add `--usermap` to generated `env export | env import` commands and make those pipelines executable even for existing destination environments
 
 #### migrate org
 
