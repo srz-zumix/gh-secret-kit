@@ -53,8 +53,7 @@ Note: Secrets cannot be exported because their values are not accessible via the
 	f.StringVar(&envName, "env", "", "Environment name to export (defaults to all environments)")
 	f.StringVarP(&output, "output", "o", "", "Output file path (defaults to stdout)")
 
-	cmdutil.AddFormatFlags(cmd, &exporter)
-	cmdflags.SetupFormatFlagWithNonJSONFormats(cmd, &exporter, &format, "", []string{"yaml"})
+	_ = cmdflags.AddFormatFlags(cmd, &exporter, &format, "", []string{"yaml"})
 
 	return cmd
 }
