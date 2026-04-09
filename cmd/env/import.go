@@ -94,8 +94,7 @@ Note: Secrets are not included in the import because their values are not access
 	f.BoolVarP(&dryrun, "dryrun", "n", false, "Preview changes without applying them")
 	f.StringVar(&mapFile, "usermap", "", "User mapping file for reviewer login conversion during import (as produced by 'gh team-kit user map')")
 
-	cmdutil.AddFormatFlags(cmd, &opts.Exporter)
-	cmdflags.SetupFormatFlagWithNonJSONFormats(cmd, &opts.Exporter, &format, "", []string{"yaml"})
+	_ = cmdflags.AddFormatFlags(cmd, &opts.Exporter, &format, "", []string{"yaml"})
 
 	return cmd
 }
