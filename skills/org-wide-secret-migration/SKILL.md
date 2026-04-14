@@ -93,7 +93,7 @@ gh secret-kit migrate plan source-org -d dest-org --unarchive
 The plan intelligently determines which commands are executable vs commented
 out based on the destination state:
 
-| Condition | `env export \| import` | `env variable copy` | `migrate env all` |
+| Condition | `env export | import` | `env variable copy` | `migrate env all` |
 | --- | --- | --- | --- |
 | Destination env does not exist | executable | — | executable |
 | Destination env exists, no `--overwrite`/`--usermap` | commented out | executable (if vars) | executable |
