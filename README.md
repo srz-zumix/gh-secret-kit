@@ -16,6 +16,16 @@ gh extension install srz-zumix/gh-secret-kit
 
 For detailed installation instructions and setup for each shell, see the [Shell Completion Guide](https://github.com/srz-zumix/go-gh-extension/blob/main/docs/shell-completion.md).
 
+## Agent Skills
+
+gh-secret-kit bundles agent skills for GitHub Copilot. Use the `skills` subcommand to install and manage them.
+
+```sh
+gh secret-kit skills [subcommand] [args...]
+```
+
+For details, see [Songmu/skillsmith](https://github.com/Songmu/skillsmith).
+
 ## Commands
 
 ### Copy GitHub Actions Variables
