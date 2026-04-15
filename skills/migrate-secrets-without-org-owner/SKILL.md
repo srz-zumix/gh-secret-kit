@@ -167,9 +167,9 @@ gh secret-kit migrate env all \
 gh secret-kit variable copy enterprise.internal/owner/dest-repo \
   -R owner/source-repo --overwrite
 
-# Migrate deploy keys (cross-host only)
+# Migrate deploy keys (cross-host only, exclude keys with "test" in title)
 gh secret-kit deploy-key migrate enterprise.internal/owner/dest-repo \
-  -R owner/source-repo
+  -R owner/source-repo --exclude test
 
 # Clean up
 gh secret-kit migrate runner teardown -R owner/source-repo

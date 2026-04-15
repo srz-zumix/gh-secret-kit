@@ -49,6 +49,10 @@ host, but cross-host migration is supported.
 ```bash
 gh secret-kit deploy-key migrate enterprise.internal/owner/dest-repo \
   -R owner/source-repo
+
+# Exclude specific keys by title (substring match)
+gh secret-kit deploy-key migrate enterprise.internal/owner/dest-repo \
+  -R owner/source-repo --exclude test,temporary
 ```
 
 ### 2. Copy Variables (No Runner Needed)
@@ -170,7 +174,7 @@ gh secret-kit migrate runner setup -R owner/source-repo
 
 # Migrate everything for this repo
 gh secret-kit deploy-key migrate enterprise.internal/owner/dest-repo \
-  -R owner/source-repo
+  -R owner/source-repo --exclude test
 
 gh secret-kit variable copy enterprise.internal/owner/dest-repo \
   -R owner/source-repo --overwrite

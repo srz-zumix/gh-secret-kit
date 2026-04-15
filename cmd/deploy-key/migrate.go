@@ -3,6 +3,7 @@ package deploykey
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/srz-zumix/go-gh-extension/pkg/gh"
@@ -12,6 +13,7 @@ import (
 // NewMigrateCmd creates the deploy-key migrate command
 func NewMigrateCmd() *cobra.Command {
 	var repo string
+	var excludeNames []string
 
 	cmd := &cobra.Command{
 		Use:   "migrate <dst>",
@@ -60,6 +62,10 @@ keys across different hosts (e.g., github.com to a GitHub Enterprise Server inst
 
 			for _, key := range keys {
 				title := key.GetTitle()
+				if shouldExcludeKey(title, excludeNames) {
+					fmt.Printf("Skipped deploy key: %q (matched exclude pattern)\n", title)
+					continue
+				}
 				keyStr := key.GetKey()
 				readOnly := key.GetReadOnly()
 				if _, copyErr := gh.CreateDeployKey(ctx, dstClient, dst, title, keyStr, readOnly); copyErr != nil {
@@ -74,6 +80,17 @@ keys across different hosts (e.g., github.com to a GitHub Enterprise Server inst
 
 	f := cmd.Flags()
 	f.StringVarP(&repo, "repo", "R", "", "Source repository (e.g., owner/repo; defaults to current repository)")
+	f.StringSliceVar(&excludeNames, "exclude", []string{}, "Exclude deploy keys whose title contains the specified string (comma-separated or repeated flag)")
 
 	return cmd
+}
+
+// shouldExcludeKey returns true if the key title contains any of the exclude patterns.
+func shouldExcludeKey(title string, excludeNames []string) bool {
+	for _, pattern := range excludeNames {
+		if strings.Contains(title, pattern) {
+			return true
+		}
+	}
+	return false
 }
