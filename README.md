@@ -18,7 +18,7 @@ For detailed installation instructions and setup for each shell, see the [Shell 
 
 ## Agent Skills
 
-gh-secret-kit bundles agent skills for GitHub Copilot. Use the `skills` subcommand to install and manage them.
+gh-secret-kit bundles agent skills for AI. Use the `skills` subcommand to install and manage them.
 
 ```sh
 gh secret-kit skills [subcommand] [args...]
