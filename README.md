@@ -149,7 +149,7 @@ Note: GitHub does not allow the same public key to be registered as a deploy key
 
 **Options:**
 
-- `--exclude strings`: Exclude deploy keys whose title contains the specified string (comma-separated or repeated flag)
+- `--exclude strings`: Exclude deploy keys whose title contains the specified string (comma-separated or repeated flag; default: none)
 - `--repo string` / `-R`: Source repository (e.g., `owner/repo`; defaults to current repository)
 
 #### deploy-key setting
