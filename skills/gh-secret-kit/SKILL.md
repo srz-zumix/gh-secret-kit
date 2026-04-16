@@ -197,12 +197,16 @@ gh secret-kit deploy-key list -R owner/repo
 ```bash
 # Migrate deploy keys to another host
 gh secret-kit deploy-key migrate enterprise.internal/owner/repo -R owner/repo
+
+# Exclude keys whose title contains one or more substrings
+gh secret-kit deploy-key migrate enterprise.internal/owner/repo -R owner/repo --exclude test,temporary
 ```
 
 Note: GitHub does not allow the same public key on multiple repositories on the same host. This command is intended for cross-host migration (e.g., github.com to GitHub Enterprise Server).
 
 | Flag | Description | Default |
 | --- | --- | --- |
+| `--exclude strings` | Exclude keys whose title contains any of the specified substrings (comma-separated or repeated) | |
 | `--repo string` / `-R` | Source repository | current repo |
 
 ### Deploy Key Setting
@@ -669,6 +673,9 @@ gh auth login --hostname enterprise.internal
 
 # Migrate deploy keys (cross-host only)
 gh secret-kit deploy-key migrate enterprise.internal/owner/repo -R owner/repo
+
+# Migrate deploy keys, excluding keys with "test" in the title
+gh secret-kit deploy-key migrate enterprise.internal/owner/repo -R owner/repo --exclude test
 
 # Migrate secrets
 gh secret-kit migrate repo all \
