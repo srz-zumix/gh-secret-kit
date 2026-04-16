@@ -198,7 +198,7 @@ gh secret-kit deploy-key list -R owner/repo
 # Migrate deploy keys to another host
 gh secret-kit deploy-key migrate enterprise.internal/owner/repo -R owner/repo
 
-# Exclude keys whose title contains a specific string
+# Exclude keys whose title contains one or more substrings
 gh secret-kit deploy-key migrate enterprise.internal/owner/repo -R owner/repo --exclude test,temporary
 ```
 
