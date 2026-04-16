@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/srz-zumix/go-gh-extension/pkg/cmdflags"
 	"github.com/srz-zumix/go-gh-extension/pkg/gh"
 	"github.com/srz-zumix/go-gh-extension/pkg/parser"
 )
@@ -80,7 +81,7 @@ keys across different hosts (e.g., github.com to a GitHub Enterprise Server inst
 
 	f := cmd.Flags()
 	f.StringVarP(&repo, "repo", "R", "", "Source repository (e.g., owner/repo; defaults to current repository)")
-	f.StringSliceVar(&excludeNames, "exclude", []string{}, "Exclude deploy keys whose title contains the specified string (comma-separated or repeated flag)")
+	cmdflags.NonEmptyStringSliceVar(cmd, &excludeNames, "exclude", []string{}, "Exclude deploy keys whose title contains the specified string (comma-separated or repeated flag)")
 
 	return cmd
 }
