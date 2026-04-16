@@ -14,7 +14,7 @@ import (
 // NewMigrateCmd creates the deploy-key migrate command
 func NewMigrateCmd() *cobra.Command {
 	var repo string
-	var excludeNames []string
+	var excludePatterns []string
 
 	cmd := &cobra.Command{
 		Use:   "migrate <dst>",
@@ -63,7 +63,7 @@ keys across different hosts (e.g., github.com to a GitHub Enterprise Server inst
 
 			for _, key := range keys {
 				title := key.GetTitle()
-				if shouldExcludeKey(title, excludeNames) {
+				if shouldExcludeKey(title, excludePatterns) {
 					fmt.Printf("Skipped deploy key: %q (matched exclude pattern)\n", title)
 					continue
 				}
@@ -81,7 +81,7 @@ keys across different hosts (e.g., github.com to a GitHub Enterprise Server inst
 
 	f := cmd.Flags()
 	f.StringVarP(&repo, "repo", "R", "", "Source repository (e.g., owner/repo; defaults to current repository)")
-	cmdflags.NonEmptyStringSliceVar(cmd, &excludeNames, "exclude", []string{}, "Exclude deploy keys whose title contains the specified string (comma-separated or repeated flag)")
+	cmdflags.NonEmptyStringSliceVar(cmd, &excludePatterns, "exclude", []string{}, "Exclude deploy keys whose title contains the specified string (comma-separated or repeated flag)")
 
 	return cmd
 }
