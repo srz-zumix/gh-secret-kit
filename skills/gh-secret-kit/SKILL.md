@@ -206,7 +206,7 @@ Note: GitHub does not allow the same public key on multiple repositories on the 
 
 | Flag | Description | Default |
 | --- | --- | --- |
-| `--exclude strings` | Exclude keys whose title contains the specified string (comma-separated or repeated) | |
+| `--exclude strings` | Exclude keys whose title contains any of the specified substrings (comma-separated or repeated) | |
 | `--repo string` / `-R` | Source repository | current repo |
 
 ### Deploy Key Setting
