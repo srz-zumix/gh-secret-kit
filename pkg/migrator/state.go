@@ -12,13 +12,15 @@ const stateFileName = "migrate-state.json"
 
 // MigrateState holds the persistent state for a runner setup/teardown lifecycle
 type MigrateState struct {
-	Source       string    `json:"source"`
-	ScaleSetID   int       `json:"scale_set_id"`
-	ScaleSetName string    `json:"scale_set_name"`
-	RunnerPID    int       `json:"runner_pid,omitempty"`
-	RunnerDir    string    `json:"runner_dir"`
-	ConfigURL    string    `json:"config_url"`
-	CreatedAt    time.Time `json:"created_at"`
+	Source             string    `json:"source"`
+	ScaleSetID         int       `json:"scale_set_id"`
+	ScaleSetName       string    `json:"scale_set_name"`
+	RunnerGroupID      int       `json:"runner_group_id,omitempty"`
+	RunnerGroupCreated bool      `json:"runner_group_created,omitempty"`
+	RunnerPID          int       `json:"runner_pid,omitempty"`
+	RunnerDir          string    `json:"runner_dir"`
+	ConfigURL          string    `json:"config_url"`
+	CreatedAt          time.Time `json:"created_at"`
 }
 
 // stateDir returns the directory for storing state files

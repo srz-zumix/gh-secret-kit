@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/srz-zumix/gh-secret-kit/cmd/migrate/types"
 	"github.com/srz-zumix/gh-secret-kit/pkg/migrator"
+	"github.com/srz-zumix/go-gh-extension/pkg/gh"
 	"github.com/srz-zumix/go-gh-extension/pkg/logger"
 )
 
@@ -90,7 +91,11 @@ func runTeardown(cmd *cobra.Command, args []string) error {
 	if !scaleSetDeleted {
 		// Try to find and delete by name
 		logger.Info(fmt.Sprintf("Looking up runner scale set by name: %s", teardownRunnerOpts.RunnerLabel))
-		scaleSet, err := migrator.FindRunnerScaleSet(ctx, scalesetClient, teardownRunnerOpts.RunnerLabel)
+		runnerGroupID := migrator.DefaultRunnerGroupID
+		if stateErr == nil && state.RunnerGroupID > 0 {
+			runnerGroupID = state.RunnerGroupID
+		}
+		scaleSet, err := migrator.FindRunnerScaleSet(ctx, scalesetClient, teardownRunnerOpts.RunnerLabel, runnerGroupID)
 		if err != nil {
 			logger.Warn(fmt.Sprintf("Failed to find scale set by name: %v", err))
 		} else if scaleSet != nil {
@@ -103,6 +108,21 @@ func runTeardown(cmd *cobra.Command, args []string) error {
 			}
 		} else {
 			logger.Info("No runner scale set found to delete")
+		}
+	}
+
+	// Delete runner group if it was created during setup
+	if stateErr == nil && state.RunnerGroupCreated && state.RunnerGroupID > 0 {
+		logger.Info(fmt.Sprintf("Deleting runner group (ID: %d) created during setup...", state.RunnerGroupID))
+		ghClient, err := gh.NewGitHubClientWithRepo(sourceRepo)
+		if err != nil {
+			logger.Warn(fmt.Sprintf("Failed to create GitHub client for runner group deletion: %v", err))
+		} else {
+			if err := gh.DeleteOrgRunnerGroup(ctx, ghClient, sourceRepo, int64(state.RunnerGroupID)); err != nil {
+				logger.Warn(fmt.Sprintf("Failed to delete runner group: %v", err))
+			} else {
+				logger.Info("Runner group deleted")
+			}
 		}
 	}
 

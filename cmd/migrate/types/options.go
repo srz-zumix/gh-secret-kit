@@ -23,6 +23,7 @@ type CommonOptions struct {
 // RunnerOptions holds options for runner commands
 type RunnerOptions struct {
 	RunnerLabel string
+	RunnerGroup string
 	MaxRunners  int
 }
 
