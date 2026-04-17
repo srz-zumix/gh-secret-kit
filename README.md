@@ -762,6 +762,7 @@ Register a self-hosted runner and start a message session listener for secret mi
 
 - `--max-runners int`: Maximum number of concurrent runners (default: 2)
 - `--repo string` / `-R`: Source repository (owner/repo); when omitted uses the first argument as org or falls back to the current repository
+- `--runner-group string`: Runner group name to place the scale set in (created automatically if not found; defaults to the default runner group when omitted)
 - `--runner-label string`: Custom label for the runner (default: "gh-secret-kit-migrate")
 
 #### migrate runner teardown
@@ -770,11 +771,12 @@ Register a self-hosted runner and start a message session listener for secret mi
 gh secret-kit migrate runner teardown [[HOST]/ORG] [flags]
 ```
 
-Unregister and stop the self-hosted runner. Deregisters any leftover runner instances via `config.sh remove`, stops the runner process, deletes the runner scale set from the source repository/organization, and cleans up local runner files.
+Unregister and stop the self-hosted runner. Deregisters any leftover runner instances via `config.sh remove`, stops the runner process, deletes the runner scale set from the source repository/organization, and cleans up local runner files. If the runner group was created during setup, it is also deleted.
 
 **Options:**
 
 - `--repo string` / `-R`: Source repository (owner/repo); when omitted uses the first argument as org or falls back to the current repository
+- `--runner-group string`: Runner group name to search for the scale set (defaults to the default runner group when state file is unavailable)
 - `--runner-label string`: Label of the runner to tear down (default: "gh-secret-kit-migrate")
 
 #### migrate runner prune

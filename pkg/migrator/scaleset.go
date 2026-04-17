@@ -68,11 +68,12 @@ func SetScaleSetSystemInfo(client *scaleset.Client, scaleSetID int) {
 	})
 }
 
-// CreateRunnerScaleSet creates a new runner scale set with the given name as both name and label
-func CreateRunnerScaleSet(ctx context.Context, client *scaleset.Client, name string) (*scaleset.RunnerScaleSet, error) {
+// CreateRunnerScaleSet creates a new runner scale set with the given name as both name and label.
+// runnerGroupID specifies which runner group the scale set belongs to (use DefaultRunnerGroupID for the default group).
+func CreateRunnerScaleSet(ctx context.Context, client *scaleset.Client, name string, runnerGroupID int) (*scaleset.RunnerScaleSet, error) {
 	return client.CreateRunnerScaleSet(ctx, &scaleset.RunnerScaleSet{
 		Name:          name,
-		RunnerGroupID: DefaultRunnerGroupID,
+		RunnerGroupID: runnerGroupID,
 		Labels: []scaleset.Label{
 			{Name: name},
 		},
@@ -82,9 +83,10 @@ func CreateRunnerScaleSet(ctx context.Context, client *scaleset.Client, name str
 	})
 }
 
-// FindRunnerScaleSet finds a runner scale set by name in the default runner group
-func FindRunnerScaleSet(ctx context.Context, client *scaleset.Client, name string) (*scaleset.RunnerScaleSet, error) {
-	return client.GetRunnerScaleSet(ctx, DefaultRunnerGroupID, name)
+// FindRunnerScaleSet finds a runner scale set by name in the specified runner group.
+// runnerGroupID specifies which runner group to search in (use DefaultRunnerGroupID for the default group).
+func FindRunnerScaleSet(ctx context.Context, client *scaleset.Client, name string, runnerGroupID int) (*scaleset.RunnerScaleSet, error) {
+	return client.GetRunnerScaleSet(ctx, runnerGroupID, name)
 }
 
 // GetRunnerScaleSetByID retrieves a runner scale set by its ID

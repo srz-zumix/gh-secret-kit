@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/actions/scaleset"
 	"github.com/cli/go-gh/v2/pkg/repository"
 	"github.com/spf13/cobra"
 	"github.com/srz-zumix/gh-secret-kit/cmd/migrate/types"
@@ -49,6 +50,7 @@ Arguments:
 
 	// Runner-specific flags
 	f.StringVar(&setupRunnerOpts.RunnerLabel, "runner-label", types.DefaultRunnerLabel, "Custom label for the runner")
+	f.StringVar(&setupRunnerOpts.RunnerGroup, "runner-group", "", "Runner group name (created if not found; defaults to the default runner group)")
 	f.IntVar(&setupRunnerOpts.MaxRunners, "max-runners", 2, "Maximum number of concurrent runners")
 
 	return cmd
@@ -88,9 +90,21 @@ func setupNewRunner(ctx context.Context, sourceRepo repository.Repository) error
 		return fmt.Errorf("failed to create scaleset client: %w", err)
 	}
 
+	// Resolve runner group ID
+	runnerGroupID := migrator.DefaultRunnerGroupID
+	runnerGroupCreated := false
+	if setupRunnerOpts.RunnerGroup != "" {
+		resolvedID, created, err := resolveRunnerGroup(ctx, client, scalesetClient, sourceRepo, setupRunnerOpts.RunnerGroup)
+		if err != nil {
+			return err
+		}
+		runnerGroupID = resolvedID
+		runnerGroupCreated = created
+	}
+
 	// Create runner scale set
-	logger.Info(fmt.Sprintf("Creating runner scale set: %s", setupRunnerOpts.RunnerLabel))
-	scaleSet, err := migrator.CreateRunnerScaleSet(ctx, scalesetClient, setupRunnerOpts.RunnerLabel)
+	logger.Info(fmt.Sprintf("Creating runner scale set: %s (runner group ID=%d)", setupRunnerOpts.RunnerLabel, runnerGroupID))
+	scaleSet, err := migrator.CreateRunnerScaleSet(ctx, scalesetClient, setupRunnerOpts.RunnerLabel, runnerGroupID)
 	if err != nil {
 		return fmt.Errorf("failed to create runner scale set: %w", err)
 	}
@@ -102,9 +116,15 @@ func setupNewRunner(ctx context.Context, sourceRepo repository.Repository) error
 		scaleSet.ID, scaleSet.Name, scaleSet.RunnerGroupID, scaleSet.RunnerGroupName, labelNames))
 
 	// Verify runner group accessibility
-	runnerGroup, err := migrator.GetRunnerGroupByName(ctx, scalesetClient, "default")
+	runnerGroupName := "default"
+	if setupRunnerOpts.RunnerGroup != "" {
+		runnerGroupName = setupRunnerOpts.RunnerGroup
+	}
+	runnerGroup, err := migrator.GetRunnerGroupByName(ctx, scalesetClient, runnerGroupName)
 	if err != nil {
-		logger.Warn(fmt.Sprintf("Failed to verify runner group 'default': %v", err))
+		logger.Warn(fmt.Sprintf("Failed to verify runner group '%s': %v", runnerGroupName, err))
+	} else if runnerGroup == nil {
+		logger.Warn(fmt.Sprintf("Runner group '%s' was not found during verification", runnerGroupName))
 	} else {
 		logger.Info(fmt.Sprintf("Runner group verified: ID=%d, Name=%s, IsDefault=%v", runnerGroup.ID, runnerGroup.Name, runnerGroup.IsDefault))
 	}
@@ -152,12 +172,14 @@ func setupNewRunner(ctx context.Context, sourceRepo repository.Repository) error
 		sourceString = sourceRepo.Owner + "/" + sourceRepo.Name
 	}
 	state := &migrator.MigrateState{
-		Source:       sourceString,
-		ScaleSetID:   scaleSet.ID,
-		ScaleSetName: scaleSet.Name,
-		RunnerDir:    runnerDir,
-		ConfigURL:    configURL,
-		CreatedAt:    time.Now(),
+		Source:             sourceString,
+		ScaleSetID:         scaleSet.ID,
+		ScaleSetName:       scaleSet.Name,
+		RunnerGroupID:      runnerGroupID,
+		RunnerGroupCreated: runnerGroupCreated,
+		RunnerDir:          runnerDir,
+		ConfigURL:          configURL,
+		CreatedAt:          time.Now(),
 	}
 	if err := migrator.SaveState(state); err != nil {
 		logger.Warn(fmt.Sprintf("Failed to save migration state: %v", err))
@@ -234,4 +256,27 @@ func cleanupScaleSet(ctx context.Context, client interface {
 	if err := client.DeleteRunnerScaleSet(ctx, scaleSetID); err != nil {
 		logger.Error(fmt.Sprintf("Failed to clean up scale set: %v", err))
 	}
+}
+
+// resolveRunnerGroup resolves a runner group by name, creating it if it does not exist.
+// Returns the runner group ID and whether the group was newly created.
+func resolveRunnerGroup(ctx context.Context, client *gh.GitHubClient, scalesetClient *scaleset.Client, sourceRepo repository.Repository, groupName string) (int, bool, error) {
+	// First, try to find the runner group via the scaleset client.
+	group, err := migrator.GetRunnerGroupByName(ctx, scalesetClient, groupName)
+	if err != nil {
+		return 0, false, fmt.Errorf("failed to get runner group '%s': %w", groupName, err)
+	}
+	if group != nil {
+		logger.Info(fmt.Sprintf("Found runner group: ID=%d, Name=%s", group.ID, group.Name))
+		return group.ID, false, nil
+	}
+
+	// Runner group was not found; create it via the GitHub API.
+	logger.Info(fmt.Sprintf("Runner group '%s' not found, creating...", groupName))
+	created, err := gh.CreateOrgRunnerGroup(ctx, client, sourceRepo, groupName)
+	if err != nil {
+		return 0, false, fmt.Errorf("failed to create runner group '%s': %w", groupName, err)
+	}
+	logger.Info(fmt.Sprintf("Created runner group: ID=%d, Name=%s", created.GetID(), created.GetName()))
+	return int(created.GetID()), true, nil
 }
