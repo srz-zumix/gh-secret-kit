@@ -395,12 +395,16 @@ gh secret-kit migrate runner setup myorg --runner-label custom-label
 
 # Set max concurrent runners
 gh secret-kit migrate runner setup myorg --max-runners 4
+
+# Use custom runner group (creates if not exists)
+gh secret-kit migrate runner setup myorg --runner-group custom-group
 ```
 
 | Flag | Description | Default |
 | --- | --- | --- |
 | `--max-runners int` | Maximum concurrent runners | 2 |
 | `--repo string` / `-R` | Source repository | |
+| `--runner-group string` | Runner group name | default |
 | `--runner-label string` | Custom runner label | gh-secret-kit-migrate |
 
 ### Runner Teardown
@@ -412,6 +416,12 @@ gh secret-kit migrate runner teardown myorg
 # Teardown runner for a specific repository
 gh secret-kit migrate runner teardown -R owner/repo
 ```
+
+Teardown cleans up all resources created during setup:
+- Stops the runner process
+- Deletes the runner scale set
+- Deletes the runner group if it was created during setup
+- Removes local runner files
 
 | Flag | Description | Default |
 | --- | --- | --- |

@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/srz-zumix/gh-secret-kit/cmd/migrate/types"
 	"github.com/srz-zumix/gh-secret-kit/pkg/migrator"
+	"github.com/srz-zumix/go-gh-extension/pkg/gh"
 	"github.com/srz-zumix/go-gh-extension/pkg/logger"
 )
 
@@ -103,6 +104,30 @@ func runTeardown(cmd *cobra.Command, args []string) error {
 			}
 		} else {
 			logger.Info("No runner scale set found to delete")
+		}
+	}
+
+	// Delete runner group if it was created during setup
+	if stateErr == nil && state.RunnerGroupCreated && state.RunnerGroupName != "" {
+		logger.Info("Deleting runner group created during setup...")
+		client, err := gh.NewGitHubClientWithRepo(sourceRepo)
+		if err != nil {
+			logger.Warn(fmt.Sprintf("Failed to create GitHub client for runner group deletion: %v", err))
+		} else {
+			// Find the runner group by name to get its ID
+			group, err := gh.FindOrgRunnerGroup(ctx, client, sourceRepo, state.RunnerGroupName)
+			if err != nil {
+				logger.Warn(fmt.Sprintf("Failed to find runner group '%s': %v", state.RunnerGroupName, err))
+			} else if group != nil {
+				// Delete the runner group
+				if err := gh.DeleteOrgRunnerGroup(ctx, client, sourceRepo, group.GetID()); err != nil {
+					logger.Warn(fmt.Sprintf("Failed to delete runner group '%s' (ID=%d): %v", group.GetName(), group.GetID(), err))
+				} else {
+					logger.Info(fmt.Sprintf("Deleted runner group: %s (ID=%d)", group.GetName(), group.GetID()))
+				}
+			} else {
+				logger.Warn(fmt.Sprintf("Runner group '%s' not found for deletion", state.RunnerGroupName))
+			}
 		}
 	}
 

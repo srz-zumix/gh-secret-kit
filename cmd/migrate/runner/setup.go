@@ -49,6 +49,7 @@ Arguments:
 
 	// Runner-specific flags
 	f.StringVar(&setupRunnerOpts.RunnerLabel, "runner-label", types.DefaultRunnerLabel, "Custom label for the runner")
+	f.StringVar(&setupRunnerOpts.RunnerGroup, "runner-group", "default", "Runner group name to use for the scale set")
 	f.IntVar(&setupRunnerOpts.MaxRunners, "max-runners", 2, "Maximum number of concurrent runners")
 
 	return cmd
@@ -72,10 +73,16 @@ func setupNewRunner(ctx context.Context, sourceRepo repository.Repository) error
 		return fmt.Errorf("migration state already exists; run 'runner teardown' first or remove the state file")
 	}
 
-	// Initialize GitHub client (for registration token)
+	// Initialize GitHub client (for registration token and runner group management)
 	client, err := gh.NewGitHubClientWithRepo(sourceRepo)
 	if err != nil {
 		return fmt.Errorf("failed to create GitHub client: %w", err)
+	}
+
+	// Get or create runner group
+	runnerGroupID, created, err := getOrCreateRunnerGroup(ctx, client, sourceRepo, setupRunnerOpts.RunnerGroup)
+	if err != nil {
+		return fmt.Errorf("failed to get or create runner group: %w", err)
 	}
 
 	// Build GitHub config URL for scaleset
@@ -90,7 +97,7 @@ func setupNewRunner(ctx context.Context, sourceRepo repository.Repository) error
 
 	// Create runner scale set
 	logger.Info(fmt.Sprintf("Creating runner scale set: %s", setupRunnerOpts.RunnerLabel))
-	scaleSet, err := migrator.CreateRunnerScaleSet(ctx, scalesetClient, setupRunnerOpts.RunnerLabel)
+	scaleSet, err := migrator.CreateRunnerScaleSetWithGroup(ctx, scalesetClient, setupRunnerOpts.RunnerLabel, runnerGroupID)
 	if err != nil {
 		return fmt.Errorf("failed to create runner scale set: %w", err)
 	}
@@ -152,12 +159,14 @@ func setupNewRunner(ctx context.Context, sourceRepo repository.Repository) error
 		sourceString = sourceRepo.Owner + "/" + sourceRepo.Name
 	}
 	state := &migrator.MigrateState{
-		Source:       sourceString,
-		ScaleSetID:   scaleSet.ID,
-		ScaleSetName: scaleSet.Name,
-		RunnerDir:    runnerDir,
-		ConfigURL:    configURL,
-		CreatedAt:    time.Now(),
+		Source:             sourceString,
+		ScaleSetID:         scaleSet.ID,
+		ScaleSetName:       scaleSet.Name,
+		RunnerDir:          runnerDir,
+		ConfigURL:          configURL,
+		RunnerGroupName:    setupRunnerOpts.RunnerGroup,
+		RunnerGroupCreated: created,
+		CreatedAt:          time.Now(),
 	}
 	if err := migrator.SaveState(state); err != nil {
 		logger.Warn(fmt.Sprintf("Failed to save migration state: %v", err))
@@ -234,4 +243,26 @@ func cleanupScaleSet(ctx context.Context, client interface {
 	if err := client.DeleteRunnerScaleSet(ctx, scaleSetID); err != nil {
 		logger.Error(fmt.Sprintf("Failed to clean up scale set: %v", err))
 	}
+}
+
+// getOrCreateRunnerGroup gets the runner group by name, or creates it if it doesn't exist
+func getOrCreateRunnerGroup(ctx context.Context, client *gh.GitHubClient, repo repository.Repository, groupName string) (int, bool, error) {
+	// Try to find existing runner group
+	group, err := gh.FindOrgRunnerGroup(ctx, client, repo, groupName)
+	if err != nil {
+		return 0, false, fmt.Errorf("failed to list runner groups: %w", err)
+	}
+	if group != nil {
+		logger.Info(fmt.Sprintf("Using existing runner group: %s (ID=%d)", group.GetName(), group.GetID()))
+		return int(group.GetID()), false, nil
+	}
+
+	// Runner group doesn't exist, create it
+	logger.Info(fmt.Sprintf("Runner group '%s' not found, creating it...", groupName))
+	newGroup, err := gh.CreateOrgRunnerGroup(ctx, client, repo, groupName)
+	if err != nil {
+		return 0, false, fmt.Errorf("failed to create runner group '%s': %w", groupName, err)
+	}
+	logger.Info(fmt.Sprintf("Created runner group: %s (ID=%d)", newGroup.GetName(), newGroup.GetID()))
+	return int(newGroup.GetID()), true, nil
 }

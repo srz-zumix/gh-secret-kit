@@ -762,6 +762,7 @@ Register a self-hosted runner and start a message session listener for secret mi
 
 - `--max-runners int`: Maximum number of concurrent runners (default: 2)
 - `--repo string` / `-R`: Source repository (owner/repo); when omitted uses the first argument as org or falls back to the current repository
+- `--runner-group string`: Runner group name to use for the scale set (default: "default")
 - `--runner-label string`: Custom label for the runner (default: "gh-secret-kit-migrate")
 
 #### migrate runner teardown

@@ -70,9 +70,14 @@ func SetScaleSetSystemInfo(client *scaleset.Client, scaleSetID int) {
 
 // CreateRunnerScaleSet creates a new runner scale set with the given name as both name and label
 func CreateRunnerScaleSet(ctx context.Context, client *scaleset.Client, name string) (*scaleset.RunnerScaleSet, error) {
+	return CreateRunnerScaleSetWithGroup(ctx, client, name, DefaultRunnerGroupID)
+}
+
+// CreateRunnerScaleSetWithGroup creates a new runner scale set with the given name and runner group ID
+func CreateRunnerScaleSetWithGroup(ctx context.Context, client *scaleset.Client, name string, runnerGroupID int) (*scaleset.RunnerScaleSet, error) {
 	return client.CreateRunnerScaleSet(ctx, &scaleset.RunnerScaleSet{
 		Name:          name,
-		RunnerGroupID: DefaultRunnerGroupID,
+		RunnerGroupID: runnerGroupID,
 		Labels: []scaleset.Label{
 			{Name: name},
 		},
