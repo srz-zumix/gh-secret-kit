@@ -123,6 +123,8 @@ func setupNewRunner(ctx context.Context, sourceRepo repository.Repository) error
 	runnerGroup, err := migrator.GetRunnerGroupByName(ctx, scalesetClient, runnerGroupName)
 	if err != nil {
 		logger.Warn(fmt.Sprintf("Failed to verify runner group '%s': %v", runnerGroupName, err))
+	} else if runnerGroup == nil {
+		logger.Warn(fmt.Sprintf("Runner group '%s' was not found during verification", runnerGroupName))
 	} else {
 		logger.Info(fmt.Sprintf("Runner group verified: ID=%d, Name=%s, IsDefault=%v", runnerGroup.ID, runnerGroup.Name, runnerGroup.IsDefault))
 	}
