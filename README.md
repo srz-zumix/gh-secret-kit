@@ -776,6 +776,7 @@ Unregister and stop the self-hosted runner. Deregisters any leftover runner inst
 **Options:**
 
 - `--repo string` / `-R`: Source repository (owner/repo); when omitted uses the first argument as org or falls back to the current repository
+- `--runner-group string`: Runner group name to search for the scale set (defaults to the default runner group when state file is unavailable)
 - `--runner-label string`: Label of the runner to tear down (default: "gh-secret-kit-migrate")
 
 #### migrate runner prune

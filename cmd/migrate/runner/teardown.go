@@ -40,6 +40,7 @@ Arguments:
 
 	// Runner-specific flags
 	f.StringVar(&teardownRunnerOpts.RunnerLabel, "runner-label", types.DefaultRunnerLabel, "Label of the runner to tear down")
+	f.StringVar(&teardownRunnerOpts.RunnerGroup, "runner-group", "", "Runner group name to search for the scale set (defaults to the default runner group when state file is unavailable)")
 
 	return cmd
 }
@@ -63,6 +64,22 @@ func runTeardown(cmd *cobra.Command, args []string) error {
 	scalesetClient, err := migrator.NewScaleSetClient(configURL)
 	if err != nil {
 		return fmt.Errorf("failed to create scaleset client: %w", err)
+	}
+
+	// Resolve runner group ID for name-based lookup
+	runnerGroupID := migrator.DefaultRunnerGroupID
+	if stateErr == nil && state.RunnerGroupID > 0 {
+		runnerGroupID = state.RunnerGroupID
+	} else if teardownRunnerOpts.RunnerGroup != "" {
+		// State is missing/unreadable; try to resolve runner group by name
+		group, err := migrator.GetRunnerGroupByName(ctx, scalesetClient, teardownRunnerOpts.RunnerGroup)
+		if err != nil {
+			logger.Warn(fmt.Sprintf("Failed to find runner group '%s': %v", teardownRunnerOpts.RunnerGroup, err))
+			logger.Warn("Falling back to default runner group for scale set lookup")
+		} else {
+			runnerGroupID = group.ID
+			logger.Info(fmt.Sprintf("Using runner group '%s' (ID=%d) for scale set lookup", group.Name, group.ID))
+		}
 	}
 
 	// Stop runner process if state has a PID (legacy or interrupted listener)
@@ -91,10 +108,6 @@ func runTeardown(cmd *cobra.Command, args []string) error {
 	if !scaleSetDeleted {
 		// Try to find and delete by name
 		logger.Info(fmt.Sprintf("Looking up runner scale set by name: %s", teardownRunnerOpts.RunnerLabel))
-		runnerGroupID := migrator.DefaultRunnerGroupID
-		if stateErr == nil && state.RunnerGroupID > 0 {
-			runnerGroupID = state.RunnerGroupID
-		}
 		scaleSet, err := migrator.FindRunnerScaleSet(ctx, scalesetClient, teardownRunnerOpts.RunnerLabel, runnerGroupID)
 		if err != nil {
 			logger.Warn(fmt.Sprintf("Failed to find scale set by name: %v", err))

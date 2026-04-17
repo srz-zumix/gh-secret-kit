@@ -415,6 +415,9 @@ gh secret-kit migrate runner teardown myorg
 
 # Teardown runner for a specific repository
 gh secret-kit migrate runner teardown -R owner/repo
+
+# Teardown runner in a specific runner group (when state file is unavailable)
+gh secret-kit migrate runner teardown myorg --runner-group my-runner-group
 ```
 
 If the runner group was created during setup, it is also deleted during teardown.
@@ -422,6 +425,7 @@ If the runner group was created during setup, it is also deleted during teardown
 | Flag | Description | Default |
 | --- | --- | --- |
 | `--repo string` / `-R` | Source repository | |
+| `--runner-group string` | Runner group name to search for the scale set | (default runner group when state file unavailable) |
 | `--runner-label string` | Label of the runner to tear down | gh-secret-kit-migrate |
 
 ### Runner Prune
