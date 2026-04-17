@@ -259,14 +259,17 @@ func cleanupScaleSet(ctx context.Context, client interface {
 // resolveRunnerGroup resolves a runner group by name, creating it if it does not exist.
 // Returns the runner group ID and whether the group was newly created.
 func resolveRunnerGroup(ctx context.Context, client *gh.GitHubClient, scalesetClient *scaleset.Client, sourceRepo repository.Repository, groupName string) (int, bool, error) {
-	// First, try to find the runner group via the scaleset client
+	// First, try to find the runner group via the scaleset client.
 	group, err := migrator.GetRunnerGroupByName(ctx, scalesetClient, groupName)
-	if err == nil && group != nil {
+	if err != nil {
+		return 0, false, fmt.Errorf("failed to get runner group '%s': %w", groupName, err)
+	}
+	if group != nil {
 		logger.Info(fmt.Sprintf("Found runner group: ID=%d, Name=%s", group.ID, group.Name))
 		return group.ID, false, nil
 	}
 
-	// Runner group not found; create it via the GitHub API
+	// Runner group was not found; create it via the GitHub API.
 	logger.Info(fmt.Sprintf("Runner group '%s' not found, creating...", groupName))
 	created, err := gh.CreateOrgRunnerGroup(ctx, client, sourceRepo, groupName)
 	if err != nil {
