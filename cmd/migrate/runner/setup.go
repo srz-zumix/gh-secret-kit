@@ -262,7 +262,7 @@ func cleanupScaleSet(ctx context.Context, client interface {
 // Returns the runner group ID and whether the group was newly created.
 func resolveRunnerGroup(ctx context.Context, client *gh.GitHubClient, scalesetClient *scaleset.Client, sourceRepo repository.Repository, groupName string) (int, bool, error) {
 	// First, try to find the runner group via the scaleset client.
-	group, err := migrator.GetRunnerGroupByName(ctx, scalesetClient, groupName)
+	group, err := migrator.FindRunnerGroupByName(ctx, scalesetClient, groupName)
 	if err != nil {
 		return 0, false, fmt.Errorf("failed to get runner group '%s': %w", groupName, err)
 	}

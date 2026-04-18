@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"strings"
 
 	"github.com/actions/scaleset"
 	"github.com/cli/go-gh/v2/pkg/auth"
@@ -97,6 +98,19 @@ func GetRunnerScaleSetByID(ctx context.Context, client *scaleset.Client, scaleSe
 // GetRunnerGroupByName retrieves a runner group by name
 func GetRunnerGroupByName(ctx context.Context, client *scaleset.Client, groupName string) (*scaleset.RunnerGroup, error) {
 	return client.GetRunnerGroupByName(ctx, groupName)
+}
+
+// FindRunnerGroupByName finds a runner group by name.
+// Returns (nil, nil) if the runner group is not found.
+func FindRunnerGroupByName(ctx context.Context, client *scaleset.Client, groupName string) (*scaleset.RunnerGroup, error) {
+	group, err := client.GetRunnerGroupByName(ctx, groupName)
+	if err != nil {
+		if strings.Contains(err.Error(), "no runner group found with name") {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return group, nil
 }
 
 // DeleteRunnerScaleSet deletes a runner scale set by ID
