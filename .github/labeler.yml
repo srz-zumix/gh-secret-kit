@@ -13,3 +13,9 @@ documentation:
     - any-glob-to-any-file:
       - 'docs/**'
       - README.md
+
+skills:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'skills/**'
+  - color: '#48d1cc'
