@@ -63,8 +63,11 @@ The generated script includes (in order):
    - `env variable copy` (when environment already exists at destination)
    - `migrate env all` (migrates environment secrets)
 4. **Variable copy** commands (`variable copy`) for repositories with variables
-5. **Deploy key migration** commands (for cross-host migrations only)
-6. **Runner teardown** instruction (commented out)
+5. **Organization secret migration** command (`migrate org all`) — included if
+   org-level secrets exist in the source organization
+6. **Organization variable copy** command — included if org-level variables exist
+7. **Deploy key migration** commands (for cross-host migrations only)
+8. **Runner teardown** instruction (commented out)
 
 Each command group is preceded by a comment listing the affected secret/variable
 names.
@@ -288,18 +291,26 @@ Organization-level secrets are migrated separately from repository secrets:
 # Start runner (if not already running)
 gh secret-kit migrate runner setup source-org
 
-# Migrate org secrets
+# Migrate org secrets (same host)
 gh secret-kit migrate org all \
   -s source-org/some-repo \
   -d dest-org
 
+# Migrate org secrets (cross-host: -d HOST/ORG)
+gh secret-kit migrate org all \
+  -s source-org/some-repo \
+  -d enterprise.internal/dest-org
+
 # Verify
 gh secret-kit migrate org check -s source-org -d dest-org
+# Or for cross-host
+gh secret-kit migrate org check -s source-org -d enterprise.internal/dest-org
 ```
 
 Note: `--src` (`-s`) for org migration takes a **repository** in the source
 organization (the workflow runs in that repository's context), while `--dst`
-(`-d`) takes the **destination organization name**.
+(`-d`) takes the **destination organization name** — or `HOST/ORG` for
+cross-host migrations.
 
 ## Security Notes
 

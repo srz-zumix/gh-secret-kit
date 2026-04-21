@@ -82,6 +82,10 @@ The secret name (e.g., `DST_PAT`) is what you pass to `--dst-token` in
 
 ## Full Workflow Example
 
+> **Note: `runner setup` / `runner teardown` argument format**
+> - `-R OWNER/REPO`: repository-scoped runner (requires repo admin only, no org owner needed)
+> - Positional arg `ORG-NAME`: organization-scoped runner (requires org owner)
+
 ### Repository Secret Migration
 
 ```bash
@@ -98,10 +102,12 @@ gh secret-kit migrate repo all \
   --dst-token DST_PAT
 
 # Verify (uses token value for local check)
+# If authenticated to the destination host: use $(gh auth token --hostname enterprise.internal)
+# If NOT authenticated (no gh auth login for that host): pass the token value directly
 gh secret-kit migrate repo check \
   -s owner/source-repo \
   -d enterprise.internal/owner/dest-repo \
-  --dst-token "$(gh auth token --hostname enterprise.internal)"
+  --dst-token "ghp_xxxxx"  # replace with actual token value
 
 # Clean up
 gh secret-kit migrate runner teardown -R owner/source-repo
@@ -125,12 +131,13 @@ gh secret-kit migrate env all \
   --dst-token DST_PAT
 
 # Verify
+# If authenticated: $(gh auth token --hostname enterprise.internal); otherwise pass token value directly
 gh secret-kit migrate env check \
   -s owner/source-repo \
   -d enterprise.internal/owner/dest-repo \
   --src-env production \
   --dst-env production \
-  --dst-token "$(gh auth token --hostname enterprise.internal)"
+  --dst-token "ghp_xxxxx"  # replace with actual token value
 
 # Clean up
 gh secret-kit migrate runner teardown -R owner/source-repo
@@ -146,20 +153,27 @@ gh secret set DST_PAT -R source-org/some-repo
 gh secret-kit migrate runner setup source-org
 
 # Terminal 2: Migrate org secrets
+# Note: org all/create uses -s OWNER/REPO (a repo in the org, for runner workflow)
 gh secret-kit migrate org all \
   -s source-org/some-repo \
   -d enterprise.internal/dest-org \
   --dst-token DST_PAT
 
 # Verify
+# Note: org check uses -s ORG-NAME (not OWNER/REPO — no runner involved)
+# If authenticated: $(gh auth token --hostname enterprise.internal); otherwise pass token value directly
 gh secret-kit migrate org check \
   -s source-org \
   -d enterprise.internal/dest-org \
-  --dst-token "$(gh auth token --hostname enterprise.internal)"
+  --dst-token "ghp_xxxxx"  # replace with actual token value
 
 # Clean up
 gh secret-kit migrate runner teardown source-org
 ```
+
+> **Note: `-s` argument format differs between `org all/create` and `org check`**
+> - `org all` / `org create`: `-s OWNER/REPO` (a repository inside the source org — used to host the runner workflow)
+> - `org check`: `-s ORG-NAME` (the org name only — runs locally, no runner needed)
 
 ## Step-by-Step (Without all)
 
@@ -179,10 +193,11 @@ gh secret-kit migrate repo create \
 gh secret-kit migrate repo run -s owner/source-repo --wait
 
 # check needs the actual token value
+# If authenticated: $(gh auth token --hostname enterprise.internal); otherwise pass token value directly
 gh secret-kit migrate repo check \
   -s owner/source-repo \
   -d enterprise.internal/owner/dest-repo \
-  --dst-token "$(gh auth token --hostname enterprise.internal)"
+  --dst-token "ghp_xxxxx"  # replace with actual token value
 
 gh secret-kit migrate repo delete -s owner/source-repo
 ```

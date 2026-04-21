@@ -416,16 +416,18 @@ gh secret-kit migrate runner teardown myorg
 # Teardown runner for a specific repository
 gh secret-kit migrate runner teardown -R owner/repo
 
-# Teardown runner in a specific runner group (when state file is unavailable)
+# Teardown runner with explicit runner group (when state file is unavailable)
 gh secret-kit migrate runner teardown myorg --runner-group my-runner-group
 ```
 
 If the runner group was created during setup, it is also deleted during teardown.
+Normally, teardown reads the runner group from the saved state file.
+Specifying `--runner-group` explicitly is required when the state file is missing, and is harmless when the state file exists.
 
 | Flag | Description | Default |
 | --- | --- | --- |
 | `--repo string` / `-R` | Source repository | |
-| `--runner-group string` | Runner group name to search for the scale set | (default runner group when state file unavailable) |
+| `--runner-group string` | Runner group name to locate the scale set; reads from state file if omitted | |
 | `--runner-label string` | Label of the runner to tear down | gh-secret-kit-migrate |
 
 ### Runner Prune
@@ -489,7 +491,7 @@ gh secret-kit migrate repo delete -s owner/source
 | --- | --- | --- |
 | `--branch string` | Topic branch name | gh-secret-kit-migrate |
 | `--dst string` / `-d` | Destination repository (`owner/repo` or `HOST/OWNER/REPO`) | |
-| `--exclude-secrets strings` | Secret names to exclude | |
+| `--exclude-secrets strings` | Secret names to exclude (exact name match only — no substring matching; use `migrate list` first to find exact names, comma-separated or repeated) | |
 | `--label string` | Label name for triggering | gh-secret-kit-migrate |
 | `--overwrite` | Overwrite existing secrets | false |
 | `--rename strings` | `OLD_NAME=NEW_NAME` mapping (repeatable) | |
@@ -507,7 +509,12 @@ gh secret-kit migrate repo delete -s owner/source
 
 ```bash
 # Full pipeline for organization secrets
+# Note: -s is the source *repository* (any repo in the org) where the migration workflow runs
+# Note: -d accepts org name or HOST/ORG for cross-host (2 segments, unlike repo's HOST/OWNER/REPO)
 gh secret-kit migrate org all -s owner/source-repo -d dest-org
+
+# Cross-host org migration
+gh secret-kit migrate org all -s myorg/source-repo -d enterprise.internal/dest-org
 
 # Migrate specific org secrets
 gh secret-kit migrate org all -s owner/source-repo -d dest-org \
@@ -518,6 +525,7 @@ gh secret-kit migrate org all -s owner/source-repo -d dest-org \
 
 ```bash
 # Verify org secret migration
+# Note: -s is the source *organization name* (not a repository)
 gh secret-kit migrate org check -s source-org -d dest-org
 ```
 
@@ -530,7 +538,9 @@ gh secret-kit migrate org run -s owner/source-repo --wait
 gh secret-kit migrate org delete -s owner/source-repo
 ```
 
-Same flags as `migrate repo` except `--dst` accepts an organization name instead of a repository.
+Same flags as `migrate repo` except:
+- `--dst` / `-d` accepts an organization name instead of a repository
+- `check`: `--src` / `-s` accepts a source organization name instead of a repository
 
 ### Migrate Env Secrets
 
@@ -617,6 +627,8 @@ gh secret-kit migrate plan source-org -d dest-org --no-deploy-keys
 
 Outputs all commands needed for a full migration: runner setup, secret migration, variable copies, deploy key migrations, and runner teardown.
 
+> **Note**: `migrate plan` does not support `--exclude-secrets`. To exclude specific secrets from the generated commands, edit the script manually and add `--exclude-secrets NAME1,NAME2` to the relevant `migrate repo all` / `migrate org all` lines.
+
 | Flag | Description | Default |
 | --- | --- | --- |
 | `--dst string` / `-d` | Destination organization (required) | |
@@ -687,10 +699,20 @@ gh secret-kit deploy-key migrate enterprise.internal/owner/repo -R owner/repo
 # Migrate deploy keys, excluding keys with "test" in the title
 gh secret-kit deploy-key migrate enterprise.internal/owner/repo -R owner/repo --exclude test
 
-# Migrate secrets
+# Migrate repository secrets
 gh secret-kit migrate repo all \
   -s owner/source-repo \
   -d enterprise.internal/owner/dest-repo
+
+# Migrate organization secrets
+# Note: -s is the source repository (any repo in the source org) where the workflow runs;
+#       -d is the destination organization as HOST/ORG
+gh secret-kit migrate org all \
+  -s myorg/source-repo \
+  -d enterprise.internal/dest-org
+
+# Migrate plan also accepts HOST/ORG as destination
+gh secret-kit migrate plan source-org -d enterprise.internal/dest-org > migrate.sh
 ```
 
 ## Getting Help
