@@ -110,35 +110,47 @@ Secrets require a runner for migration, but environment settings and variables
 are accessible via the API and can be copied directly:
 
 ```bash
-# Copy entire environment (settings + branch policies + variables)
+# Copy entire environment (settings + branch policies + variables); does NOT include secrets
 gh secret-kit env copy owner/dest-repo \
   -R owner/source-repo \
   --src-env staging \
-  --dst-env production
+  --dst-env staging
 
-# Or copy only environment variables
+# Or copy only environment variables (no settings/policies)
 gh secret-kit env variable copy owner/dest-repo \
   -R owner/source-repo \
   --src-env staging \
-  --dst-env production
+  --dst-env staging
 ```
+
+> Use `env copy` when you want to replicate the full environment configuration
+> (protection rules, branch policies, and variables). Use `env variable copy`
+> when you only need to transfer variable values.
+> Neither command copies secrets — use `migrate env all` for environment secrets.
 
 ## Migrate Multiple Repositories
 
 When migrating secrets from several repositories without org owner access,
-set up and tear down a runner per repository:
+set up and tear down a runner per repository.
+
+> **Important:** `migrate runner setup` **blocks** the terminal until interrupted
+> (Ctrl+C). It does not return automatically after a migration job completes.
+> You must run the migration command from a **separate terminal** while the
+> runner is active, then interrupt the runner manually before teardown.
+
+For each repository, use two terminals:
 
 ```bash
-for repo in owner/repo-a owner/repo-b owner/repo-c; do
-  # Terminal 1: Start runner for this repo
-  gh secret-kit migrate runner setup -R "$repo"
+# --- repo-a: Terminal 1 ---
+gh secret-kit migrate runner setup -R owner/repo-a
+# (keep running; interrupt with Ctrl+C after Terminal 2 finishes)
 
-  # Terminal 2: Migrate
-  gh secret-kit migrate repo all -s "$repo" -d "dest-owner/${repo##*/}"
+# --- repo-a: Terminal 2 ---
+gh secret-kit migrate repo all -s owner/repo-a -d dest-owner/repo-a
+# After done, Ctrl+C Terminal 1, then:
+gh secret-kit migrate runner teardown -R owner/repo-a
 
-  # Teardown after each repo
-  gh secret-kit migrate runner teardown -R "$repo"
-done
+# Repeat the same pattern for repo-b and repo-c
 ```
 
 ## Cross-Host Migration (e.g., github.com → GHES)

@@ -27,6 +27,27 @@ gh auth login --hostname github.com
 gh auth login --hostname enterprise.internal
 ```
 
+For GHES-to-GHES migration, authenticate to both GHES hosts:
+
+```bash
+gh auth login --hostname ghes1.internal
+gh auth login --hostname ghes2.internal
+```
+
+### Argument Format
+
+All flags that accept a repository (`-R`, `-s`) and destination arguments (`-d`) support the `[HOST/]OWNER/REPO` format. For cross-host operations, always include the host prefix:
+
+```
+# Source repository on a non-default host
+-R ghes1.internal/owner/source-repo
+-s ghes1.internal/owner/source-repo
+
+# Destination repository or organization
+-d ghes2.internal/owner/dest-repo      # repo destination
+-d ghes2.internal/dest-org             # org destination (HOST/ORG)
+```
+
 ## What Can Be Migrated Cross-Host
 
 | Resource | Method | Runner Required? |
@@ -71,14 +92,23 @@ gh secret-kit variable copy enterprise.internal/owner/dest-repo \
 
 ### 3. Copy Environments (No Runner Needed)
 
-Environment settings, deployment branch policies, and variables can be copied
-or exported/imported without a runner:
+Environment settings, deployment branch policies, and **variables** can be copied
+or exported/imported without a runner. **Secrets are not included** — use
+`migrate env all` (Step 6) for environment secrets.
+
+`--dst-env` defaults to the same name as `--src-env` when omitted.
 
 ```bash
 # Copy entire environment (settings + branch policies + variables)
+# --dst-env defaults to same name as --src-env when omitted
 gh secret-kit env copy enterprise.internal/owner/dest-repo \
   -R owner/source-repo \
   --src-env production
+
+# Copy to a different destination environment name
+gh secret-kit env copy enterprise.internal/owner/dest-repo \
+  -R owner/source-repo \
+  --src-env staging --dst-env production
 
 # Or export and import for more control
 gh secret-kit env export -R owner/source-repo -o envs.yaml
@@ -92,12 +122,17 @@ gh secret-kit env import envs.yaml \
 
 ### 4. Start the Runner
 
+The runner must be started on the **source** host (i.e., the host you are migrating *from*, regardless of whether it is github.com or a GHES instance).
+
 ```bash
 # Repo-level runner (repo admin required)
 gh secret-kit migrate runner setup -R owner/source-repo
 
 # Or org-level runner (org owner required)
 gh secret-kit migrate runner setup source-org
+
+# Place runner in a specific runner group (created if not found)
+gh secret-kit migrate runner setup source-org --runner-group migration-runners
 ```
 
 ### 5. Migrate Repository Secrets
@@ -146,8 +181,9 @@ gh secret-kit migrate plan source-org \
 # Review the generated script
 cat migrate.sh
 
-# Start the runner
+# Start the runner (optionally in a runner group)
 gh secret-kit migrate runner setup source-org
+# Or: gh secret-kit migrate runner setup source-org --runner-group migration-runners
 
 # Execute migration (from another terminal)
 bash migrate.sh
