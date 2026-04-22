@@ -63,8 +63,10 @@ The generated script includes (in order):
    - `env variable copy` (when environment already exists at destination)
    - `migrate env all` (migrates environment secrets)
 4. **Variable copy** commands (`variable copy`) for repositories with variables
-5. **Organization secret migration** command (`migrate org all`) — included if
-   org-level secrets exist in the source organization
+5. **Organization secret migration** command (`migrate org all`) — included only
+   when org-level secrets exist and at least one repository match is found
+   between the source and destination organizations to host the org migration
+   workflow
 6. **Organization variable copy** command — included if org-level variables exist
 7. **Deploy key migration** commands (for cross-host migrations only)
 8. **Runner teardown** instruction (commented out)
