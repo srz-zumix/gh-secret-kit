@@ -18,6 +18,7 @@ type planConfig struct {
 	Source       string
 	Destination  string
 	RunnerLabel  string
+	RunnerGroup  string
 	NoDeployKeys bool
 	Overwrite    bool
 	Unarchive    bool
@@ -100,6 +101,7 @@ Arguments:
 	f := cmd.Flags()
 	f.StringVarP(&config.Destination, "dst", "d", "", "Destination organization (e.g., org or HOST/org)")
 	f.StringVar(&config.RunnerLabel, "runner-label", types.DefaultRunnerLabel, "Runner label for the workflow")
+	f.StringVar(&config.RunnerGroup, "runner-group", "", "Runner group name for the runner setup command")
 	f.BoolVar(&config.NoDeployKeys, "no-deploy-keys", false, "Skip deploy key scanning (avoids extra API calls per repository)")
 	f.BoolVar(&config.Overwrite, "overwrite", false, "Add --overwrite to generated migration and copy commands that support it and make env export | env import pipelines executable for existing destination environments")
 	f.BoolVar(&config.Unarchive, "unarchive", false, "Add --unarchive to generated migration commands")
@@ -135,21 +137,24 @@ func runPlan(ctx context.Context, config *planConfig) error {
 	}
 
 	runnerCmd := "gh secret-kit migrate runner"
-	if config.RunnerLabel != "" && config.RunnerLabel != types.DefaultRunnerLabel {
-		if orgArg != "" {
-			result.RunnerSetup = fmt.Sprintf("%s setup --runner-label %s %s", runnerCmd, shellQuote(config.RunnerLabel), shellQuote(orgArg))
-			result.RunnerTeardown = fmt.Sprintf("%s teardown --runner-label %s %s", runnerCmd, shellQuote(config.RunnerLabel), shellQuote(orgArg))
-		} else {
-			result.RunnerSetup = fmt.Sprintf("%s setup --runner-label %s", runnerCmd, shellQuote(config.RunnerLabel))
-			result.RunnerTeardown = fmt.Sprintf("%s teardown --runner-label %s", runnerCmd, shellQuote(config.RunnerLabel))
+	{
+		var runnerFlags []string
+		if config.RunnerLabel != "" && config.RunnerLabel != types.DefaultRunnerLabel {
+			runnerFlags = append(runnerFlags, fmt.Sprintf("--runner-label %s", shellQuote(config.RunnerLabel)))
 		}
-	} else {
+		if config.RunnerGroup != "" {
+			runnerFlags = append(runnerFlags, fmt.Sprintf("--runner-group %s", shellQuote(config.RunnerGroup)))
+		}
+		runnerFlagStr := ""
+		if len(runnerFlags) > 0 {
+			runnerFlagStr = " " + strings.Join(runnerFlags, " ")
+		}
 		if orgArg != "" {
-			result.RunnerSetup = fmt.Sprintf("%s setup %s", runnerCmd, shellQuote(orgArg))
-			result.RunnerTeardown = fmt.Sprintf("%s teardown %s", runnerCmd, shellQuote(orgArg))
+			result.RunnerSetup = fmt.Sprintf("%s setup%s %s", runnerCmd, runnerFlagStr, shellQuote(orgArg))
+			result.RunnerTeardown = fmt.Sprintf("%s teardown%s %s", runnerCmd, runnerFlagStr, shellQuote(orgArg))
 		} else {
-			result.RunnerSetup = fmt.Sprintf("%s setup", runnerCmd)
-			result.RunnerTeardown = fmt.Sprintf("%s teardown", runnerCmd)
+			result.RunnerSetup = fmt.Sprintf("%s setup%s", runnerCmd, runnerFlagStr)
+			result.RunnerTeardown = fmt.Sprintf("%s teardown%s", runnerCmd, runnerFlagStr)
 		}
 	}
 
@@ -347,7 +352,6 @@ func buildEnvPlanEntry(src, dst repository.Repository, envName string, secretNam
 		}
 		envVariableCopyCmd = strings.Join(varParts, " ")
 	}
-
 
 	// Build env export | import pipeline (handles settings and variables)
 	exportImportCmd := fmt.Sprintf(
