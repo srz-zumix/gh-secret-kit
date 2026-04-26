@@ -508,7 +508,7 @@ When the source and destination organizations are on different hosts, deploy key
 - `--dst string` / `-d`: Destination organization (e.g., org or HOST/org) (required)
 - `--no-deploy-keys`: Skip deploy key scanning (avoids extra API calls per repository) (default: false)
 - `--overwrite`: Add `--overwrite` to generated migration and copy commands that support it (default: false)
-- `--runner-group string`: Runner group name for the runner setup command (default: "")
+- `--runner-group string`: Runner group name for the runner setup/teardown commands (default: "")
 - `--runner-label string`: Runner label for the workflow (default: "gh-secret-kit-migrate")
 - `--unarchive`: Add `--unarchive` to generated migration commands (default: false)
 - `--usermap string`: Add `--usermap` to generated `env export | env import` commands and make those pipelines executable even for existing destination environments
