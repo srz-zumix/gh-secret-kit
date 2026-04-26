@@ -634,6 +634,7 @@ Outputs all commands needed for a full migration: runner setup, secret migration
 | `--dst string` / `-d` | Destination organization (required) | |
 | `--no-deploy-keys` | Skip deploy key scanning | false |
 | `--overwrite` | Add `--overwrite` to generated commands | false |
+| `--runner-group string` | Runner group name for the generated runner setup and runner teardown commands | |
 | `--runner-label string` | Runner label | gh-secret-kit-migrate |
 | `--unarchive` | Add `--unarchive` to generated commands | false |
 | `--usermap string` | User mapping file for `env export/import` commands | |
