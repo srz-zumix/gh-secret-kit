@@ -101,7 +101,7 @@ Arguments:
 	f := cmd.Flags()
 	f.StringVarP(&config.Destination, "dst", "d", "", "Destination organization (e.g., org or HOST/org)")
 	f.StringVar(&config.RunnerLabel, "runner-label", types.DefaultRunnerLabel, "Runner label for the workflow")
-	f.StringVar(&config.RunnerGroup, "runner-group", "", "Runner group name for the runner setup command")
+	f.StringVar(&config.RunnerGroup, "runner-group", "", "Runner group name added to generated runner setup and runner teardown commands")
 	f.BoolVar(&config.NoDeployKeys, "no-deploy-keys", false, "Skip deploy key scanning (avoids extra API calls per repository)")
 	f.BoolVar(&config.Overwrite, "overwrite", false, "Add --overwrite to generated migration and copy commands that support it and make env export | env import pipelines executable for existing destination environments")
 	f.BoolVar(&config.Unarchive, "unarchive", false, "Add --unarchive to generated migration commands")
