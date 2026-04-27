@@ -627,11 +627,15 @@ gh secret-kit migrate plan source-org -d dest-org --no-deploy-keys
 
 Outputs all commands needed for a full migration: runner setup, secret migration, variable copies, deploy key migrations, and runner teardown.
 
-> **Note**: `migrate plan` does not support `--exclude-secrets`. To exclude specific secrets from the generated commands, edit the script manually and add `--exclude-secrets NAME1,NAME2` to the relevant `migrate repo all` / `migrate org all` lines.
+> **Note**: `migrate plan` does not support `--exclude-secrets` directly. Use `--extra-repo-options "--exclude-secrets NAME1,NAME2"` (or `--extra-env-options` / `--extra-org-options`) to add such options to the relevant generated commands. Alternatively, edit the generated script manually.
 
 | Flag | Description | Default |
 | --- | --- | --- |
 | `--dst string` / `-d` | Destination organization (required) | |
+| `--extra-deploy-key-options string` | Additional options appended verbatim to generated `deploy-key migrate` commands | |
+| `--extra-env-options string` | Additional options appended verbatim to generated `migrate env all` commands | |
+| `--extra-org-options string` | Additional options appended verbatim to generated `migrate org all` commands | |
+| `--extra-repo-options string` | Additional options appended verbatim to generated `migrate repo all` commands | |
 | `--no-deploy-keys` | Skip deploy key scanning | false |
 | `--overwrite` | Add `--overwrite` to generated commands | false |
 | `--runner-group string` | Runner group name for the generated runner setup and runner teardown commands | |
