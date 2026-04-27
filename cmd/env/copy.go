@@ -6,13 +6,14 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/srz-zumix/go-gh-extension/pkg/gh"
+	"github.com/srz-zumix/go-gh-extension/pkg/logger"
 	"github.com/srz-zumix/go-gh-extension/pkg/parser"
 )
 
 // NewCopyCmd creates the env copy command
 func NewCopyCmd() *cobra.Command {
 	var repo, dstHost, srcEnv, dstEnv string
-	var overwrite bool
+	var overwrite, errorIfExists bool
 
 	cmd := &cobra.Command{
 		Use:   "copy <dst> [dst...]",
@@ -105,6 +106,10 @@ Note: Secrets cannot be copied because their values are not accessible via the G
 
 				for _, v := range srcVars {
 					if copyErr := gh.CreateOrUpdateEnvVariable(ctx, dstClient, dst, dstEnv, v, overwrite); copyErr != nil {
+						if !errorIfExists && gh.IsVariableAlreadyExists(copyErr) {
+							logger.Warn(fmt.Sprintf("variable %q already exists in environment %q in %q, skipping", v.Name, dstEnv, dstArg))
+							continue
+						}
 						return fmt.Errorf("failed to copy variable %q to environment %q in %q: %w", v.Name, dstEnv, dstArg, copyErr)
 					}
 					fmt.Printf("Copied variable: %s -> %s (env: %s)\n", v.Name, dstArg, dstEnv)
@@ -121,6 +126,7 @@ Note: Secrets cannot be copied because their values are not accessible via the G
 	f.StringVar(&dstEnv, "dst-env", "", "Destination environment name (defaults to --src-env)")
 	f.StringVar(&dstHost, "dst-host", "", "Host to apply to destination arguments that do not specify one (e.g., github.com)")
 	f.BoolVar(&overwrite, "overwrite", false, "Overwrite existing environment variables at the destination")
+	f.BoolVar(&errorIfExists, "error-if-exists", false, "Return an error if a variable already exists at destination instead of skipping")
 
 	_ = cmd.MarkFlagRequired("src-env")
 

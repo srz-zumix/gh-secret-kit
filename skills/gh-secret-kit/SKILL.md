@@ -120,6 +120,7 @@ gh secret-kit variable copy owner/dest-repo --dst-host enterprise.internal
 | Flag | Description | Default |
 | --- | --- | --- |
 | `--dst-host string` | Host to apply to destinations without one | source host |
+| `--error-if-exists` | Return an error if a variable already exists instead of skipping | false |
 | `--owner string` | Source organization (mutually exclusive with `--repo`) | |
 | `--overwrite` | Overwrite existing variables | false |
 | `--repo string` / `-R` | Source repository | current repo |
@@ -251,6 +252,7 @@ Copies settings, deployment branch policies, and variables. Secrets cannot be co
 | --- | --- | --- |
 | `--dst-env string` | Destination environment name | same as `--src-env` |
 | `--dst-host string` | Host to apply to destinations without one | |
+| `--error-if-exists` | Return an error if a variable already exists instead of skipping | false |
 | `--overwrite` | Overwrite existing variables | false |
 | `--repo string` / `-R` | Source repository | current repo |
 | `--src-env string` | Source environment name (required) | |
@@ -357,6 +359,7 @@ gh secret-kit env variable copy owner/dest-repo --src-env staging --overwrite
 | --- | --- | --- |
 | `--dst-env string` | Destination environment name | same as `--src-env` |
 | `--dst-host string` | Host to apply to destinations without one | |
+| `--error-if-exists` | Return an error if a variable already exists instead of skipping | false |
 | `--overwrite` | Overwrite existing variables | false |
 | `--repo string` / `-R` | Source repository | current repo |
 | `--src-env string` | Source environment name (required) | |

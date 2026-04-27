@@ -46,7 +46,7 @@ The source scope (repository or organization) is controlled by the `--repo` and 
 gh secret-kit variable copy <dst> [dst...] [flags]
 ```
 
-Copy all (or specific) GitHub Actions variables from a source repository or organization to one or more destinations. For each variable, if it already exists at the destination and `--overwrite` is not set, it is skipped silently; otherwise it is created or updated.
+Copy all (or specific) GitHub Actions variables from a source repository or organization to one or more destinations. For each variable, if it already exists at the destination and `--overwrite` is not set, a warning is logged and it is skipped; use `--error-if-exists` to treat this as an error instead.
 
 Each destination argument can be `owner/repo` (repository scope) or `owner` (organization scope). Use `--dst-host` to apply a host to destination arguments that do not include one.
 
@@ -57,6 +57,7 @@ Each destination argument can be `owner/repo` (repository scope) or `owner` (org
 **Options:**
 
 - `--dst-host string`: Host to apply to destination arguments that do not specify one (e.g., `github.com`)
+- `--error-if-exists`: Return an error if a variable already exists at destination instead of skipping (default: false)
 - `--owner string`: Source organization/owner for organization-level variables. Mutually exclusive with `--repo`
 - `--overwrite`: Overwrite existing variables at destination (default: false)
 - `--repo string` / `-R`: Source repository (e.g., `owner/repo`; defaults to current repository). Mutually exclusive with `--owner`
@@ -199,8 +200,7 @@ Note: Secrets cannot be copied because their values are not accessible via the G
 **Options:**
 
 - `--dst-env string`: Destination environment name (defaults to `--src-env`)
-- `--dst-host string`: Host to apply to destination arguments that do not specify one (e.g., `github.com`)
-- `--overwrite`: Overwrite existing variables at destination (default: false)
+- `--dst-host string`: Host to apply to destination arguments that do not specify one (e.g., `github.com`)- `--error-if-exists`: Return an error if a variable already exists at destination instead of skipping (default: false)- `--overwrite`: Overwrite existing variables at destination (default: false)
 - `--repo string` / `-R`: Source repository (e.g., `owner/repo`; defaults to current repository)
 - `--src-env string`: Source environment name (required)
 
@@ -298,6 +298,7 @@ The destination environment name defaults to `--src-env` when `--dst-env` is not
 
 - `--dst-env string`: Destination environment name (defaults to `--src-env`)
 - `--dst-host string`: Host to apply to destination arguments that do not specify one (e.g., `github.com`)
+- `--error-if-exists`: Return an error if a variable already exists at destination instead of skipping (default: false)
 - `--overwrite`: Overwrite existing variables at destination (default: false)
 - `--repo string` / `-R`: Source repository (e.g., `owner/repo`; defaults to current repository)
 - `--src-env string`: Source environment name (required)
