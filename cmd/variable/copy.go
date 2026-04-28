@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/srz-zumix/go-gh-extension/pkg/gh"
+	"github.com/srz-zumix/go-gh-extension/pkg/logger"
 	"github.com/srz-zumix/go-gh-extension/pkg/parser"
 )
 
@@ -14,7 +15,7 @@ import (
 func NewCopyCmd() *cobra.Command {
 	var repo, owner, dstHost string
 	var variables []string
-	var overwrite bool
+	var overwrite, errorIfExists bool
 
 	cmd := &cobra.Command{
 		Use:   "copy <dst> [dst...]",
@@ -53,12 +54,9 @@ Use --dst-host to apply a host to destination arguments that do not include one.
 			}
 
 			for _, dstArg := range args {
-				dst, err := parser.Repository(parser.RepositoryInput(dstArg))
+				dst, err := parser.Repository(parser.RepositoryOwnerOrRepo(dstArg))
 				if err != nil {
-					dst, err = parser.Repository(parser.RepositoryOwnerWithHost(dstArg))
-				}
-				if err != nil {
-					return fmt.Errorf("failed to parse destination %q: expected owner/repo or owner: %w", dstArg, err)
+					return fmt.Errorf("failed to parse destination %q: expected [host/]owner[/repo]: %w", dstArg, err)
 				}
 				if dstHost != "" && dst.Host == "" {
 					dst.Host = dstHost
@@ -80,6 +78,10 @@ Use --dst-host to apply a host to destination arguments that do not include one.
 					}
 					err := gh.CreateOrUpdateVariable(ctx, dstClient, dst, v, overwrite)
 					if err != nil {
+						if !errorIfExists && gh.IsVariableAlreadyExists(err) {
+							logger.Warn(fmt.Sprintf("variable %q already exists in %q, skipping", v.Name, dstArg))
+							continue
+						}
 						return fmt.Errorf("failed to copy variable %q to %q: %w", v.Name, dstArg, err)
 					}
 					fmt.Printf("Copied variable: %s -> %s\n", v.Name, dstArg)
@@ -97,6 +99,7 @@ Use --dst-host to apply a host to destination arguments that do not include one.
 	f.StringVar(&dstHost, "dst-host", "", "Host to apply to destination arguments that do not specify one (e.g., github.com)")
 	f.StringSliceVar(&variables, "variables", []string{}, "Specific variable names to copy (comma-separated or repeated flag; defaults to all)")
 	f.BoolVar(&overwrite, "overwrite", false, "Overwrite existing variables at destination")
+	f.BoolVar(&errorIfExists, "error-if-exists", false, "Return an error if a variable already exists at destination instead of skipping")
 	cmd.MarkFlagsMutuallyExclusive("repo", "owner")
 
 	return cmd
