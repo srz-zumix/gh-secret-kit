@@ -334,9 +334,10 @@ func extractZip(zipPath, destDir string) (err error) {
 // CreateRunnerInstanceDir; config.sh writes .runner and .credentials into
 // runnerBinDir (the script's own directory).
 // Pass an empty string for workDir to use runnerBinDir.
+// Pass an empty string for runnerGroup to use the default runner group.
 // This is used instead of JIT config on GHES where JIT runners may not inherit
 // scale set labels.
-func ConfigureRunner(runnerBinDir, workDir, configURL, token, name, labels string) error {
+func ConfigureRunner(runnerBinDir, workDir, configURL, token, name, labels, runnerGroup string) error {
 	if workDir == "" {
 		workDir = runnerBinDir
 	}
@@ -359,6 +360,9 @@ func ConfigureRunner(runnerBinDir, workDir, configURL, token, name, labels strin
 		"--disableupdate",
 		"--unattended",
 		"--replace",
+	}
+	if runnerGroup != "" {
+		args = append(args, "--runnergroup", runnerGroup)
 	}
 
 	cmd := exec.Command(scriptPath, args...)
