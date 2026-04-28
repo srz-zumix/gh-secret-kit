@@ -3,7 +3,7 @@ module github.com/srz-zumix/gh-secret-kit
 go 1.26.1
 
 require (
-	github.com/actions/scaleset v0.2.0
+	github.com/actions/scaleset v0.3.0
 	github.com/cli/cli/v2 v2.88.1
 	github.com/cli/go-gh/v2 v2.13.0
 	github.com/google/go-github/v84 v84.0.0
@@ -85,11 +85,10 @@ require (
 	github.com/stretchr/testify v1.11.1 // indirect
 	github.com/thlib/go-timezone-local v0.0.6 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
-	golang.org/x/crypto v0.48.0 // indirect
+	golang.org/x/crypto v0.49.0 // indirect
 	golang.org/x/mod v0.34.0 // indirect
-	golang.org/x/net v0.50.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.42.0 // indirect
-	golang.org/x/term v0.40.0 // indirect
-	golang.org/x/text v0.34.0 // indirect
+	golang.org/x/term v0.41.0 // indirect
+	golang.org/x/text v0.35.0 // indirect
 )

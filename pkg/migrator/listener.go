@@ -73,13 +73,17 @@ func (c *loggingSessionClient) Session() scaleset.RunnerScaleSetSession {
 	return c.inner.Session()
 }
 
+func (c *loggingSessionClient) AcquireJobs(ctx context.Context, requestIDs []int64) ([]int64, error) {
+	return c.inner.AcquireJobs(ctx, requestIDs)
+}
+
 // ListenerConfig holds configuration for the message session listener
 type ListenerConfig struct {
-	Client       *scaleset.Client
-	ScaleSetID   int
-	RunnerDir    string
-	ConfigURL    string // GitHub config URL for runner registration
-	RunnerLabel  string // Label to assign to runners
+	Client      *scaleset.Client
+	ScaleSetID  int
+	RunnerDir   string
+	ConfigURL   string // GitHub config URL for runner registration
+	RunnerLabel string // Label to assign to runners
 	// TokenRefresher, when non-nil, is called before each config.sh invocation to
 	// obtain a fresh one-time-use registration token. Required for GHES because
 	// registration tokens are invalidated after the first use.
@@ -236,10 +240,10 @@ type migrateScaler struct {
 	runnerLabel    string
 	tokenRefresher func(ctx context.Context) (string, error)
 	maxRunners     int
-	runners           runnerState
-	runnerWg          sync.WaitGroup // tracks all watcher goroutines for clean shutdown
-	doneCh            chan struct{}
-	doneOnce          sync.Once
+	runners        runnerState
+	runnerWg       sync.WaitGroup // tracks all watcher goroutines for clean shutdown
+	doneCh         chan struct{}
+	doneOnce       sync.Once
 }
 
 // HandleDesiredRunnerCount is called by the listener when the desired runner
