@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/srz-zumix/gh-secret-kit/cmd/migrate/types"
 	"github.com/srz-zumix/gh-secret-kit/pkg/migrator"
+	"github.com/srz-zumix/go-gh-extension/pkg/cmdflags"
 	"github.com/srz-zumix/go-gh-extension/pkg/gh"
 	"github.com/srz-zumix/go-gh-extension/pkg/logger"
 	"github.com/srz-zumix/go-gh-extension/pkg/parser"
@@ -110,10 +111,10 @@ Arguments:
 	f.BoolVar(&config.Overwrite, "overwrite", false, "Add --overwrite to generated migration and copy commands that support it and make env export | env import pipelines executable for existing destination environments")
 	f.BoolVar(&config.Unarchive, "unarchive", false, "Add --unarchive to generated migration commands")
 	f.StringVar(&config.UserMap, "usermap", "", "Add --usermap to generated env export | env import commands and make those pipelines executable even for existing destination environments")
-	f.StringVar(&config.ExtraRepoOptions, "extra-repo-options", "", "Additional options appended verbatim to generated migrate repo all commands")
-	f.StringVar(&config.ExtraEnvOptions, "extra-env-options", "", "Additional options appended verbatim to generated migrate env all commands")
-	f.StringVar(&config.ExtraOrgOptions, "extra-org-options", "", "Additional options appended verbatim to generated migrate org all commands")
-	f.StringVar(&config.ExtraDeployKeyOptions, "extra-deploy-key-options", "", "Additional options appended verbatim to generated deploy-key migrate commands")
+	cmdflags.SafeOptionsVar(cmd, &config.ExtraRepoOptions, "extra-repo-options", "", "Additional options appended verbatim to generated migrate repo all commands (quote the value when it contains spaces, e.g. --extra-repo-options '--flag value'); newlines and control characters are rejected")
+	cmdflags.SafeOptionsVar(cmd, &config.ExtraEnvOptions, "extra-env-options", "", "Additional options appended verbatim to generated migrate env all commands (quote the value when it contains spaces, e.g. --extra-env-options '--flag value'); newlines and control characters are rejected")
+	cmdflags.SafeOptionsVar(cmd, &config.ExtraOrgOptions, "extra-org-options", "", "Additional options appended verbatim to generated migrate org all commands (quote the value when it contains spaces, e.g. --extra-org-options '--flag value'); newlines and control characters are rejected")
+	cmdflags.SafeOptionsVar(cmd, &config.ExtraDeployKeyOptions, "extra-deploy-key-options", "", "Additional options appended verbatim to generated deploy-key migrate commands (quote the value when it contains spaces, e.g. --extra-deploy-key-options '--flag value'); newlines and control characters are rejected")
 
 	_ = cmd.MarkFlagRequired("dst")
 
