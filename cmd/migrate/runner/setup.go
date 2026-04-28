@@ -223,6 +223,7 @@ func setupNewRunner(ctx context.Context, sourceRepo repository.Repository) error
 		RunnerDir:      runnerDir,
 		ConfigURL:      configURL,
 		RunnerLabel:    setupRunnerOpts.RunnerLabel,
+		RunnerGroup:    setupRunnerOpts.RunnerGroup,
 		TokenRefresher: tokenRefresher,
 		MaxRunners:     setupRunnerOpts.MaxRunners,
 	}

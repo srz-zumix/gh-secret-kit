@@ -84,6 +84,7 @@ type ListenerConfig struct {
 	RunnerDir   string
 	ConfigURL   string // GitHub config URL for runner registration
 	RunnerLabel string // Label to assign to runners
+	RunnerGroup string // Runner group name for config.sh registration (empty = default group)
 	// TokenRefresher, when non-nil, is called before each config.sh invocation to
 	// obtain a fresh one-time-use registration token. Required for GHES because
 	// registration tokens are invalidated after the first use.
@@ -196,6 +197,7 @@ func runListenerOnce(ctx context.Context, config *ListenerConfig, hostname strin
 		runnerDir:      config.RunnerDir,
 		configURL:      config.ConfigURL,
 		runnerLabel:    config.RunnerLabel,
+		runnerGroup:    config.RunnerGroup,
 		tokenRefresher: config.TokenRefresher,
 		maxRunners:     maxRunners,
 		runners: runnerState{
@@ -238,6 +240,7 @@ type migrateScaler struct {
 	runnerDir      string
 	configURL      string
 	runnerLabel    string
+	runnerGroup    string
 	tokenRefresher func(ctx context.Context) (string, error)
 	maxRunners     int
 	runners        runnerState
@@ -331,7 +334,7 @@ func (s *migrateScaler) startRunner(ctx context.Context) error {
 		}
 
 		logger.Info(fmt.Sprintf("Configuring runner via config.sh: %s (label: %s)", runnerName, s.runnerLabel))
-		if err := ConfigureRunner(instanceDir, instanceDir, s.configURL, token, runnerName, s.runnerLabel); err != nil {
+		if err := ConfigureRunner(instanceDir, instanceDir, s.configURL, token, runnerName, s.runnerLabel, s.runnerGroup); err != nil {
 			return fmt.Errorf("failed to configure runner: %w", err)
 		}
 
