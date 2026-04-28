@@ -200,7 +200,9 @@ Note: Secrets cannot be copied because their values are not accessible via the G
 **Options:**
 
 - `--dst-env string`: Destination environment name (defaults to `--src-env`)
-- `--dst-host string`: Host to apply to destination arguments that do not specify one (e.g., `github.com`)- `--error-if-exists`: Return an error if a variable already exists at destination instead of skipping (default: false)- `--overwrite`: Overwrite existing variables at destination (default: false)
+- `--dst-host string`: Host to apply to destination arguments that do not specify one (e.g., `github.com`)
+- `--error-if-exists`: Return an error if a variable already exists at destination instead of skipping (default: false)
+- `--overwrite`: Overwrite existing variables at destination (default: false)
 - `--repo string` / `-R`: Source repository (e.g., `owner/repo`; defaults to current repository)
 - `--src-env string`: Source environment name (required)
 
