@@ -506,6 +506,10 @@ When the source and destination organizations are on different hosts, deploy key
 **Options:**
 
 - `--dst string` / `-d`: Destination organization (e.g., org or HOST/org) (required)
+- `--extra-deploy-key-options string`: Additional options appended verbatim to generated `deploy-key migrate` commands (default: "")
+- `--extra-env-options string`: Additional options appended verbatim to generated `migrate env all` commands (default: "")
+- `--extra-org-options string`: Additional options appended verbatim to generated `migrate org all` commands (default: "")
+- `--extra-repo-options string`: Additional options appended verbatim to generated `migrate repo all` commands (default: "")
 - `--no-deploy-keys`: Skip deploy key scanning (avoids extra API calls per repository) (default: false)
 - `--overwrite`: Add `--overwrite` to generated migration and copy commands that support it (default: false)
 - `--runner-group string`: Runner group name for the runner setup/teardown commands (default: "")

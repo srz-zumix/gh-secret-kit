@@ -9,20 +9,25 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/srz-zumix/gh-secret-kit/cmd/migrate/types"
 	"github.com/srz-zumix/gh-secret-kit/pkg/migrator"
+	"github.com/srz-zumix/go-gh-extension/pkg/cmdflags"
 	"github.com/srz-zumix/go-gh-extension/pkg/gh"
 	"github.com/srz-zumix/go-gh-extension/pkg/logger"
 	"github.com/srz-zumix/go-gh-extension/pkg/parser"
 )
 
 type planConfig struct {
-	Source       string
-	Destination  string
-	RunnerLabel  string
-	RunnerGroup  string
-	NoDeployKeys bool
-	Overwrite    bool
-	Unarchive    bool
-	UserMap      string
+	Source                string
+	Destination           string
+	RunnerLabel           string
+	RunnerGroup           string
+	NoDeployKeys          bool
+	Overwrite             bool
+	Unarchive             bool
+	UserMap               string
+	ExtraRepoOptions      string
+	ExtraEnvOptions       string
+	ExtraOrgOptions       string
+	ExtraDeployKeyOptions string
 }
 
 // PlanEntry represents a single migration command with an optional comment listing secrets.
@@ -106,6 +111,10 @@ Arguments:
 	f.BoolVar(&config.Overwrite, "overwrite", false, "Add --overwrite to generated migration and copy commands that support it and make env export | env import pipelines executable for existing destination environments")
 	f.BoolVar(&config.Unarchive, "unarchive", false, "Add --unarchive to generated migration commands")
 	f.StringVar(&config.UserMap, "usermap", "", "Add --usermap to generated env export | env import commands and make those pipelines executable even for existing destination environments")
+	cmdflags.SafeOptionsVar(cmd, &config.ExtraRepoOptions, "extra-repo-options", "", "Additional options appended verbatim to generated migrate repo all commands (quote the value when it contains spaces, e.g. --extra-repo-options '--flag value'); newlines and control characters are rejected")
+	cmdflags.SafeOptionsVar(cmd, &config.ExtraEnvOptions, "extra-env-options", "", "Additional options appended verbatim to generated migrate env all commands (quote the value when it contains spaces, e.g. --extra-env-options '--flag value'); newlines and control characters are rejected")
+	cmdflags.SafeOptionsVar(cmd, &config.ExtraOrgOptions, "extra-org-options", "", "Additional options appended verbatim to generated migrate org all commands (quote the value when it contains spaces, e.g. --extra-org-options '--flag value'); newlines and control characters are rejected")
+	cmdflags.SafeOptionsVar(cmd, &config.ExtraDeployKeyOptions, "extra-deploy-key-options", "", "Additional options appended verbatim to generated deploy-key migrate commands (quote the value when it contains spaces, e.g. --extra-deploy-key-options '--flag value'); newlines and control characters are rejected")
 
 	_ = cmd.MarkFlagRequired("dst")
 
@@ -208,7 +217,7 @@ func runPlan(ctx context.Context, config *planConfig) error {
 			if err != nil {
 				logger.Warn(fmt.Sprintf("Skipping deploy keys for %s: %v", m.SrcName, err))
 			} else if len(keys) > 0 {
-				cmd := buildDeployKeyMigrateCmd(m.SrcRepoRef, m.DstRepoRef)
+				cmd := buildDeployKeyMigrateCmd(m.SrcRepoRef, m.DstRepoRef, config)
 				result.DeployKeyMigrates = append(result.DeployKeyMigrates, cmd)
 				logger.Info(fmt.Sprintf("Found matching repo with deploy keys: %s (%d keys)", m.SrcName, len(keys)))
 			}
@@ -317,6 +326,9 @@ func buildRepoMigrateCmd(src, dst repository.Repository, secretNames []string, c
 	if config.Unarchive {
 		parts = append(parts, "--unarchive")
 	}
+	if config.ExtraRepoOptions != "" {
+		parts = append(parts, config.ExtraRepoOptions)
+	}
 	return PlanEntry{Comment: secretsComment(secretNames), Cmd: strings.Join(parts, " ")}
 }
 
@@ -336,6 +348,9 @@ func buildEnvPlanEntry(src, dst repository.Repository, envName string, secretNam
 	}
 	if config.Unarchive {
 		migrateParts = append(migrateParts, "--unarchive")
+	}
+	if config.ExtraEnvOptions != "" {
+		migrateParts = append(migrateParts, config.ExtraEnvOptions)
 	}
 
 	// Build env variable copy command (used when destination env already exists and --overwrite and --usermap are not set)
@@ -398,6 +413,9 @@ func buildOrgMigrateCmd(srcRepo repository.Repository, dstOrg repository.Reposit
 	if config.Unarchive {
 		parts = append(parts, "--unarchive")
 	}
+	if config.ExtraOrgOptions != "" {
+		parts = append(parts, config.ExtraOrgOptions)
+	}
 	return PlanEntry{Comment: secretsComment(secretNames), Cmd: strings.Join(parts, " ")}
 }
 
@@ -434,11 +452,14 @@ func variablesComment(names []string) string {
 	return strings.Join(lines, "\n")
 }
 
-func buildDeployKeyMigrateCmd(src, dst repository.Repository) PlanEntry {
+func buildDeployKeyMigrateCmd(src, dst repository.Repository, config *planConfig) PlanEntry {
 	var parts []string
 	parts = append(parts, "gh secret-kit deploy-key migrate")
 	parts = append(parts, fmt.Sprintf("--repo %s", shellQuote(repoArg(src))))
 	parts = append(parts, shellQuote(repoArg(dst)))
+	if config.ExtraDeployKeyOptions != "" {
+		parts = append(parts, config.ExtraDeployKeyOptions)
+	}
 	return PlanEntry{Cmd: strings.Join(parts, " ")}
 }
 
