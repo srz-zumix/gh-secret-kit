@@ -18,8 +18,8 @@ import (
 
 // loggingSessionClient wraps a MessageSessionClient to log message details
 type loggingSessionClient struct {
-	inner       *scaleset.MessageSessionClient
-	acquireJobs bool
+	inner             *scaleset.MessageSessionClient
+	shouldAcquireJobs bool
 }
 
 func (c *loggingSessionClient) GetMessage(ctx context.Context, lastMessageID, maxCapacity int) (*scaleset.RunnerScaleSetMessage, error) {
