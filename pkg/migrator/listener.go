@@ -18,7 +18,8 @@ import (
 
 // loggingSessionClient wraps a MessageSessionClient to log message details
 type loggingSessionClient struct {
-	inner *scaleset.MessageSessionClient
+	inner       *scaleset.MessageSessionClient
+	acquireJobs bool
 }
 
 func (c *loggingSessionClient) GetMessage(ctx context.Context, lastMessageID, maxCapacity int) (*scaleset.RunnerScaleSetMessage, error) {
@@ -30,8 +31,9 @@ func (c *loggingSessionClient) GetMessage(ctx context.Context, lastMessageID, ma
 		logger.Debug("GetMessage: received nil message (long-poll timeout)")
 		return nil, nil
 	}
-	logger.Info(fmt.Sprintf("GetMessage: messageID=%d, assigned=%d, completed=%d, started=%d",
+	logger.Info(fmt.Sprintf("GetMessage: messageID=%d, available=%d, assigned=%d, completed=%d, started=%d",
 		msg.MessageID,
+		len(msg.JobAvailableMessages),
 		len(msg.JobAssignedMessages),
 		len(msg.JobCompletedMessages),
 		len(msg.JobStartedMessages),
@@ -74,6 +76,10 @@ func (c *loggingSessionClient) Session() scaleset.RunnerScaleSetSession {
 }
 
 func (c *loggingSessionClient) AcquireJobs(ctx context.Context, requestIDs []int64) ([]int64, error) {
+	if !c.acquireJobs {
+		logger.Info(fmt.Sprintf("Skipping AcquireJobs for config.sh runners: requestIDs=%v", requestIDs))
+		return nil, nil
+	}
 	return c.inner.AcquireJobs(ctx, requestIDs)
 }
 
@@ -172,8 +178,12 @@ func runListenerOnce(ctx context.Context, config *ListenerConfig, hostname strin
 		))
 	}
 
-	// Wrap session client with logging
-	loggingClient := &loggingSessionClient{inner: sessionClient}
+	// Wrap session client with logging. config.sh runners are regular
+	// self-hosted runners, so jobs must remain available for label matching.
+	loggingClient := &loggingSessionClient{
+		inner:       sessionClient,
+		acquireJobs: config.TokenRefresher == nil,
+	}
 
 	// Create the SDK listener
 	logger.Info("Initializing listener...")
