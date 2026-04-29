@@ -3,7 +3,7 @@ package migrate
 import (
 	"github.com/spf13/cobra"
 	"github.com/srz-zumix/gh-secret-kit/cmd/migrate/org"
-	"github.com/srz-zumix/gh-secret-kit/cmd/migrate/workflow"
+	"github.com/srz-zumix/gh-secret-kit/internal/migrate/workflow"
 )
 
 // NewOrgCmd creates the migrate org command

@@ -8,12 +8,12 @@ import (
 	"github.com/srz-zumix/go-gh-extension/pkg/parser"
 )
 
-// resolveSourceRepo resolves the source repository/organization from the
+// ResolveSourceRepo resolves the source repository/organization from the
 // --repo flag, a positional argument, or the current repository's owner.
 // repoFlag is the value of --repo (empty string when not specified).
 // args are the cobra positional arguments.
 // label is used only for debug logging (e.g., the runner label).
-func resolveSourceRepo(repoFlag string, args []string, label string) (repository.Repository, error) {
+func ResolveSourceRepo(repoFlag string, args []string, label string) (repository.Repository, error) {
 	var (
 		sourceRepo repository.Repository
 		err        error
@@ -44,11 +44,14 @@ func resolveSourceRepo(repoFlag string, args []string, label string) (repository
 	return sourceRepo, nil
 }
 
-func stateSourceString(repo repository.Repository) string {
+// StateSourceString formats a repository as the canonical source string used
+// in the migration state file (HOST/OWNER[/REPO]).
+func StateSourceString(repo repository.Repository) string {
 	return parser.GetRepositoryFullNameWithHost(repo)
 }
 
-func resolveStateSourceRepo(source string) (repository.Repository, error) {
+// ResolveStateSourceRepo parses a state.Source value back into a Repository.
+func ResolveStateSourceRepo(source string) (repository.Repository, error) {
 	if source == "" {
 		return repository.Repository{}, fmt.Errorf("state does not contain a source")
 	}

@@ -5,7 +5,8 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"github.com/srz-zumix/gh-secret-kit/cmd/migrate/workflow"
+	migrateutil "github.com/srz-zumix/gh-secret-kit/internal/migrate"
+	"github.com/srz-zumix/gh-secret-kit/internal/migrate/workflow"
 	"github.com/srz-zumix/gh-secret-kit/pkg/migrator"
 	"github.com/srz-zumix/go-gh-extension/pkg/gh"
 	"github.com/srz-zumix/go-gh-extension/pkg/logger"
@@ -82,8 +83,8 @@ func runCheck(ctx context.Context, config *checkConfig) error {
 		if m.RepoSecretCount > 0 {
 			logger.Info(fmt.Sprintf("Checking repo secrets: %s (%d secrets)", m.SrcName, m.RepoSecretCount))
 			checkCfg := &workflow.CheckConfig{
-				Source:      repoArg(m.SrcRepoRef),
-				Destination: repoArg(m.DstRepoRef),
+				Source:      migrateutil.RepoArg(m.SrcRepoRef),
+				Destination: migrateutil.RepoArg(m.DstRepoRef),
 				Scope:       migrator.SecretScopeRepo,
 			}
 			cerr := workflow.RunCheck(ctx, checkCfg)
@@ -98,8 +99,8 @@ func runCheck(ctx context.Context, config *checkConfig) error {
 		for _, env := range m.EnvMatches {
 			logger.Info(fmt.Sprintf("Checking env secrets: %s/%s (%d secrets)", m.SrcName, env.Name, env.SecretCount))
 			checkCfg := &workflow.CheckConfig{
-				Source:         repoArg(m.SrcRepoRef),
-				Destination:    repoArg(m.DstRepoRef),
+				Source:         migrateutil.RepoArg(m.SrcRepoRef),
+				Destination:    migrateutil.RepoArg(m.DstRepoRef),
 				SourceEnv:      env.Name,
 				DestinationEnv: env.Name,
 				Scope:          migrator.SecretScopeEnv,

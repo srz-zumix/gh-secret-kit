@@ -5,7 +5,8 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"github.com/srz-zumix/gh-secret-kit/cmd/migrate/types"
+	runnerinternal "github.com/srz-zumix/gh-secret-kit/internal/migrate/runner"
+	"github.com/srz-zumix/gh-secret-kit/internal/migrate/types"
 	"github.com/srz-zumix/gh-secret-kit/pkg/migrator"
 	"github.com/srz-zumix/go-gh-extension/pkg/logger"
 )
@@ -51,7 +52,7 @@ func runRestart(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("state does not contain a valid runner scale set ID")
 	}
 
-	sourceRepo, err := resolveStateSourceRepo(state.Source)
+	sourceRepo, err := runnerinternal.ResolveStateSourceRepo(state.Source)
 	if err != nil {
 		return err
 	}
@@ -83,5 +84,5 @@ func runRestart(cmd *cobra.Command, args []string) error {
 	logger.Info(fmt.Sprintf("Using runner scale set: ID=%d, Name=%s", scaleSet.ID, scaleSet.Name))
 	logger.Info(fmt.Sprintf("Using runner label: %s", state.RunnerLabel))
 
-	return runListenerForState(ctx, sourceRepo, scalesetClient, state, restartRunnerOpts.MaxRunners)
+	return runnerinternal.RunListenerForState(ctx, sourceRepo, scalesetClient, state, restartRunnerOpts.MaxRunners)
 }

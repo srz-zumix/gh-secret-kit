@@ -6,7 +6,8 @@ import (
 
 	"github.com/cli/go-gh/v2/pkg/repository"
 	"github.com/spf13/cobra"
-	"github.com/srz-zumix/gh-secret-kit/cmd/migrate/types"
+	runnerinternal "github.com/srz-zumix/gh-secret-kit/internal/migrate/runner"
+	"github.com/srz-zumix/gh-secret-kit/internal/migrate/types"
 	"github.com/srz-zumix/gh-secret-kit/pkg/migrator"
 	"github.com/srz-zumix/go-gh-extension/pkg/gh"
 	"github.com/srz-zumix/go-gh-extension/pkg/logger"
@@ -72,14 +73,14 @@ func runTeardown(cmd *cobra.Command, args []string) error {
 
 	if stateErr == nil {
 		var parseErr error
-		sourceRepo, parseErr = resolveStateSourceRepo(state.Source)
+		sourceRepo, parseErr = runnerinternal.ResolveStateSourceRepo(state.Source)
 		if parseErr != nil {
 			return parseErr
 		}
 		configURL = migrator.BuildGitHubConfigURL(sourceRepo)
 		// Validate CLI source against state to prevent accidental teardown of the wrong runner.
 		if teardownRepo != "" || len(args) > 0 {
-			explicitRepo, err := resolveSourceRepo(teardownRepo, args, teardownRunnerOpts.RunnerLabel)
+			explicitRepo, err := runnerinternal.ResolveSourceRepo(teardownRepo, args, teardownRunnerOpts.RunnerLabel)
 			if err != nil {
 				return err
 			}
@@ -91,7 +92,7 @@ func runTeardown(cmd *cobra.Command, args []string) error {
 	} else {
 		// No state: fall back to CLI-specified source.
 		var err error
-		sourceRepo, err = resolveSourceRepo(teardownRepo, args, teardownRunnerOpts.RunnerLabel)
+		sourceRepo, err = runnerinternal.ResolveSourceRepo(teardownRepo, args, teardownRunnerOpts.RunnerLabel)
 		if err != nil {
 			return err
 		}

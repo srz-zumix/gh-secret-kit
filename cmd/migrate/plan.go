@@ -7,7 +7,8 @@ import (
 
 	"github.com/cli/go-gh/v2/pkg/repository"
 	"github.com/spf13/cobra"
-	"github.com/srz-zumix/gh-secret-kit/cmd/migrate/types"
+	migrateutil "github.com/srz-zumix/gh-secret-kit/internal/migrate"
+	"github.com/srz-zumix/gh-secret-kit/internal/migrate/types"
 	"github.com/srz-zumix/gh-secret-kit/pkg/migrator"
 	"github.com/srz-zumix/go-gh-extension/pkg/cmdflags"
 	"github.com/srz-zumix/go-gh-extension/pkg/gh"
@@ -149,18 +150,18 @@ func runPlan(ctx context.Context, config *planConfig) error {
 	{
 		var runnerFlags []string
 		if config.RunnerLabel != "" && config.RunnerLabel != types.DefaultRunnerLabel {
-			runnerFlags = append(runnerFlags, fmt.Sprintf("--runner-label %s", shellQuote(config.RunnerLabel)))
+			runnerFlags = append(runnerFlags, fmt.Sprintf("--runner-label %s", migrateutil.ShellQuote(config.RunnerLabel)))
 		}
 		if config.RunnerGroup != "" {
-			runnerFlags = append(runnerFlags, fmt.Sprintf("--runner-group %s", shellQuote(config.RunnerGroup)))
+			runnerFlags = append(runnerFlags, fmt.Sprintf("--runner-group %s", migrateutil.ShellQuote(config.RunnerGroup)))
 		}
 		runnerFlagStr := ""
 		if len(runnerFlags) > 0 {
 			runnerFlagStr = " " + strings.Join(runnerFlags, " ")
 		}
 		if orgArg != "" {
-			result.RunnerSetup = fmt.Sprintf("%s setup%s %s", runnerCmd, runnerFlagStr, shellQuote(orgArg))
-			result.RunnerTeardown = fmt.Sprintf("%s teardown%s %s", runnerCmd, runnerFlagStr, shellQuote(orgArg))
+			result.RunnerSetup = fmt.Sprintf("%s setup%s %s", runnerCmd, runnerFlagStr, migrateutil.ShellQuote(orgArg))
+			result.RunnerTeardown = fmt.Sprintf("%s teardown%s %s", runnerCmd, runnerFlagStr, migrateutil.ShellQuote(orgArg))
 		} else {
 			result.RunnerSetup = fmt.Sprintf("%s setup%s", runnerCmd, runnerFlagStr)
 			result.RunnerTeardown = fmt.Sprintf("%s teardown%s", runnerCmd, runnerFlagStr)
@@ -234,7 +235,7 @@ func runPlan(ctx context.Context, config *planConfig) error {
 			if dst.OwnerRepo.Host != "" {
 				dstOrgArg = dst.OwnerRepo.Host + "/" + dst.OwnerRepo.Owner
 			}
-			result.DstDeployKeySettingCmd = fmt.Sprintf("gh secret-kit deploy-key setting --set enable %s", shellQuote(dstOrgArg))
+			result.DstDeployKeySettingCmd = fmt.Sprintf("gh secret-kit deploy-key setting --set enable %s", migrateutil.ShellQuote(dstOrgArg))
 			logger.Info("Deploy keys are disabled in the destination organization")
 		}
 	}
@@ -315,10 +316,10 @@ func secretsComment(names []string) string {
 func buildRepoMigrateCmd(src, dst repository.Repository, secretNames []string, config *planConfig) PlanEntry {
 	var parts []string
 	parts = append(parts, "gh secret-kit migrate repo all")
-	parts = append(parts, fmt.Sprintf("-s %s", shellQuote(repoArg(src))))
-	parts = append(parts, fmt.Sprintf("-d %s", shellQuote(repoArg(dst))))
+	parts = append(parts, fmt.Sprintf("-s %s", migrateutil.ShellQuote(migrateutil.RepoArg(src))))
+	parts = append(parts, fmt.Sprintf("-d %s", migrateutil.ShellQuote(migrateutil.RepoArg(dst))))
 	if config.RunnerLabel != "" && config.RunnerLabel != types.DefaultRunnerLabel {
-		parts = append(parts, fmt.Sprintf("--runner-label %s", shellQuote(config.RunnerLabel)))
+		parts = append(parts, fmt.Sprintf("--runner-label %s", migrateutil.ShellQuote(config.RunnerLabel)))
 	}
 	if config.Overwrite {
 		parts = append(parts, "--overwrite")
@@ -336,12 +337,12 @@ func buildEnvPlanEntry(src, dst repository.Repository, envName string, secretNam
 	// Build migrate env all command (handles secrets via workflow)
 	var migrateParts []string
 	migrateParts = append(migrateParts, "gh secret-kit migrate env all")
-	migrateParts = append(migrateParts, fmt.Sprintf("-s %s", shellQuote(repoArg(src))))
-	migrateParts = append(migrateParts, fmt.Sprintf("--src-env %s", shellQuote(envName)))
-	migrateParts = append(migrateParts, fmt.Sprintf("-d %s", shellQuote(repoArg(dst))))
-	migrateParts = append(migrateParts, fmt.Sprintf("--dst-env %s", shellQuote(envName)))
+	migrateParts = append(migrateParts, fmt.Sprintf("-s %s", migrateutil.ShellQuote(migrateutil.RepoArg(src))))
+	migrateParts = append(migrateParts, fmt.Sprintf("--src-env %s", migrateutil.ShellQuote(envName)))
+	migrateParts = append(migrateParts, fmt.Sprintf("-d %s", migrateutil.ShellQuote(migrateutil.RepoArg(dst))))
+	migrateParts = append(migrateParts, fmt.Sprintf("--dst-env %s", migrateutil.ShellQuote(envName)))
 	if config.RunnerLabel != "" && config.RunnerLabel != types.DefaultRunnerLabel {
-		migrateParts = append(migrateParts, fmt.Sprintf("--runner-label %s", shellQuote(config.RunnerLabel)))
+		migrateParts = append(migrateParts, fmt.Sprintf("--runner-label %s", migrateutil.ShellQuote(config.RunnerLabel)))
 	}
 	if config.Overwrite {
 		migrateParts = append(migrateParts, "--overwrite")
@@ -358,10 +359,10 @@ func buildEnvPlanEntry(src, dst repository.Repository, envName string, secretNam
 	if len(variableNames) > 0 {
 		var varParts []string
 		varParts = append(varParts, "gh secret-kit env variable copy")
-		varParts = append(varParts, shellQuote(repoArg(dst)))
-		varParts = append(varParts, fmt.Sprintf("--repo %s", shellQuote(repoArg(src))))
-		varParts = append(varParts, fmt.Sprintf("--src-env %s", shellQuote(envName)))
-		varParts = append(varParts, fmt.Sprintf("--dst-env %s", shellQuote(envName)))
+		varParts = append(varParts, migrateutil.ShellQuote(migrateutil.RepoArg(dst)))
+		varParts = append(varParts, fmt.Sprintf("--repo %s", migrateutil.ShellQuote(migrateutil.RepoArg(src))))
+		varParts = append(varParts, fmt.Sprintf("--src-env %s", migrateutil.ShellQuote(envName)))
+		varParts = append(varParts, fmt.Sprintf("--dst-env %s", migrateutil.ShellQuote(envName)))
 		if config.Overwrite {
 			varParts = append(varParts, "--overwrite")
 		}
@@ -371,15 +372,15 @@ func buildEnvPlanEntry(src, dst repository.Repository, envName string, secretNam
 	// Build env export | import pipeline (handles settings and variables)
 	exportImportCmd := fmt.Sprintf(
 		"gh secret-kit env export --env %s -R %s | gh secret-kit env import - -R %s",
-		shellQuote(envName),
-		shellQuote(repoArg(src)),
-		shellQuote(repoArg(dst)),
+		migrateutil.ShellQuote(envName),
+		migrateutil.ShellQuote(migrateutil.RepoArg(src)),
+		migrateutil.ShellQuote(migrateutil.RepoArg(dst)),
 	)
 	if config.Overwrite {
 		exportImportCmd += " --overwrite"
 	}
 	if config.UserMap != "" {
-		exportImportCmd += fmt.Sprintf(" --usermap %s", shellQuote(config.UserMap))
+		exportImportCmd += fmt.Sprintf(" --usermap %s", migrateutil.ShellQuote(config.UserMap))
 	}
 
 	return EnvPlanEntry{
@@ -398,14 +399,14 @@ func buildEnvPlanEntry(src, dst repository.Repository, envName string, secretNam
 func buildOrgMigrateCmd(srcRepo repository.Repository, dstOrg repository.Repository, secretNames []string, config *planConfig) PlanEntry {
 	var parts []string
 	parts = append(parts, "gh secret-kit migrate org all")
-	parts = append(parts, fmt.Sprintf("-s %s", shellQuote(repoArg(srcRepo))))
+	parts = append(parts, fmt.Sprintf("-s %s", migrateutil.ShellQuote(migrateutil.RepoArg(srcRepo))))
 	dstOrgArg := dstOrg.Owner
 	if dstOrg.Host != "" {
 		dstOrgArg = dstOrg.Host + "/" + dstOrg.Owner
 	}
-	parts = append(parts, fmt.Sprintf("-d %s", shellQuote(dstOrgArg)))
+	parts = append(parts, fmt.Sprintf("-d %s", migrateutil.ShellQuote(dstOrgArg)))
 	if config.RunnerLabel != "" && config.RunnerLabel != types.DefaultRunnerLabel {
-		parts = append(parts, fmt.Sprintf("--runner-label %s", shellQuote(config.RunnerLabel)))
+		parts = append(parts, fmt.Sprintf("--runner-label %s", migrateutil.ShellQuote(config.RunnerLabel)))
 	}
 	if config.Overwrite {
 		parts = append(parts, "--overwrite")
@@ -455,8 +456,8 @@ func variablesComment(names []string) string {
 func buildDeployKeyMigrateCmd(src, dst repository.Repository, config *planConfig) PlanEntry {
 	var parts []string
 	parts = append(parts, "gh secret-kit deploy-key migrate")
-	parts = append(parts, fmt.Sprintf("--repo %s", shellQuote(repoArg(src))))
-	parts = append(parts, shellQuote(repoArg(dst)))
+	parts = append(parts, fmt.Sprintf("--repo %s", migrateutil.ShellQuote(migrateutil.RepoArg(src))))
+	parts = append(parts, migrateutil.ShellQuote(migrateutil.RepoArg(dst)))
 	if config.ExtraDeployKeyOptions != "" {
 		parts = append(parts, config.ExtraDeployKeyOptions)
 	}
@@ -466,8 +467,8 @@ func buildDeployKeyMigrateCmd(src, dst repository.Repository, config *planConfig
 func buildRepoVariableCopyCmd(src, dst repository.Repository, varNames []string, config *planConfig) PlanEntry {
 	var parts []string
 	parts = append(parts, "gh secret-kit variable copy")
-	parts = append(parts, shellQuote(repoArg(dst)))
-	parts = append(parts, fmt.Sprintf("--repo %s", shellQuote(repoArg(src))))
+	parts = append(parts, migrateutil.ShellQuote(migrateutil.RepoArg(dst)))
+	parts = append(parts, fmt.Sprintf("--repo %s", migrateutil.ShellQuote(migrateutil.RepoArg(src))))
 	if config.Overwrite {
 		parts = append(parts, "--overwrite")
 	}
@@ -481,12 +482,12 @@ func buildOrgVariableCopyCmd(srcOrg, dstOrg repository.Repository, varNames []st
 	if dstOrg.Host != "" {
 		dstOrgArg = dstOrg.Host + "/" + dstOrg.Owner
 	}
-	parts = append(parts, shellQuote(dstOrgArg))
+	parts = append(parts, migrateutil.ShellQuote(dstOrgArg))
 	srcOrgArg := srcOrg.Owner
 	if srcOrg.Host != "" {
 		srcOrgArg = srcOrg.Host + "/" + srcOrg.Owner
 	}
-	parts = append(parts, fmt.Sprintf("--owner %s", shellQuote(srcOrgArg)))
+	parts = append(parts, fmt.Sprintf("--owner %s", migrateutil.ShellQuote(srcOrgArg)))
 	if config.Overwrite {
 		parts = append(parts, "--overwrite")
 	}

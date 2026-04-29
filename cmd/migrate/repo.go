@@ -3,7 +3,7 @@ package migrate
 import (
 	"github.com/spf13/cobra"
 	"github.com/srz-zumix/gh-secret-kit/cmd/migrate/repo"
-	"github.com/srz-zumix/gh-secret-kit/cmd/migrate/workflow"
+	"github.com/srz-zumix/gh-secret-kit/internal/migrate/workflow"
 )
 
 // NewRepoCmd creates the migrate repo command
