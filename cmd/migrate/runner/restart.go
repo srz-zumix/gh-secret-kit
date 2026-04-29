@@ -11,35 +11,26 @@ import (
 )
 
 var (
-	restartRepo       string
 	restartRunnerOpts types.RunnerOptions
 )
 
 // NewRestartCmd creates the runner restart command
 func NewRestartCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "restart [[HOST]/ORG]",
+		Use:   "restart",
 		Short: "Restart the self-hosted runner listener from state",
 		Long: `Restart the self-hosted runner listener for secret migration.
 
 This command reads .gh-secret-kit-state.json from the current working directory,
 reuses the saved runner scale set and runner directory, and starts the foreground
 message session listener again. Use this when runner setup was interrupted and
-the state file still exists.
-
-When a source argument is given on the CLI it is validated against the
-source stored in the state file. If they do not match the command aborts
-without touching the state file.
-
-Arguments:
-  org   Organization name for organization-scoped runner (optional).
-        Must match the source saved in the state file when provided.`,
+the state file still exists. The source repository or organization is read from
+the state file.`,
 		RunE: runRestart,
-		Args: cobra.MaximumNArgs(1),
+		Args: cobra.NoArgs,
 	}
 
 	f := cmd.Flags()
-	f.StringVarP(&restartRepo, "repo", "R", "", "Source repository (owner/repo); validated against state when provided")
 	f.IntVar(&restartRunnerOpts.MaxRunners, "max-runners", 2, "Maximum number of concurrent runners")
 
 	return cmd
@@ -53,9 +44,6 @@ func runRestart(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	if state.ConfigURL == "" {
-		return fmt.Errorf("state does not contain a source config URL")
-	}
 	if state.RunnerLabel == "" {
 		return fmt.Errorf("state does not contain a runner label")
 	}
@@ -63,20 +51,11 @@ func runRestart(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("state does not contain a valid runner scale set ID")
 	}
 
-	sourceRepo, err := migrator.ParseConfigURL(state.ConfigURL)
+	sourceRepo, err := resolveStateSourceRepo(state.Source)
 	if err != nil {
-		return fmt.Errorf("failed to parse source from state: %w", err)
+		return err
 	}
-	if restartRepo != "" || len(args) > 0 {
-		explicitRepo, err := resolveSourceRepo(restartRepo, args, state.RunnerLabel)
-		if err != nil {
-			return err
-		}
-		explicitConfigURL := migrator.BuildGitHubConfigURL(explicitRepo)
-		if explicitConfigURL != state.ConfigURL {
-			return fmt.Errorf("specified source %s does not match state source %s; aborting to protect the state file", explicitConfigURL, state.ConfigURL)
-		}
-	}
+	state.ConfigURL = migrator.BuildGitHubConfigURL(sourceRepo)
 
 	if state.RunnerDir == "" {
 		state.RunnerDir, err = migrator.RunnerDirPathForCwd()

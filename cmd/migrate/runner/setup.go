@@ -167,12 +167,8 @@ func setupNewRunner(ctx context.Context, sourceRepo repository.Repository) error
 	}
 
 	// Save state for teardown (before starting listener, so teardown works even if interrupted)
-	sourceString := sourceRepo.Owner
-	if sourceRepo.Name != "" {
-		sourceString = sourceRepo.Owner + "/" + sourceRepo.Name
-	}
 	state := &migrator.MigrateState{
-		Source:             sourceString,
+		Source:             stateSourceString(sourceRepo),
 		RunnerLabel:        setupRunnerOpts.RunnerLabel,
 		ScaleSetID:         scaleSet.ID,
 		ScaleSetName:       scaleSet.Name,

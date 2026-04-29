@@ -33,25 +33,6 @@ func BuildGitHubConfigURL(repo repository.Repository) string {
 	return fmt.Sprintf("https://%s/%s/%s", host, repo.Owner, repo.Name)
 }
 
-// ParseConfigURL parses a config URL produced by BuildGitHubConfigURL back into
-// a repository.Repository. The path may be "/owner" (org scope) or
-// "/owner/repo" (repository scope).
-func ParseConfigURL(configURL string) (repository.Repository, error) {
-	u, err := url.Parse(configURL)
-	if err != nil {
-		return repository.Repository{}, fmt.Errorf("failed to parse config URL %q: %w", configURL, err)
-	}
-	parts := strings.SplitN(strings.TrimPrefix(u.Path, "/"), "/", 2)
-	if len(parts) == 0 || parts[0] == "" {
-		return repository.Repository{}, fmt.Errorf("config URL has no owner path: %s", configURL)
-	}
-	repo := repository.Repository{Host: u.Host, Owner: parts[0]}
-	if len(parts) > 1 && parts[1] != "" {
-		repo.Name = parts[1]
-	}
-	return repo, nil
-}
-
 // NewScaleSetClient creates a new scaleset client using PAT from gh auth
 func NewScaleSetClient(configURL string) (*scaleset.Client, error) {
 	u, err := url.Parse(configURL)

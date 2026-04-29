@@ -423,9 +423,6 @@ If setup was interrupted, run `runner restart` from the same directory.
 # Restart listener from .gh-secret-kit-state.json in the current directory
 gh secret-kit migrate runner restart
 
-# Restart and validate the source against state
-gh secret-kit migrate runner restart -R owner/repo
-
 # Restart with a different concurrency limit
 gh secret-kit migrate runner restart --max-runners 4
 ```
@@ -433,13 +430,11 @@ gh secret-kit migrate runner restart --max-runners 4
 Restart reads `.gh-secret-kit-state.json` from the **current working directory**.
 It reuses the saved runner scale set, runner label, runner group, and runner dir,
 then starts the foreground listener again. Use this after an interrupted `runner setup`.
-When a source argument is provided it is validated against the state; if they do not match
-the command aborts without touching the state file.
+The source repository or organization is read from the state file.
 
 | Flag | Description | Default |
 | --- | --- | --- |
 | `--max-runners int` | Maximum concurrent runners | 2 |
-| `--repo string` / `-R` | Source repository; validated against state when provided | |
 
 ### Runner Teardown
 

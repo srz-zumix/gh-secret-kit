@@ -71,12 +71,12 @@ func runTeardown(cmd *cobra.Command, args []string) error {
 	var sourceRepo repository.Repository
 
 	if stateErr == nil {
-		configURL = state.ConfigURL
 		var parseErr error
-		sourceRepo, parseErr = migrator.ParseConfigURL(state.ConfigURL)
+		sourceRepo, parseErr = resolveStateSourceRepo(state.Source)
 		if parseErr != nil {
-			return fmt.Errorf("failed to parse source from state: %w", parseErr)
+			return parseErr
 		}
+		configURL = migrator.BuildGitHubConfigURL(sourceRepo)
 		// Validate CLI source against state to prevent accidental teardown of the wrong runner.
 		if teardownRepo != "" || len(args) > 0 {
 			explicitRepo, err := resolveSourceRepo(teardownRepo, args, teardownRunnerOpts.RunnerLabel)

@@ -785,20 +785,18 @@ execute setup from different directories. If the setup process was interrupted, 
 #### migrate runner restart
 
 ```sh
-gh secret-kit migrate runner restart [[HOST]/ORG] [flags]
+gh secret-kit migrate runner restart [flags]
 ```
 
 Restart the self-hosted runner listener from `.gh-secret-kit-state.json` in the
 **current working directory**. Reuses the saved runner scale set, runner label,
 runner group, and runner directory without creating a new scale set. Use this when
-`runner setup` was interrupted and the state file still exists. When a source
-argument is provided, it is validated against the source recorded in the state file;
-if they do not match the command aborts without modifying the state file.
+`runner setup` was interrupted and the state file still exists. The source repository
+or organization is read from the state file.
 
 **Options:**
 
 - `--max-runners int`: Maximum number of concurrent runners (default: 2)
-- `--repo string` / `-R`: Source repository (owner/repo); validated against state when provided
 
 #### migrate runner teardown
 

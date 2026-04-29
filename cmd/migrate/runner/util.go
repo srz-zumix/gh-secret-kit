@@ -43,3 +43,18 @@ func resolveSourceRepo(repoFlag string, args []string, label string) (repository
 	}
 	return sourceRepo, nil
 }
+
+func stateSourceString(repo repository.Repository) string {
+	return parser.GetRepositoryFullNameWithHost(repo)
+}
+
+func resolveStateSourceRepo(source string) (repository.Repository, error) {
+	if source == "" {
+		return repository.Repository{}, fmt.Errorf("state does not contain a source")
+	}
+	repo, err := parser.Repository(parser.RepositoryOwnerOrRepo(source))
+	if err != nil {
+		return repository.Repository{}, fmt.Errorf("failed to parse source from state: %w", err)
+	}
+	return repo, nil
+}
