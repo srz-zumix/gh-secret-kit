@@ -764,7 +764,16 @@ Trigger the migration workflow by removing and re-adding the trigger label on th
 gh secret-kit migrate runner setup [[HOST]/ORG] [flags]
 ```
 
-Register a self-hosted runner and start a message session listener for secret migration. Creates a runner scale set on the source repository/organization, downloads the runner binary, and starts a foreground message session listener. The listener waits for job assignments, automatically starts an ephemeral runner via JIT config when a workflow job is dispatched, and loops continuously until interrupted. Run the workflow dispatch command from another terminal while this command is running.
+Register a self-hosted runner and start a message session listener for secret migration.
+Creates a runner scale set on the source repository/organization, downloads the runner binary,
+and starts a foreground message session listener. The listener waits for job assignments,
+automatically starts an ephemeral runner via JIT config when a workflow job is dispatched,
+and loops continuously until interrupted. Run the workflow dispatch command from another
+terminal while this command is running.
+`.gh-secret-kit-state.json` is written to the **current working directory**. Running setup again in
+the same directory is rejected if the file already exists. To run multiple concurrent runners,
+execute setup from different directories. If the setup process was interrupted, run
+`runner restart` from the same directory to reuse the saved state.
 
 **Options:**
 
@@ -773,19 +782,41 @@ Register a self-hosted runner and start a message session listener for secret mi
 - `--runner-group string`: Runner group name to place the scale set in (created automatically if not found; defaults to the default runner group when omitted)
 - `--runner-label string`: Custom label for the runner (default: "gh-secret-kit-migrate")
 
+#### migrate runner restart
+
+```sh
+gh secret-kit migrate runner restart [[HOST]/ORG] [flags]
+```
+
+Restart the self-hosted runner listener from `.gh-secret-kit-state.json` in the
+**current working directory**. Reuses the saved runner scale set, runner label,
+runner group, and runner directory without creating a new scale set. Use this when
+`runner setup` was interrupted and the state file still exists. When a source
+argument is provided, it is validated against the source recorded in the state file;
+if they do not match the command aborts without modifying the state file.
+
+**Options:**
+
+- `--max-runners int`: Maximum number of concurrent runners (default: 2)
+- `--repo string` / `-R`: Source repository (owner/repo); validated against state when provided
+
 #### migrate runner teardown
 
 ```sh
 gh secret-kit migrate runner teardown [[HOST]/ORG] [flags]
 ```
 
-Unregister and stop the self-hosted runner. Deregisters any leftover runner instances via `config.sh remove`, stops the runner process, deletes the runner scale set from the source repository/organization, and cleans up local runner files. If the runner group was created during setup, it is also deleted.
+Unregister and stop the self-hosted runner. Reads `.gh-secret-kit-state.json` from the **current
+working directory** to determine the runner label, runner group, scale set ID, and runner
+directory. If the runner group was created during setup, it is also deleted.
+When a source argument is provided, it is validated against the source recorded in the state
+file; if they do not match the command aborts without modifying the state file.
 
 **Options:**
 
-- `--repo string` / `-R`: Source repository (owner/repo); when omitted uses the first argument as org or falls back to the current repository
-- `--runner-group string`: Runner group name to search for the scale set (defaults to the default runner group when state file is unavailable)
-- `--runner-label string`: Label of the runner to tear down (default: "gh-secret-kit-migrate")
+- `--repo string` / `-R`: Source repository (owner/repo); validated against state when provided
+- `--runner-group string`: Runner group name to search for the scale set (read from state when available; fallback when state file is absent)
+- `--runner-label string`: Label of the runner to tear down (read from state when available; default: "gh-secret-kit-migrate")
 
 #### migrate runner prune
 

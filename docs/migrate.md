@@ -101,6 +101,10 @@ gh secret-kit migrate runner setup owner-org
 | `--runner-label` | Custom runner label (default: `gh-secret-kit-migrate`) |
 | `--max-runners` | Maximum concurrent runners (default: `2`) |
 
+`runner setup` writes `.gh-secret-kit-state.json` in the current working directory.
+If the setup process is interrupted, run `gh secret-kit migrate runner restart` from
+the same directory to start the listener again without creating a new scale set.
+
 ### Step 2: Init
 
 Creates a topic branch, pushes a stub workflow, and opens a draft PR on the source repository. This makes GitHub recognise the workflow file.
@@ -227,7 +231,10 @@ gh secret-kit migrate runner teardown owner-org
 
 ### Cleaning Up Leftover Runners
 
-If a previous setup was interrupted without teardown, orphaned runners may remain registered in GitHub. Use `runner prune` to remove them:
+If a previous setup was interrupted and `.gh-secret-kit-state.json` still exists, use
+`runner restart` from the same directory to continue using the existing scale set.
+If teardown was not completed and orphaned runners remain registered in GitHub, use
+`runner prune` to remove them:
 
 ```sh
 # Preview (no deletion)
