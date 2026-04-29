@@ -6,6 +6,7 @@ import (
 	"compress/gzip"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -136,6 +137,23 @@ func RunnerDirPath() (string, error) {
 		return "", fmt.Errorf("failed to get home directory: %w", err)
 	}
 	return filepath.Join(homeDir, ".gh-secret-kit", runnerDirName), nil
+}
+
+// RunnerDirPathForCwd returns a runner directory dedicated to the current
+// working directory. Each working directory gets an isolated runner binary
+// tree so that concurrent setups in different directories do not interfere.
+func RunnerDirPathForCwd() (string, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("failed to get current directory: %w", err)
+	}
+	sum := sha256.Sum256([]byte(cwd))
+	id := hex.EncodeToString(sum[:8])
+	base, err := RunnerDirPath()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(base, id), nil
 }
 
 // GenerateRunnerName generates a unique runner name

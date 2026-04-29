@@ -69,9 +69,13 @@ func runSetup(cmd *cobra.Command, args []string) error {
 }
 
 func setupNewRunner(ctx context.Context, sourceRepo repository.Repository) error {
-	// Check if migration state already exists
+	// Build GitHub config URL for scaleset
+	configURL := migrator.BuildGitHubConfigURL(sourceRepo)
+	logger.Info(fmt.Sprintf("Creating scale set client for: %s", configURL))
+
+	// Check if migration state already exists in the current working directory.
 	if migrator.StateExists() {
-		return fmt.Errorf("migration state already exists; run 'runner teardown' first or remove the state file")
+		return fmt.Errorf("migration state already exists in current directory; run 'runner restart' to resume, or run 'runner teardown' first or remove %s", ".gh-secret-kit-state.json")
 	}
 
 	// Initialize GitHub client (for registration token)
@@ -79,10 +83,6 @@ func setupNewRunner(ctx context.Context, sourceRepo repository.Repository) error
 	if err != nil {
 		return fmt.Errorf("failed to create GitHub client: %w", err)
 	}
-
-	// Build GitHub config URL for scaleset
-	configURL := migrator.BuildGitHubConfigURL(sourceRepo)
-	logger.Info(fmt.Sprintf("Creating scale set client for: %s", configURL))
 
 	// Create scaleset client
 	scalesetClient, err := migrator.NewScaleSetClient(configURL)
@@ -145,8 +145,8 @@ func setupNewRunner(ctx context.Context, sourceRepo repository.Repository) error
 	// Update system info with scale set ID
 	migrator.SetScaleSetSystemInfo(scalesetClient, scaleSet.ID)
 
-	// Determine runner directory
-	runnerDir, err := migrator.RunnerDirPath()
+	// Determine runner directory (isolated per working directory)
+	runnerDir, err := migrator.RunnerDirPathForCwd()
 	if err != nil {
 		cleanupScaleSet(ctx, scalesetClient, scaleSet.ID)
 		return fmt.Errorf("failed to determine runner directory: %w", err)
@@ -167,15 +167,13 @@ func setupNewRunner(ctx context.Context, sourceRepo repository.Repository) error
 	}
 
 	// Save state for teardown (before starting listener, so teardown works even if interrupted)
-	sourceString := sourceRepo.Owner
-	if sourceRepo.Name != "" {
-		sourceString = sourceRepo.Owner + "/" + sourceRepo.Name
-	}
 	state := &migrator.MigrateState{
-		Source:             sourceString,
+		Source:             stateSourceString(sourceRepo),
+		RunnerLabel:        setupRunnerOpts.RunnerLabel,
 		ScaleSetID:         scaleSet.ID,
 		ScaleSetName:       scaleSet.Name,
 		RunnerGroupID:      runnerGroupID,
+		RunnerGroupName:    setupRunnerOpts.RunnerGroup,
 		RunnerGroupCreated: runnerGroupCreated,
 		RunnerDir:          runnerDir,
 		ConfigURL:          configURL,
@@ -190,63 +188,7 @@ func setupNewRunner(ctx context.Context, sourceRepo repository.Repository) error
 	logger.Info(fmt.Sprintf("  Runner Label: %s", setupRunnerOpts.RunnerLabel))
 	logger.Info("")
 
-	// Build a token refresher for config.sh-based GHES registration.
-	// Registration tokens are one-time-use on GHES, so we obtain a fresh one
-	// before each ConfigureRunner call instead of reusing a single token.
-	var tokenRefresher func(ctx context.Context) (string, error)
-	logger.Info("Verifying registration token availability...")
-	_, err = gh.CreateRegistrationToken(ctx, client, sourceRepo)
-	if err != nil {
-		logger.Warn(fmt.Sprintf("Failed to obtain registration token (will use JIT config): %v", err))
-	} else {
-		logger.Info("Registration token available; using config.sh mode for runners")
-		tokenRefresher = func(ctx context.Context) (string, error) {
-			token, err := gh.CreateRegistrationToken(ctx, client, sourceRepo)
-			if err != nil {
-				return "", fmt.Errorf("failed to create registration token: %w", err)
-			}
-			return token.GetToken(), nil
-		}
-	}
-
-	logger.Info("Starting message session listener (foreground)...")
-	logger.Info("Dispatch the workflow from another terminal, then the listener will")
-	logger.Info("automatically start an ephemeral runner when a job is assigned.")
-	logger.Info("The listener will keep running after job completion, ready for subsequent runs.")
-	logger.Info("Press Ctrl+C to stop the listener.")
-	logger.Info("")
-
-	// Run the message session listener loop (blocks until job completes or interrupted)
-	listenerConfig := &migrator.ListenerConfig{
-		Client:         scalesetClient,
-		ScaleSetID:     scaleSet.ID,
-		RunnerDir:      runnerDir,
-		ConfigURL:      configURL,
-		RunnerLabel:    setupRunnerOpts.RunnerLabel,
-		RunnerGroup:    setupRunnerOpts.RunnerGroup,
-		TokenRefresher: tokenRefresher,
-		MaxRunners:     setupRunnerOpts.MaxRunners,
-	}
-	listenerErr := migrator.RunListenerLoop(ctx, listenerConfig)
-
-	// After listener exits, show teardown instructions
-	logger.Info("")
-	if listenerErr == nil {
-		logger.Info("Listener stopped.")
-	} else if ctx.Err() != nil {
-		logger.Info("Listener was interrupted.")
-	} else {
-		logger.Warn(fmt.Sprintf("Listener exited with error: %v", listenerErr))
-	}
-	logger.Info("To clean up resources, run:")
-	teardownArgs := sourceRepo.Owner
-	if sourceRepo.Name != "" {
-		teardownArgs = "--repo " + sourceRepo.Owner + "/" + sourceRepo.Name
-	}
-	logger.Info(fmt.Sprintf("  gh secret-kit migrate runner teardown %s --runner-label %s",
-		teardownArgs, setupRunnerOpts.RunnerLabel))
-
-	return listenerErr
+	return runListenerForState(ctx, sourceRepo, scalesetClient, state, setupRunnerOpts.MaxRunners)
 }
 
 // cleanupScaleSet deletes the scale set on failure, logging any errors

@@ -79,6 +79,7 @@ gh secret-kit                           # Root command
 │   │   └── run                         # Trigger migration workflow
 │   └── runner                          # Self-hosted runner management
 │       ├── setup                       # Register and start runner
+│       ├── restart                     # Restart runner listener from state
 │       ├── teardown                    # Unregister and stop runner
 │       └── prune                       # Remove leftover runners
 └── completion                          # Shell completion
@@ -410,28 +411,58 @@ gh secret-kit migrate runner setup myorg --runner-group my-runner-group
 | `--runner-group string` | Runner group name (created if not found) | (default runner group) |
 | `--runner-label string` | Custom runner label | gh-secret-kit-migrate |
 
-### Runner Teardown
+Runner state and local runner files are stored per **working directory**.
+`.gh-secret-kit-state.json` is written to the directory where `runner setup` is run.
+Running setup again in the same directory is rejected if the file already exists.
+To run multiple concurrent runners, execute setup from different directories.
+If setup was interrupted, run `runner restart` from the same directory.
+
+### Runner Restart
 
 ```bash
-# Teardown runner for an organization
-gh secret-kit migrate runner teardown myorg
+# Restart listener from .gh-secret-kit-state.json in the current directory
+gh secret-kit migrate runner restart
 
-# Teardown runner for a specific repository
-gh secret-kit migrate runner teardown -R owner/repo
-
-# Teardown runner with explicit runner group (when state file is unavailable)
-gh secret-kit migrate runner teardown myorg --runner-group my-runner-group
+# Restart with a different concurrency limit
+gh secret-kit migrate runner restart --max-runners 4
 ```
 
-If the runner group was created during setup, it is also deleted during teardown.
-Normally, teardown reads the runner group from the saved state file.
-Specifying `--runner-group` explicitly is required when the state file is missing, and is harmless when the state file exists.
+Restart reads `.gh-secret-kit-state.json` from the **current working directory**.
+It reuses the saved runner scale set, runner label, runner group, and runner dir,
+then starts the foreground listener again. Use this after an interrupted `runner setup`.
+The source repository or organization is read from the state file.
 
 | Flag | Description | Default |
 | --- | --- | --- |
-| `--repo string` / `-R` | Source repository | |
-| `--runner-group string` | Runner group name to locate the scale set; reads from state file if omitted | |
-| `--runner-label string` | Label of the runner to tear down | gh-secret-kit-migrate |
+| `--max-runners int` | Maximum concurrent runners | 2 |
+
+### Runner Teardown
+
+```bash
+# Teardown runner (reads .gh-secret-kit-state.json from the current directory)
+gh secret-kit migrate runner teardown
+
+# Teardown runner for an organization (validated against state)
+gh secret-kit migrate runner teardown myorg
+
+# Teardown runner for a specific repository (validated against state)
+gh secret-kit migrate runner teardown -R owner/repo
+
+# Teardown with explicit runner group and label (fallback when state file is absent)
+gh secret-kit migrate runner teardown myorg --runner-group my-runner-group --runner-label custom-label
+```
+
+Teardown reads `.gh-secret-kit-state.json` from the **current working directory**.
+The runner label, runner group, scale set ID, and runner dir are taken from the state.
+If the runner group was created during setup, it is also deleted during teardown.
+When a source argument is provided it is validated against the state; if they do not match
+the command aborts without touching the state file.
+
+| Flag | Description | Default |
+| --- | --- | --- |
+| `--repo string` / `-R` | Source repository; validated against state when provided | |
+| `--runner-group string` | Runner group name; reads from state file when available | |
+| `--runner-label string` | Label of the runner to tear down; reads from state file when available | gh-secret-kit-migrate |
 
 ### Runner Prune
 

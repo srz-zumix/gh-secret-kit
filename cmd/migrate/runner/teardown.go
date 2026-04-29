@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/cli/go-gh/v2/pkg/repository"
 	"github.com/spf13/cobra"
 	"github.com/srz-zumix/gh-secret-kit/cmd/migrate/types"
 	"github.com/srz-zumix/gh-secret-kit/pkg/migrator"
@@ -23,12 +24,20 @@ func NewTeardownCmd() *cobra.Command {
 		Short: "Unregister and stop the self-hosted runner",
 		Long: `Unregister and stop the self-hosted runner for secret migration.
 
-This command stops the runner process, deletes the runner scale set from the
-source repository/organization, and cleans up local runner files.
+This command reads .gh-secret-kit-state.json from the current working directory,
+stops the runner process, deletes the runner scale set from the source
+repository/organization, and cleans up local runner files.
+
+If the runner group was created during setup, it is also deleted.
+
+When a source argument is given on the CLI it is validated against the
+source stored in the state file. If they do not match the command aborts
+without touching the state file, so the original setup can still be torn
+down correctly.
 
 Arguments:
   org   Organization name for organization-scoped runner (optional).
-        When omitted, uses the current repository's owner.`,
+        Must match the source saved in the state file when provided.`,
 		RunE: runTeardown,
 		Args: cobra.MaximumNArgs(1),
 	}
@@ -36,11 +45,11 @@ Arguments:
 	f := cmd.Flags()
 
 	// Common flags
-	f.StringVarP(&teardownRepo, "repo", "R", "", "Source repository (owner/repo); when omitted uses the first argument as org or falls back to the current repository")
+	f.StringVarP(&teardownRepo, "repo", "R", "", "Source repository (owner/repo); validated against state when provided")
 
-	// Runner-specific flags
-	f.StringVar(&teardownRunnerOpts.RunnerLabel, "runner-label", types.DefaultRunnerLabel, "Label of the runner to tear down")
-	f.StringVar(&teardownRunnerOpts.RunnerGroup, "runner-group", "", "Runner group name to search for the scale set (defaults to the default runner group when state file is unavailable)")
+	// Runner-specific flags (fallback when state file is unavailable)
+	f.StringVar(&teardownRunnerOpts.RunnerLabel, "runner-label", types.DefaultRunnerLabel, "Label of the runner to tear down (read from state when available)")
+	f.StringVar(&teardownRunnerOpts.RunnerGroup, "runner-group", "", "Runner group name to search for the scale set (read from state when available)")
 
 	return cmd
 }
@@ -49,29 +58,63 @@ func runTeardown(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 	logger.Info("Tearing down runner for migration")
 
-	sourceRepo, err := resolveSourceRepo(teardownRepo, args, teardownRunnerOpts.RunnerLabel)
-	if err != nil {
-		return err
+	// Load state from the current working directory.
+	// State is the authoritative source for source, runner label, runner group, and runner dir.
+	state, stateErr := migrator.LoadState()
+	if stateErr != nil {
+		logger.Warn(fmt.Sprintf("No state file found in current directory: %v", stateErr))
 	}
 
-	// Try to load state from the state file
-	state, stateErr := migrator.LoadState()
+	// Determine config URL and source repo.
+	// When state is available it is the primary source of truth.
+	var configURL string
+	var sourceRepo repository.Repository
 
-	// Build GitHub config URL for scaleset
-	configURL := migrator.BuildGitHubConfigURL(sourceRepo)
+	if stateErr == nil {
+		var parseErr error
+		sourceRepo, parseErr = resolveStateSourceRepo(state.Source)
+		if parseErr != nil {
+			return parseErr
+		}
+		configURL = migrator.BuildGitHubConfigURL(sourceRepo)
+		// Validate CLI source against state to prevent accidental teardown of the wrong runner.
+		if teardownRepo != "" || len(args) > 0 {
+			explicitRepo, err := resolveSourceRepo(teardownRepo, args, teardownRunnerOpts.RunnerLabel)
+			if err != nil {
+				return err
+			}
+			explicitConfigURL := migrator.BuildGitHubConfigURL(explicitRepo)
+			if explicitConfigURL != configURL {
+				return fmt.Errorf("specified source %s does not match state source %s; aborting to protect the state file", explicitConfigURL, configURL)
+			}
+		}
+	} else {
+		// No state: fall back to CLI-specified source.
+		var err error
+		sourceRepo, err = resolveSourceRepo(teardownRepo, args, teardownRunnerOpts.RunnerLabel)
+		if err != nil {
+			return err
+		}
+		configURL = migrator.BuildGitHubConfigURL(sourceRepo)
+	}
 
-	// Create scaleset client
+	// Effective runner label and group: prefer state over flag.
+	effectiveRunnerLabel := teardownRunnerOpts.RunnerLabel
+	if stateErr == nil && state.RunnerLabel != "" {
+		effectiveRunnerLabel = state.RunnerLabel
+	}
+
+	// Create scaleset client.
 	scalesetClient, err := migrator.NewScaleSetClient(configURL)
 	if err != nil {
 		return fmt.Errorf("failed to create scaleset client: %w", err)
 	}
 
-	// Resolve runner group ID for name-based lookup
+	// Resolve runner group ID: prefer state over flag.
 	runnerGroupID := migrator.DefaultRunnerGroupID
 	if stateErr == nil && state.RunnerGroupID > 0 {
 		runnerGroupID = state.RunnerGroupID
 	} else if teardownRunnerOpts.RunnerGroup != "" {
-		// State is missing/unreadable; try to resolve runner group by name
 		group, err := migrator.GetRunnerGroupByName(ctx, scalesetClient, teardownRunnerOpts.RunnerGroup)
 		if err != nil {
 			logger.Warn(fmt.Sprintf("Failed to find runner group '%s': %v", teardownRunnerOpts.RunnerGroup, err))
@@ -82,7 +125,7 @@ func runTeardown(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Stop runner process if state has a PID (legacy or interrupted listener)
+	// Stop runner process if state has a PID (legacy or interrupted listener).
 	if stateErr == nil && state.RunnerPID > 0 {
 		logger.Info(fmt.Sprintf("Stopping runner process (PID: %d)...", state.RunnerPID))
 		if err := migrator.StopRunner(state.RunnerPID); err != nil {
@@ -92,10 +135,9 @@ func runTeardown(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Delete scale set
+	// Delete scale set.
 	var scaleSetDeleted bool
 	if stateErr == nil && state.ScaleSetID > 0 {
-		// Use scale set ID from state
 		logger.Info(fmt.Sprintf("Deleting runner scale set (ID: %d)...", state.ScaleSetID))
 		if err := migrator.DeleteRunnerScaleSet(ctx, scalesetClient, state.ScaleSetID); err != nil {
 			logger.Warn(fmt.Sprintf("Failed to delete scale set by ID: %v", err))
@@ -106,9 +148,8 @@ func runTeardown(cmd *cobra.Command, args []string) error {
 	}
 
 	if !scaleSetDeleted {
-		// Try to find and delete by name
-		logger.Info(fmt.Sprintf("Looking up runner scale set by name: %s", teardownRunnerOpts.RunnerLabel))
-		scaleSet, err := migrator.FindRunnerScaleSet(ctx, scalesetClient, teardownRunnerOpts.RunnerLabel, runnerGroupID)
+		logger.Info(fmt.Sprintf("Looking up runner scale set by name: %s", effectiveRunnerLabel))
+		scaleSet, err := migrator.FindRunnerScaleSet(ctx, scalesetClient, effectiveRunnerLabel, runnerGroupID)
 		if err != nil {
 			logger.Warn(fmt.Sprintf("Failed to find scale set by name: %v", err))
 		} else if scaleSet != nil {
@@ -124,7 +165,7 @@ func runTeardown(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Delete runner group if it was created during setup
+	// Delete runner group if it was created during setup.
 	if stateErr == nil && state.RunnerGroupCreated && state.RunnerGroupID > 0 {
 		logger.Info(fmt.Sprintf("Deleting runner group (ID: %d) created during setup...", state.RunnerGroupID))
 		ghClient, err := gh.NewGitHubClientWithRepo(sourceRepo)
@@ -139,21 +180,19 @@ func runTeardown(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Clean up local runner files
+	// Clean up local runner files.
 	runnerDir := ""
 	if stateErr == nil && state.RunnerDir != "" {
 		runnerDir = state.RunnerDir
 	} else {
-		runnerDir, _ = migrator.RunnerDirPath()
+		runnerDir, _ = migrator.RunnerDirPathForCwd()
 	}
 
 	if runnerDir != "" {
-		// Deregister any leftover runner instances before removing files
 		instancesDir := migrator.RunnerInstancesBaseDir(runnerDir)
 		logger.Info(fmt.Sprintf("Removing registered runners in: %s", instancesDir))
 		migrator.RemoveRunnerInstances(instancesDir)
 
-		// Also deregister the template runner dir itself if it was configured
 		if err := migrator.RemoveRunner(runnerDir); err != nil {
 			logger.Warn(fmt.Sprintf("Failed to remove runner from template dir: %v", err))
 		}
@@ -165,7 +204,6 @@ func runTeardown(cmd *cobra.Command, args []string) error {
 			logger.Info("Runner directory cleaned up")
 		}
 
-		// Clean up runner instance directories (sibling of runnerDir)
 		if err := migrator.CleanupRunnerDir(instancesDir); err != nil {
 			logger.Warn(fmt.Sprintf("Failed to clean up runner instances directory: %v", err))
 		} else {
@@ -173,7 +211,7 @@ func runTeardown(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Remove state file
+	// Remove state file.
 	if err := migrator.RemoveState(); err != nil {
 		logger.Warn(fmt.Sprintf("Failed to remove state file: %v", err))
 	}

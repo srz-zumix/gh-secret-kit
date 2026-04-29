@@ -101,6 +101,11 @@ gh secret-kit migrate runner setup owner-org
 | `--runner-label` | ランナーのカスタムラベル（デフォルト: `gh-secret-kit-migrate`） |
 | `--max-runners` | 最大同時実行ランナー数（デフォルト: `2`） |
 
+`runner setup` はカレントディレクトリに `.gh-secret-kit-state.json` を作成します。
+セットアッププロセスを中断した場合は、同じディレクトリで
+`gh secret-kit migrate runner restart` を実行すると、新しい scale set を作らずに
+リスナーを再起動できます。
+
 ### ステップ 2：Init
 
 トピックブランチを作成し、スタブワークフローをプッシュして、コピー元リポジトリにドラフト PR を開きます。これにより GitHub がワークフローファイルを認識します。
@@ -227,7 +232,10 @@ gh secret-kit migrate runner teardown owner-org
 
 ### 残留ランナーを削除する
 
-teardown を実行せずにセットアップが中断された場合、孤立したランナーが GitHub に残ることがあります。`runner prune` で削除できます：
+セットアップが中断され、`.gh-secret-kit-state.json` が残っている場合は、同じ
+ディレクトリで `runner restart` を実行すると既存の scale set を継続利用できます。
+teardown が完了せず、孤立したランナーが GitHub に残っている場合は、`runner prune`
+で削除できます：
 
 ```sh
 # プレビュー（削除しない）
