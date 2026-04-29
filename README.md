@@ -824,10 +824,13 @@ gh secret-kit migrate runner prune [[HOST]/ORG] [flags]
 
 Remove self-hosted runners whose names start with `gh-secret-kit-` that were left behind by previous runs. Only runners matching `--runner-label` are targeted (pass `--runner-label ""` to match all `gh-secret-kit-` runners). Busy runners are skipped to avoid disrupting running jobs. Use `--dry-run` (`-n`) to preview without deleting.
 
+Use `--runner-group` to restrict pruning to runners belonging to a specific runner group (org-level only; cannot be combined with `--repo`).
+
 **Options:**
 
 - `--dry-run` / `-n`: Print runners that would be removed without deleting them (default: false)
-- `--repo string` / `-R`: Source repository (owner/repo); when omitted uses the first argument as org or falls back to the current repository
+- `--repo string` / `-R`: Source repository (owner/repo); when omitted uses the first argument as org or falls back to the current repository (mutually exclusive with `--runner-group`)
+- `--runner-group string`: Only remove runners belonging to this runner group name (org-level only; mutually exclusive with `--repo`)
 - `--runner-label string`: Only remove runners that have this label (default: "gh-secret-kit-migrate"; empty string matches all gh-secret-kit runners)
 
 ### Examples
