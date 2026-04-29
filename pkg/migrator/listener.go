@@ -84,7 +84,7 @@ func requestIDSample(requestIDs []int64, limit int) []int64 {
 }
 
 func (c *loggingSessionClient) AcquireJobs(ctx context.Context, requestIDs []int64) ([]int64, error) {
-	if !c.acquireJobs {
+	if !c.shouldAcquireJobs {
 		logger.Debug(fmt.Sprintf(
 			"Skipping AcquireJobs for config.sh runners: requestIDCount=%d requestIDSample=%v",
 			len(requestIDs),
@@ -194,8 +194,8 @@ func runListenerOnce(ctx context.Context, config *ListenerConfig, hostname strin
 	// self-hosted runners, so jobs must remain available for label matching.
 	isConfigShMode := config.TokenRefresher != nil
 	loggingClient := &loggingSessionClient{
-		inner:       sessionClient,
-		acquireJobs: !isConfigShMode,
+		inner:             sessionClient,
+		shouldAcquireJobs: !isConfigShMode,
 	}
 
 	// Create the SDK listener
