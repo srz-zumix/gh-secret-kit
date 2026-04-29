@@ -192,9 +192,10 @@ func runListenerOnce(ctx context.Context, config *ListenerConfig, hostname strin
 
 	// Wrap session client with logging. config.sh runners are regular
 	// self-hosted runners, so jobs must remain available for label matching.
+	isConfigShMode := config.TokenRefresher != nil
 	loggingClient := &loggingSessionClient{
 		inner:       sessionClient,
-		acquireJobs: config.TokenRefresher == nil,
+		acquireJobs: !isConfigShMode,
 	}
 
 	// Create the SDK listener
