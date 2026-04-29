@@ -11,7 +11,10 @@ import (
 	"github.com/srz-zumix/go-gh-extension/pkg/logger"
 )
 
-func runListenerForState(ctx context.Context, sourceRepo repository.Repository, scalesetClient *scaleset.Client, state *migrator.MigrateState, maxRunners int) error {
+// RunListenerForState starts the foreground message session listener using
+// values from the saved migration state. It is shared by runner setup and
+// runner restart.
+func RunListenerForState(ctx context.Context, sourceRepo repository.Repository, scalesetClient *scaleset.Client, state *migrator.MigrateState, maxRunners int) error {
 	if state.ScaleSetID <= 0 {
 		return fmt.Errorf("state does not contain a runner scale set ID")
 	}

@@ -8,7 +8,8 @@ import (
 	"github.com/actions/scaleset"
 	"github.com/cli/go-gh/v2/pkg/repository"
 	"github.com/spf13/cobra"
-	"github.com/srz-zumix/gh-secret-kit/cmd/migrate/types"
+	runnerinternal "github.com/srz-zumix/gh-secret-kit/internal/migrate/runner"
+	"github.com/srz-zumix/gh-secret-kit/internal/migrate/types"
 	"github.com/srz-zumix/gh-secret-kit/pkg/migrator"
 	"github.com/srz-zumix/go-gh-extension/pkg/gh"
 	"github.com/srz-zumix/go-gh-extension/pkg/logger"
@@ -60,7 +61,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 	logger.Info("Setting up runner for migration")
 
-	sourceRepo, err := resolveSourceRepo(setupRepo, args, setupRunnerOpts.RunnerLabel)
+	sourceRepo, err := runnerinternal.ResolveSourceRepo(setupRepo, args, setupRunnerOpts.RunnerLabel)
 	if err != nil {
 		return err
 	}
@@ -168,7 +169,7 @@ func setupNewRunner(ctx context.Context, sourceRepo repository.Repository) error
 
 	// Save state for teardown (before starting listener, so teardown works even if interrupted)
 	state := &migrator.MigrateState{
-		Source:             stateSourceString(sourceRepo),
+		Source:             runnerinternal.StateSourceString(sourceRepo),
 		RunnerLabel:        setupRunnerOpts.RunnerLabel,
 		ScaleSetID:         scaleSet.ID,
 		ScaleSetName:       scaleSet.Name,
@@ -188,7 +189,7 @@ func setupNewRunner(ctx context.Context, sourceRepo repository.Repository) error
 	logger.Info(fmt.Sprintf("  Runner Label: %s", setupRunnerOpts.RunnerLabel))
 	logger.Info("")
 
-	return runListenerForState(ctx, sourceRepo, scalesetClient, state, setupRunnerOpts.MaxRunners)
+	return runnerinternal.RunListenerForState(ctx, sourceRepo, scalesetClient, state, setupRunnerOpts.MaxRunners)
 }
 
 // cleanupScaleSet deletes the scale set on failure, logging any errors

@@ -6,7 +6,8 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/srz-zumix/gh-secret-kit/cmd/migrate/types"
+	runnerinternal "github.com/srz-zumix/gh-secret-kit/internal/migrate/runner"
+	"github.com/srz-zumix/gh-secret-kit/internal/migrate/types"
 	"github.com/srz-zumix/gh-secret-kit/pkg/migrator"
 	"github.com/srz-zumix/go-gh-extension/pkg/gh"
 	"github.com/srz-zumix/go-gh-extension/pkg/logger"
@@ -51,7 +52,7 @@ Arguments:
 func runPrune(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 
-	sourceRepo, err := resolveSourceRepo(pruneRepo, args, pruneRunnerOpts.RunnerLabel)
+	sourceRepo, err := runnerinternal.ResolveSourceRepo(pruneRepo, args, pruneRunnerOpts.RunnerLabel)
 	if err != nil {
 		return err
 	}

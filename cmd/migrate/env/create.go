@@ -4,8 +4,8 @@ import (
 	"context"
 
 	"github.com/spf13/cobra"
-	"github.com/srz-zumix/gh-secret-kit/cmd/migrate/types"
-	"github.com/srz-zumix/gh-secret-kit/cmd/migrate/workflow"
+	"github.com/srz-zumix/gh-secret-kit/internal/migrate/types"
+	"github.com/srz-zumix/gh-secret-kit/internal/migrate/workflow"
 	"github.com/srz-zumix/gh-secret-kit/pkg/migrator"
 )
 
