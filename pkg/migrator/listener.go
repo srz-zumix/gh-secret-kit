@@ -75,9 +75,21 @@ func (c *loggingSessionClient) Session() scaleset.RunnerScaleSetSession {
 	return c.inner.Session()
 }
 
+// requestIDSample returns up to the first limit request IDs for logging.
+func requestIDSample(requestIDs []int64, limit int) []int64 {
+	if len(requestIDs) <= limit {
+		return requestIDs
+	}
+	return requestIDs[:limit]
+}
+
 func (c *loggingSessionClient) AcquireJobs(ctx context.Context, requestIDs []int64) ([]int64, error) {
 	if !c.acquireJobs {
-		logger.Info(fmt.Sprintf("Skipping AcquireJobs for config.sh runners: requestIDs=%v", requestIDs))
+		logger.Debug(fmt.Sprintf(
+			"Skipping AcquireJobs for config.sh runners: requestIDCount=%d requestIDSample=%v",
+			len(requestIDs),
+			requestIDSample(requestIDs, 5),
+		))
 		return nil, nil
 	}
 	return c.inner.AcquireJobs(ctx, requestIDs)
