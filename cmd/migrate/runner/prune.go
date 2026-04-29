@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/google/go-github/v84/github"
 	"github.com/spf13/cobra"
 	runnerinternal "github.com/srz-zumix/gh-secret-kit/internal/migrate/runner"
 	"github.com/srz-zumix/gh-secret-kit/internal/migrate/types"
@@ -67,28 +66,9 @@ func runPrune(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to create GitHub client: %w", err)
 	}
 
-	var runners []*github.Runner
-	if pruneRunnerOpts.RunnerGroup != "" {
-		// Runner groups are an organization/enterprise feature and are not available for repository-level runners.
-		if sourceRepo.Name != "" {
-			return fmt.Errorf("--runner-group is not supported for repository runners (runner groups are org/enterprise only)")
-		}
-		group, err := gh.FindOrgRunnerGroup(ctx, client, sourceRepo, pruneRunnerOpts.RunnerGroup)
-		if err != nil {
-			return fmt.Errorf("failed to find runner group %q: %w", pruneRunnerOpts.RunnerGroup, err)
-		}
-		if group == nil {
-			return fmt.Errorf("runner group %q not found", pruneRunnerOpts.RunnerGroup)
-		}
-		runners, err = gh.ListOrgRunnerGroupRunners(ctx, client, sourceRepo, group.GetID())
-		if err != nil {
-			return fmt.Errorf("failed to list runners for group %q: %w", pruneRunnerOpts.RunnerGroup, err)
-		}
-	} else {
-		runners, err = gh.ListRunners(ctx, client, sourceRepo)
-		if err != nil {
-			return fmt.Errorf("failed to list runners: %w", err)
-		}
+	runners, err := runnerinternal.ListRunners(ctx, client, sourceRepo, pruneRunnerOpts.RunnerGroup)
+	if err != nil {
+		return err
 	}
 
 	removed := 0
