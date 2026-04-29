@@ -44,7 +44,11 @@ Arguments:
 	f := cmd.Flags()
 	f.StringVarP(&pruneRepo, "repo", "R", "", "Source repository (owner/repo); when omitted uses the first argument as org or falls back to the current repository")
 	f.StringVar(&pruneRunnerOpts.RunnerLabel, "runner-label", types.DefaultRunnerLabel, "Only remove runners that have this label (empty string matches all gh-secret-kit runners)")
+	f.StringVar(&pruneRunnerOpts.RunnerGroup, "runner-group", "", "Only remove runners belonging to this runner group name (org-level only; cannot be combined with --repo)")
 	f.BoolVarP(&pruneDryRun, "dry-run", "n", false, "Print runners that would be removed without deleting them")
+
+	// Runner groups are org/enterprise only; combining with --repo (repo-level runner) makes no sense.
+	cmd.MarkFlagsMutuallyExclusive("repo", "runner-group")
 
 	return cmd
 }
@@ -62,9 +66,9 @@ func runPrune(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to create GitHub client: %w", err)
 	}
 
-	runners, err := gh.ListRunners(ctx, client, sourceRepo)
+	runners, err := runnerinternal.ListRunners(ctx, client, sourceRepo, pruneRunnerOpts.RunnerGroup)
 	if err != nil {
-		return fmt.Errorf("failed to list runners: %w", err)
+		return err
 	}
 
 	removed := 0
