@@ -59,6 +59,9 @@ func runRestart(cmd *cobra.Command, args []string) error {
 	if state.RunnerLabel == "" {
 		return fmt.Errorf("state does not contain a runner label")
 	}
+	if state.ScaleSetID <= 0 {
+		return fmt.Errorf("state does not contain a valid runner scale set ID")
+	}
 
 	sourceRepo, err := migrator.ParseConfigURL(state.ConfigURL)
 	if err != nil {
