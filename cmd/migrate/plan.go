@@ -70,6 +70,12 @@ type PlanResult struct {
 	RunnerTeardown         string
 }
 
+// IsEmpty reports whether the plan has no migration targets.
+func (r *PlanResult) IsEmpty() bool {
+	return len(r.RepoMigrates) == 0 && len(r.EnvMigrates) == 0 && r.OrgMigrate.Cmd == "" &&
+		len(r.RepoVariableCopies) == 0 && r.OrgVariableCopy.Cmd == "" && len(r.DeployKeyMigrates) == 0
+}
+
 // NewPlanCmd creates the migrate plan command
 func NewPlanCmd() *cobra.Command {
 	var config planConfig
@@ -270,6 +276,11 @@ func runPlan(ctx context.Context, config *planConfig) error {
 		cmd := buildOrgVariableCopyCmd(src.OwnerRepo, dst.OwnerRepo, orgVariableNames, config)
 		result.OrgVariableCopy = cmd
 		logger.Info(fmt.Sprintf("Found org variables: %d variables", len(srcOrgVariables)))
+	}
+
+	// Log when no migration targets are found
+	if result.IsEmpty() {
+		logger.Info("No migration targets found")
 	}
 
 	// Output the plan
@@ -495,8 +506,7 @@ func buildOrgVariableCopyCmd(srcOrg, dstOrg repository.Repository, varNames []st
 }
 
 func printPlan(result *PlanResult) {
-	if len(result.RepoMigrates) == 0 && len(result.EnvMigrates) == 0 && result.OrgMigrate.Cmd == "" &&
-		len(result.RepoVariableCopies) == 0 && result.OrgVariableCopy.Cmd == "" && len(result.DeployKeyMigrates) == 0 {
+	if result.IsEmpty() {
 		fmt.Println("# No matching repositories or environments found for migration")
 		return
 	}
