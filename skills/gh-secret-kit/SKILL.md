@@ -528,21 +528,47 @@ gh secret-kit migrate repo run -s owner/source --wait
 gh secret-kit migrate repo delete -s owner/source
 ```
 
+#### migrate repo dispatch
+
+Generate a secret migration workflow, push it to a temporary branch, and trigger
+it via `workflow_dispatch`. Two modes:
+
+- **Self-rewrite** (no `--src`): run from inside a `workflow_dispatch`-triggered
+  workflow; it rewrites the currently running workflow and reuses the same runner
+  setting unless `--runner-label` is given.
+- **Target-specified** (`--src` given): the workflow need not run inside a
+  workflow. The workflow is registered in the target repository using a
+  syntax-error workflow trick, then the corrected workflow is pushed and
+  dispatched. `--runner-label` is required and `--workflow-name` selects the
+  workflow file name.
+
+The temporary branch is deleted by the generated workflow after a successful run.
+
+```bash
+# Self-rewrite: inside a workflow_dispatch job
+gh secret-kit migrate repo dispatch -d owner/dest
+
+# Override the runner and migrate specific secrets
+gh secret-kit migrate repo dispatch -d owner/dest \
+  --runner-label ubuntu-latest --secrets API_KEY,DB_PASSWORD
+
+# Target-specified: dispatch into a repository that has no workflow yet
+gh secret-kit migrate repo dispatch -s owner/source -d owner/dest \
+  --runner-label self-hosted --workflow-name gh-secret-kit-migrate
+```
+
 | Flag | Description | Default |
 | --- | --- | --- |
-| `--branch string` | Topic branch name | gh-secret-kit-migrate |
+| `--branch string` | Temporary dispatch branch name | unique name from run ID |
 | `--dst string` / `-d` | Destination repository (`owner/repo` or `HOST/OWNER/REPO`) | |
+| `--dst-token string` | Secret name holding the destination PAT (referenced as `${{ secrets.<name> }}`) | |
 | `--exclude-secrets strings` | Secret names to exclude (exact name match only — no substring matching; use `migrate list` first to find exact names, comma-separated or repeated) | |
-| `--label string` | Label name for triggering | gh-secret-kit-migrate |
 | `--overwrite` | Overwrite existing secrets | false |
 | `--rename strings` | `OLD_NAME=NEW_NAME` mapping (repeatable) | |
-| `--runner-label string` | Runner label for the workflow | gh-secret-kit-migrate |
+| `--runner-label string` | Runner label for `runs-on` (required with `--src`) | running workflow's runner |
 | `--secrets strings` | Specific secret names (comma-separated or repeated) | all |
-| `--src string` / `-s` | Source repository | current repo |
-| `--timeout string` | Wait timeout (e.g., 5m, 1h) | 10m |
-| `--unarchive` | Temporarily unarchive if archived | false |
-| `--wait` / `-w` | Wait for workflow completion (run only) | false |
-| `--workflow-name string` | Workflow file name | gh-secret-kit-migrate |
+| `--src string` / `-s` | Source repository (when set, enables target-specified mode) | current repo |
+| `--workflow-name string` | Workflow file name for target-specified mode | gh-secret-kit-migrate |
 
 ### Migrate Org Secrets
 
