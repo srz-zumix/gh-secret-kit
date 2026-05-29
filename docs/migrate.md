@@ -339,6 +339,37 @@ gh secret-kit migrate repo all -s source-org/repo-b -d dest-org/repo-b
 gh secret-kit migrate runner teardown source-org
 ```
 
+## Dispatching from Within a Workflow
+
+`migrate repo dispatch` is an advanced alternative that runs from **inside** a
+`workflow_dispatch`-triggered workflow. Instead of pushing a label-triggered
+workflow and toggling a label, it rewrites the currently running workflow with a
+secret migration workflow, pushes it to a temporary branch, and re-triggers it
+via `workflow_dispatch`.
+
+Key behaviors:
+
+- It refuses to run unless the current event is `workflow_dispatch` and it is
+  running inside GitHub Actions.
+- The generated workflow reuses the **same runner setting** (`runs-on`) as the
+  running workflow, unless `--runner-label` is given.
+- The temporary branch is deleted by the generated workflow after a successful
+  run, so no separate `delete` step is required.
+
+```yaml
+# .github/workflows/migrate.yml
+on:
+  workflow_dispatch:
+jobs:
+  migrate:
+    runs-on: self-hosted
+    steps:
+      - name: Dispatch secret migration
+        run: gh secret-kit migrate repo dispatch -d owner/dest-repo
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
 ## Security Notes
 
 - Secret values are **never written to disk** on the runner.

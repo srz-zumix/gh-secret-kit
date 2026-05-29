@@ -724,6 +724,26 @@ Close any open pull requests from the migration topic branch and then delete the
 - `--unarchive`: Temporarily unarchive the repository if it is archived
 - `--workflow-name string`: Name of the workflow file (default: "gh-secret-kit-migrate")
 
+#### migrate repo dispatch
+
+```sh
+gh secret-kit migrate repo dispatch [flags]
+```
+
+Rewrite the currently running workflow with a secret migration workflow, push it to a temporary branch, and re-trigger it via `workflow_dispatch`. This command must be invoked from inside a `workflow_dispatch`-triggered workflow and refuses to run otherwise. The generated workflow reuses the same runner setting as the running workflow (unless `--runner-label` is given) and is itself triggered by `workflow_dispatch`. The temporary branch is deleted by the generated workflow after a successful run.
+
+**Options:**
+
+- `--branch string`: Temporary dispatch branch name (default: unique name derived from the workflow run ID)
+- `--dst string` / `-d`: Destination repository (e.g., owner/repo or HOST/OWNER/REPO) (required)
+- `--dst-token string`: Secret variable name that holds the PAT for the destination (referenced as `${{ secrets.<name> }}` in the workflow)
+- `--exclude-secrets strings`: Secret names to exclude from migration (comma-separated or repeated flag)
+- `--overwrite`: Overwrite existing secrets at destination
+- `--rename strings`: Rename mapping in OLD\_NAME=NEW\_NAME format (repeatable)
+- `--runner-label string`: Runner label for `runs-on` (default: the running workflow's runner setting)
+- `--secrets strings`: Specific secret names to migrate (comma-separated or repeated flag; defaults to all)
+- `--src string` / `-s`: Source repository (e.g., owner/repo; defaults to the repository running the workflow)
+
 #### migrate repo init
 
 ```sh

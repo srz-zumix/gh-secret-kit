@@ -68,6 +68,29 @@ type DeleteConfig struct {
 	SkipArchiveCheck bool
 }
 
+// DispatchConfig holds configuration for the dispatch operation, which is meant
+// to run from inside a workflow_dispatch-triggered workflow. It rewrites the
+// currently running workflow with a migration workflow, pushes it to a
+// temporary branch, and re-triggers it via workflow_dispatch.
+type DispatchConfig struct {
+	Source                 string
+	Destination            string
+	SourceEnv              string
+	DestinationEnv         string
+	Secrets                []string
+	ExcludeSecrets         []string
+	Rename                 []string
+	Overwrite              bool
+	DestinationTokenSecret string
+	Scope                  migrator.SecretScope
+	// RunnerLabel overrides the runs-on value of the generated workflow. When
+	// empty, the runs-on of the currently running workflow is reused.
+	RunnerLabel string
+	// Branch is the temporary dispatch branch name. When empty, a unique name
+	// derived from the workflow run ID is used.
+	Branch string
+}
+
 // CheckConfig holds configuration for the check operation
 type CheckConfig struct {
 	Source           string

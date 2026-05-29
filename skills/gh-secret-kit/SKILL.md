@@ -528,6 +528,24 @@ gh secret-kit migrate repo run -s owner/source --wait
 gh secret-kit migrate repo delete -s owner/source
 ```
 
+#### migrate repo dispatch
+
+Run from inside a `workflow_dispatch`-triggered workflow. It rewrites the
+currently running workflow with a secret migration workflow, pushes it to a
+temporary branch, and re-triggers it via `workflow_dispatch`. The generated
+workflow reuses the same runner setting as the running workflow (unless
+`--runner-label` is given) and deletes the temporary branch after a successful
+run.
+
+```bash
+# Inside a workflow_dispatch job
+gh secret-kit migrate repo dispatch -d owner/dest
+
+# Override the runner and migrate specific secrets
+gh secret-kit migrate repo dispatch -d owner/dest \
+  --runner-label ubuntu-latest --secrets API_KEY,DB_PASSWORD
+```
+
 | Flag | Description | Default |
 | --- | --- | --- |
 | `--branch string` | Topic branch name | gh-secret-kit-migrate |

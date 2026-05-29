@@ -337,6 +337,37 @@ gh secret-kit migrate repo all -s source-org/repo-b -d dest-org/repo-b
 gh secret-kit migrate runner teardown source-org
 ```
 
+## ワークフロー内からのディスパッチ
+
+`migrate repo dispatch` は、`workflow_dispatch` でトリガーされたワークフローの
+**内部から**実行する高度な代替手段です。ラベルでトリガーするワークフローを
+push してラベルを付け替える代わりに、実行中のワークフロー自身をシークレット
+移行ワークフローで書き換え、ダミーのブランチへ push して `workflow_dispatch`
+で再トリガーします。
+
+主な挙動:
+
+- 現在のイベントが `workflow_dispatch` で、かつ GitHub Actions 上で実行されて
+  いない限り、実行を拒否します。
+- 生成されるワークフローは、`--runner-label` を指定しない限り、実行中の
+  ワークフローと**同じランナー設定**（`runs-on`）を使用します。
+- ダミーブランチは移行成功後に生成されたワークフロー自身が削除するため、別途
+  `delete` を実行する必要はありません。
+
+```yaml
+# .github/workflows/migrate.yml
+on:
+  workflow_dispatch:
+jobs:
+  migrate:
+    runs-on: self-hosted
+    steps:
+      - name: Dispatch secret migration
+        run: gh secret-kit migrate repo dispatch -d owner/dest-repo
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
 ## セキュリティに関する注意
 
 - シークレットの値はランナー上のディスクに**一切書き込まれません**。
