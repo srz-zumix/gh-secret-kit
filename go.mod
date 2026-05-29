@@ -3,7 +3,7 @@ module github.com/srz-zumix/gh-secret-kit
 go 1.26.1
 
 require (
-	github.com/actions/scaleset v0.3.0
+	github.com/actions/scaleset v0.4.0
 	github.com/cli/cli/v2 v2.88.1
 	github.com/cli/go-gh/v2 v2.13.0
 	github.com/google/go-github/v84 v84.0.0

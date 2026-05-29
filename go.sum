@@ -16,8 +16,8 @@ github.com/Netflix/go-expect v0.0.0-20220104043353-73e0943537d2 h1:+vx7roKuyA63n
 github.com/Netflix/go-expect v0.0.0-20220104043353-73e0943537d2/go.mod h1:HBCaDeC1lPdgDeDbhX8XFpy1jqjK0IBG8W5K+xYqA0w=
 github.com/Songmu/skillsmith v0.1.0 h1:R7tT94OrdsLuDGpdiBbLEjS+nDIRKjxGHeejwDpdf6w=
 github.com/Songmu/skillsmith v0.1.0/go.mod h1:agwErnb8lLH48nyoDqEZfoVJovtMGOgqUuTnR1M9ORI=
-github.com/actions/scaleset v0.3.0 h1:y5/ClYLJXFuGCikzILOOPhaCShAcL6K0mnUtjDKFxVw=
-github.com/actions/scaleset v0.3.0/go.mod h1:2L2I6rggFWV+zprDet6y7y7Vkm3HPudaup78eSc79Uo=
+github.com/actions/scaleset v0.4.0 h1:691GC2AkHb3ZGjfNvatboYoRS7CLr3+4VcZk/6w9IbM=
+github.com/actions/scaleset v0.4.0/go.mod h1:2L2I6rggFWV+zprDet6y7y7Vkm3HPudaup78eSc79Uo=
 github.com/atotto/clipboard v0.1.4 h1:EH0zSVneZPSuFR11BlR9YppQTVDbh5+16AmcJi4g1z4=
 github.com/atotto/clipboard v0.1.4/go.mod h1:ZY9tmq7sm5xIbd9bOK4onWV4S6X0u6GY7Vn0Yu86PYI=
 github.com/aymanbagabas/go-osc52/v2 v2.0.1 h1:HwpRHbFMcZLEVr42D4p7XBqjyuxQH5SMiErDT4WkJ2k=
