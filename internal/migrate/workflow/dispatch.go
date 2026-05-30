@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -173,6 +174,10 @@ func RunDispatch(ctx context.Context, config *DispatchConfig) error {
 		branch = "gh-secret-kit-migrate-dispatch"
 		if runID := actions.GetRunID(); runID != "" {
 			branch += "-" + runID
+		} else {
+			// Outside GitHub Actions (e.g. target-specified mode) there is no run
+			// ID, so use a timestamp to keep the branch name unique.
+			branch += "-" + strconv.FormatInt(time.Now().UnixNano(), 10)
 		}
 	}
 
