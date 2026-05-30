@@ -537,7 +537,7 @@ it via `workflow_dispatch`. Two modes:
   workflow; it rewrites the currently running workflow and reuses the same runner
   setting unless `--runner-label` is given.
 - **Target-specified** (`--src` given): the workflow need not run inside a
-  workflow. The workflow is registered in the target repository using a
+  workflow. The workflow is registered in the source repository using a
   syntax-error workflow trick, then the corrected workflow is pushed and
   dispatched. `--runner-label` is required and `--workflow-name` selects the
   workflow file name.
