@@ -26,7 +26,7 @@ This command has two modes:
     workflow and rewrites the currently running workflow. The generated workflow
     reuses the same runner setting as the running workflow unless --runner-label
     is given.
-  - Target-specified (--src given): the workflow does not exist in the target
+  - Target-specified (--src given): the workflow does not exist in the source
     repository, so it does not need to run inside a workflow. The workflow is
     registered using a syntax-error workflow trick, then the corrected workflow
     is pushed and dispatched. --runner-label is required in this mode and
