@@ -377,7 +377,7 @@ jobs:
 
 When `--src` is given, the workflow does **not** need to run inside a workflow,
 and the source repository can be any repository you have access to. Because the
-migration workflow does not exist on the target's default branch, a plain
+migration workflow does not exist on the source repository's default branch, a plain
 `workflow_dispatch` would return 404. To work around this, a syntax-error
 workflow is pushed first and a dispatch is attempted (which fails but
 **registers** the workflow), then the corrected workflow is pushed and
