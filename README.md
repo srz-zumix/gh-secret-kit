@@ -730,7 +730,7 @@ Close any open pull requests from the migration topic branch and then delete the
 gh secret-kit migrate repo dispatch [flags]
 ```
 
-Generate a secret migration workflow, push it to a temporary branch, and trigger it via `workflow_dispatch`. This command has two modes. In **self-rewrite** mode (no `--src`), it must be invoked from inside a `workflow_dispatch`-triggered workflow and rewrites the currently running workflow, reusing the same runner setting (unless `--runner-label` is given). In **target-specified** mode (`--src` given), the workflow does not need to run inside a workflow; the workflow is registered in the target repository using a syntax-error workflow trick, then the corrected workflow is pushed and dispatched. In target-specified mode, `--runner-label` is required and `--workflow-name` selects the workflow file name. The temporary branch is deleted by the generated workflow after a successful run.
+Generate a secret migration workflow, push it to a temporary branch, and trigger it via `workflow_dispatch`. This command has two modes. In **self-rewrite** mode (no `--src`), it must be invoked from inside a `workflow_dispatch`-triggered workflow and rewrites the currently running workflow, reusing the same runner setting (unless `--runner-label` is given). In **target-specified** mode (`--src` given), the workflow does not need to run inside a workflow; the workflow is registered in the source repository using a syntax-error workflow trick, then the corrected workflow is pushed and dispatched. In target-specified mode, `--runner-label` is required and `--workflow-name` selects the workflow file name. The temporary branch is deleted by the generated workflow after a successful run.
 
 **Options:**
 
