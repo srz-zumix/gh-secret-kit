@@ -168,6 +168,16 @@ func RunDispatch(ctx context.Context, config *DispatchConfig) error {
 		normalizedDst = destRepo.Owner + "/" + destRepo.Name
 	}
 
+	// Validate user-supplied branch name. Auto-generated names are always safe;
+	// only a non-empty config.Branch (from --branch) needs to be checked. Git ref
+	// names must not contain shell metacharacters because the branch name is
+	// embedded in the cleanup script that runs inside the generated workflow.
+	if config.Branch != "" {
+		if err := validateBranchName(config.Branch); err != nil {
+			return err
+		}
+	}
+
 	// Determine the temporary dispatch branch name.
 	branch := config.Branch
 	if branch == "" {
@@ -204,14 +214,18 @@ func RunDispatch(ctx context.Context, config *DispatchConfig) error {
 		return fmt.Errorf("failed to generate workflow YAML: %w", err)
 	}
 
-	// Create the temporary dispatch branch from the base commit.
-	if _, err := gh.GetBranch(ctx, client, sourceRepo, branch); err != nil {
-		logger.Info(fmt.Sprintf("Creating dispatch branch %s from %s...", branch, baseSHA))
-		if _, berr := gh.CreateBranch(ctx, client, sourceRepo, branch, baseSHA); berr != nil {
-			return fmt.Errorf("failed to create dispatch branch %s: %w", branch, berr)
-		}
-	} else {
-		logger.Debug(fmt.Sprintf("Dispatch branch %s already exists", branch))
+	// Create the temporary dispatch branch from the base commit. An existing
+	// branch is treated as an error because the generated workflow deletes the
+	// branch after a successful run; reusing it could update a caller-owned
+	// branch's workflow file and then delete that branch.
+	if _, err := gh.GetBranch(ctx, client, sourceRepo, branch); err == nil {
+		return fmt.Errorf("dispatch branch %s already exists; specify a different --branch", branch)
+	} else if !gh.IsHTTPNotFound(err) {
+		return fmt.Errorf("failed to check dispatch branch %s: %w", branch, err)
+	}
+	logger.Info(fmt.Sprintf("Creating dispatch branch %s from %s...", branch, baseSHA))
+	if _, berr := gh.CreateBranch(ctx, client, sourceRepo, branch, baseSHA); berr != nil {
+		return fmt.Errorf("failed to create dispatch branch %s: %w", branch, berr)
 	}
 
 	dispatchReq := github.CreateWorkflowDispatchEventRequest{Ref: branch}
@@ -330,4 +344,26 @@ func currentActionsRepository() string {
 		return host
 	}
 	return full
+}
+
+// validateBranchName rejects branch names that contain characters which are
+// either invalid in a Git ref or could be interpreted as shell metacharacters
+// when embedded in the cleanup script. Only the characters [a-zA-Z0-9._/-] are
+// permitted, matching the typical branch naming conventions and avoiding any
+// shell expansion risk.
+func validateBranchName(branch string) error {
+	if branch == "" {
+		return fmt.Errorf("branch name must not be empty")
+	}
+	for i, c := range branch {
+		switch {
+		case c >= 'a' && c <= 'z':
+		case c >= 'A' && c <= 'Z':
+		case c >= '0' && c <= '9':
+		case c == '-' || c == '_' || c == '.' || c == '/':
+		default:
+			return fmt.Errorf("branch name contains invalid character %q at position %d: only [a-zA-Z0-9._/-] are allowed", c, i)
+		}
+	}
+	return nil
 }

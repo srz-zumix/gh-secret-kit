@@ -250,11 +250,18 @@ func generateSecretMigrationScript(config WorkflowConfig, srcName, destName stri
 // The source host is derived from GITHUB_SERVER_URL so the delete targets the
 // correct host even when the job-level GH_HOST points at the destination.
 func generateCleanupBranchScript(branch string) string {
+	// Single-quote the branch name so that shell metacharacters (e.g. $, `,
+	// command substitutions) in a user-supplied branch name are not evaluated.
+	// Any embedded single quotes are escaped using the '\'' idiom.
+	quoted := "'" + strings.ReplaceAll(branch, "'", "'\\''") + "'"
 	var script strings.Builder
 	script.WriteString("host=\"${GITHUB_SERVER_URL#http://}\"\n")
 	script.WriteString("host=\"${host#https://}\"\n")
-	fmt.Fprintf(&script, "GH_HOST=\"${host}\" gh api -X DELETE \"repos/${GITHUB_REPOSITORY}/git/refs/heads/%s\" || true\n", branch)
-	fmt.Fprintf(&script, "echo \"Deleted dispatch branch: %s\"\n", branch)
+	// Assign to a local variable so the quoted literal is expanded only once;
+	// subsequent references via ${_branch} inside double quotes are safe.
+	fmt.Fprintf(&script, "_branch=%s\n", quoted)
+	script.WriteString("GH_HOST=\"${host}\" gh api -X DELETE \"repos/${GITHUB_REPOSITORY}/git/refs/heads/${_branch}\" || true\n")
+	script.WriteString("echo \"Deleted dispatch branch: ${_branch}\"\n")
 	return script.String()
 }
 
