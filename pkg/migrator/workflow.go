@@ -260,7 +260,7 @@ func generateCleanupBranchScript(branch string) string {
 	// Assign to a local variable so the quoted literal is expanded only once;
 	// subsequent references via ${_branch} inside double quotes are safe.
 	fmt.Fprintf(&script, "_branch=%s\n", quoted)
-	script.WriteString("GH_HOST=\"${host}\" gh api -X DELETE \"repos/${GITHUB_REPOSITORY}/git/refs/heads/${_branch}\" || true\n")
+	script.WriteString("GH_HOST=\"${host}\" gh api -X DELETE \"repos/${GITHUB_REPOSITORY}/git/refs/heads/${_branch}\"\n")
 	script.WriteString("echo \"Deleted dispatch branch: ${_branch}\"\n")
 	return script.String()
 }
