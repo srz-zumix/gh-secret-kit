@@ -285,6 +285,9 @@ func pushWorkflowFile(ctx context.Context, client *gh.GitHubClient, repo reposit
 		}
 		return nil
 	}
+	if gerr != nil && !gh.IsHTTPNotFound(gerr) {
+		return fmt.Errorf("failed to check workflow file %s: %w", workflowPath, gerr)
+	}
 	if _, err := gh.CreateRepositoryFile(ctx, client, repo, workflowPath, fileOptions); err != nil {
 		return fmt.Errorf("failed to create workflow file: %w", err)
 	}
