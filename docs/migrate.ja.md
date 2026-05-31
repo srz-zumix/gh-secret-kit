@@ -361,6 +361,9 @@ gh secret-kit migrate runner teardown source-org
 # .github/workflows/migrate.yml
 on:
   workflow_dispatch:
+permissions:
+  actions: write
+  contents: write
 jobs:
   migrate:
     runs-on: self-hosted
