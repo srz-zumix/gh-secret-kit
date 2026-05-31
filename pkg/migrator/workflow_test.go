@@ -110,6 +110,20 @@ jobs:
 			t.Error("expected error for workflow with no jobs")
 		}
 	})
+
+	t.Run("permissions read-all string", func(t *testing.T) {
+		// "permissions: read-all" is valid GitHub Actions syntax but its type
+		// (string) would conflict with WorkflowYAML.Permissions (map). The
+		// minimal-struct approach must handle this without error.
+		withPerms := "name: ci\npermissions: read-all\n" + yaml[len("name: ci\n"):]
+		got, err := ParseRunsOnFromWorkflow(withPerms, "build")
+		if err != nil {
+			t.Fatalf("unexpected error with permissions: read-all: %v", err)
+		}
+		if got != "ubuntu-latest" {
+			t.Errorf("expected ubuntu-latest, got %v", got)
+		}
+	})
 }
 
 func TestGenerateBrokenWorkflowYAML(t *testing.T) {

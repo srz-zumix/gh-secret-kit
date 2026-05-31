@@ -279,8 +279,22 @@ func generateCleanupBranchScript(branch string) string {
 // workflow YAML document. When jobName is empty or not found, the runs-on of
 // the first job (in sorted order for determinism) is returned. The returned
 // value may be a string or a list, matching the original YAML.
+//
+// A minimal struct is used for unmarshaling so that unrelated top-level fields
+// (e.g. "permissions: read-all") with types that don't match WorkflowYAML's
+// richer field definitions cannot cause a parse error.
 func ParseRunsOnFromWorkflow(workflowYAML, jobName string) (any, error) {
-	var wf WorkflowYAML
+	// workflowJobsOnly contains only the fields needed to extract runs-on.
+	// Using a dedicated struct avoids type-mismatch errors from top-level fields
+	// such as "permissions: read-all" (string) vs. WorkflowYAML's
+	// "permissions: map[string]string" which would reject that valid syntax.
+	type jobMinimal struct {
+		RunsOn any `yaml:"runs-on"`
+	}
+	type workflowJobsOnly struct {
+		Jobs map[string]jobMinimal `yaml:"jobs"`
+	}
+	var wf workflowJobsOnly
 	if err := yaml.Unmarshal([]byte(workflowYAML), &wf); err != nil {
 		return nil, fmt.Errorf("failed to parse workflow YAML: %w", err)
 	}
