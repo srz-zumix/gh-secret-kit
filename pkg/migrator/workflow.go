@@ -52,9 +52,10 @@ type WorkflowConfig struct {
 
 // WorkflowYAML represents the structure of a GitHub Actions workflow
 type WorkflowYAML struct {
-	Name string         `yaml:"name"`
-	On   map[string]any `yaml:"on"`
-	Jobs map[string]Job `yaml:"jobs"`
+	Name        string            `yaml:"name"`
+	On          map[string]any    `yaml:"on"`
+	Permissions map[string]string `yaml:"permissions,omitempty"`
+	Jobs        map[string]Job    `yaml:"jobs"`
 }
 
 // Job represents a job in a workflow
@@ -95,6 +96,15 @@ func GenerateWorkflowYAML(config WorkflowConfig) (string, error) {
 		Name: config.WorkflowName,
 		On:   onTrigger,
 		Jobs: make(map[string]Job),
+	}
+	// Dispatch-mode workflows delete the temporary branch using github.token.
+	// Repositories whose default GITHUB_TOKEN permissions are read-only would
+	// otherwise fail at the cleanup step, so request the minimum required scope
+	// explicitly.
+	if config.DispatchMode {
+		workflow.Permissions = map[string]string{
+			"contents": "write",
+		}
 	}
 
 	steps := []Step{

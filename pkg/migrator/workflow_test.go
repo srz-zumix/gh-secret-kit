@@ -43,6 +43,14 @@ func TestGenerateWorkflowYAMLDispatchMode(t *testing.T) {
 	if !strings.Contains(out, "self-hosted") || !strings.Contains(out, "- linux") {
 		t.Errorf("expected list runs-on to be preserved, got:\n%s", out)
 	}
+	// dispatch mode must request contents: write so the cleanup step can delete
+	// the branch even when the repository's default token permissions are read-only.
+	if !strings.Contains(out, "permissions:") {
+		t.Errorf("expected permissions block, got:\n%s", out)
+	}
+	if !strings.Contains(out, "contents: write") {
+		t.Errorf("expected contents: write permission, got:\n%s", out)
+	}
 }
 
 func TestParseRunsOnFromWorkflow(t *testing.T) {
