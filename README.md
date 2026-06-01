@@ -734,7 +734,7 @@ Generate a secret migration workflow, push it to a temporary branch, and trigger
 
 **Options:**
 
-- `--branch string`: Temporary dispatch branch name (default: unique name derived from the workflow run ID)
+- `--branch string`: Temporary dispatch branch name (default: unique name derived from the workflow run ID, or a timestamp outside GitHub Actions)
 - `--dst string` / `-d`: Destination repository (e.g., owner/repo or HOST/OWNER/REPO) (required)
 - `--dst-token string`: Secret variable name that holds the PAT for the destination (referenced as `${{ secrets.<name> }}` in the workflow)
 - `--exclude-secrets strings`: Secret names to exclude from migration (comma-separated or repeated flag)
