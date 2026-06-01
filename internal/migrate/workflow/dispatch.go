@@ -358,6 +358,20 @@ func validateBranchName(branch string) error {
 	if branch == "" {
 		return fmt.Errorf("branch name must not be empty")
 	}
+	if strings.HasPrefix(branch, "/") || strings.HasSuffix(branch, "/") {
+		return fmt.Errorf("branch name must not start or end with /")
+	}
+	if strings.HasSuffix(branch, ".") {
+		return fmt.Errorf("branch name must not end with .")
+	}
+	if strings.Contains(branch, "//") || strings.Contains(branch, "..") {
+		return fmt.Errorf("branch name must not contain empty path components or ..")
+	}
+	for _, part := range strings.Split(branch, "/") {
+		if strings.HasPrefix(part, ".") || strings.HasSuffix(part, ".lock") {
+			return fmt.Errorf("branch path component %q must not start with . or end with .lock", part)
+		}
+	}
 	for i, c := range branch {
 		switch {
 		case c >= 'a' && c <= 'z':
@@ -369,4 +383,5 @@ func validateBranchName(branch string) error {
 		}
 	}
 	return nil
+}
 }
