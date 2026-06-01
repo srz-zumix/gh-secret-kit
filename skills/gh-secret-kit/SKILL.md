@@ -559,7 +559,7 @@ gh secret-kit migrate repo dispatch -s owner/source -d owner/dest \
 
 | Flag | Description | Default |
 | --- | --- | --- |
-| `--branch string` | Temporary dispatch branch name | unique name from run ID |
+| `--branch string` | Temporary dispatch branch name | unique name from run ID, or timestamp outside GitHub Actions |
 | `--dst string` / `-d` | Destination repository (`owner/repo` or `HOST/OWNER/REPO`) | |
 | `--dst-token string` | Secret name holding the destination PAT (referenced as `${{ secrets.<name> }}`) | |
 | `--exclude-secrets strings` | Secret names to exclude (exact name match only — no substring matching; use `migrate list` first to find exact names, comma-separated or repeated) | |
