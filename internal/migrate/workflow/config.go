@@ -99,7 +99,7 @@ type DispatchConfig struct {
 	// running workflow file name is used.
 	WorkflowName string
 	// Branch is the temporary dispatch branch name. When empty, a unique name
-	// derived from the workflow run ID is used.
+	// derived from the workflow run ID or a timestamp is used.
 	Branch string
 }
 
