@@ -528,6 +528,22 @@ gh secret-kit migrate repo run -s owner/source --wait
 gh secret-kit migrate repo delete -s owner/source
 ```
 
+| Flag | Description | Default |
+| --- | --- | --- |
+| `--branch string` | Topic branch name | gh-secret-kit-migrate |
+| `--dst string` / `-d` | Destination repository (`owner/repo` or `HOST/OWNER/REPO`) | |
+| `--exclude-secrets strings` | Secret names to exclude (exact name match only — no substring matching; use `migrate list` first to find exact names, comma-separated or repeated) | |
+| `--label string` | Label name for triggering | gh-secret-kit-migrate |
+| `--overwrite` | Overwrite existing secrets | false |
+| `--rename strings` | `OLD_NAME=NEW_NAME` mapping (repeatable) | |
+| `--runner-label string` | Runner label for the workflow | gh-secret-kit-migrate |
+| `--secrets strings` | Specific secret names (comma-separated or repeated) | all |
+| `--src string` / `-s` | Source repository | current repo |
+| `--timeout string` | Wait timeout (e.g., 5m, 1h) | 10m |
+| `--unarchive` | Temporarily unarchive if archived | false |
+| `--wait` / `-w` | Wait for workflow completion (run only) | false |
+| `--workflow-name string` | Workflow file name | gh-secret-kit-migrate |
+
 #### migrate repo dispatch
 
 Generate a secret migration workflow, push it to a temporary branch, and trigger
@@ -568,6 +584,9 @@ gh secret-kit migrate repo dispatch -s owner/source -d owner/dest \
 | `--runner-label string` | Runner label for `runs-on` (required with `--src`) | running workflow's runner |
 | `--secrets strings` | Specific secret names (comma-separated or repeated) | all |
 | `--src string` / `-s` | Source repository (when set, enables target-specified mode) | current repo |
+| `--timeout string` | Timeout duration when waiting for workflow completion (e.g., 5m, 1h) | 10m |
+| `--unarchive` | Temporarily unarchive the source repository if archived, then re-archive after dispatch | false |
+| `--wait` / `-w` | Wait for the dispatched workflow run to complete | false |
 | `--workflow-name string` | Workflow file name for target-specified mode | gh-secret-kit-migrate |
 
 ### Migrate Org Secrets

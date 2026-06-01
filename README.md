@@ -743,6 +743,9 @@ Generate a secret migration workflow, push it to a temporary branch, and trigger
 - `--runner-label string`: Runner label for `runs-on` (default: the running workflow's runner setting; required with `--src`)
 - `--secrets strings`: Specific secret names to migrate (comma-separated or repeated flag; defaults to all)
 - `--src string` / `-s`: Source repository (e.g., owner/repo; defaults to the repository running the workflow; when set, enables target-specified mode)
+- `--timeout string`: Timeout duration when waiting for workflow completion (e.g., 5m, 1h) (default: "10m")
+- `--unarchive`: Temporarily unarchive the source repository if it is archived, then re-archive after the dispatch
+- `--wait` / `-w`: Wait for the dispatched workflow run to complete
 - `--workflow-name string`: Workflow file name (without extension) for target-specified mode (default: "gh-secret-kit-migrate")
 
 

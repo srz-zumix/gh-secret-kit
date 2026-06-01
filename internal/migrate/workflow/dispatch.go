@@ -81,6 +81,15 @@ func RunDispatch(ctx context.Context, config *DispatchConfig) error {
 		return fmt.Errorf("failed to create GitHub client: %w", err)
 	}
 
+	// Check if the repository is archived and handle unarchive if requested.
+	if !config.SkipArchiveCheck {
+		cleanup, uerr := handleUnarchiveWithCheck(ctx, client, sourceRepo, config.Unarchive)
+		if uerr != nil {
+			return uerr
+		}
+		defer cleanup()
+	}
+
 	// Determine the base commit to branch from.
 	baseSHA := ""
 	if !targetSpecified {
@@ -259,12 +268,27 @@ func RunDispatch(ctx context.Context, config *DispatchConfig) error {
 	}
 	logger.Info("Workflow file pushed successfully")
 
+	// Build a RunConfig to share wait/polling helpers with the run command.
+	runConfig := &RunConfig{
+		WorkflowName: workflowConfig.WorkflowName,
+		Branch:       branch,
+		Timeout:      config.Timeout,
+	}
+
+	// Snapshot the latest run number before triggering so we can identify the
+	// new run when waiting.
+	preDispatchMaxNumber := fetchLatestRunNumber(ctx, client, sourceRepo, runConfig)
+
 	// Trigger the workflow_dispatch event on the dispatch branch.
 	logger.Info(fmt.Sprintf("Triggering workflow_dispatch for %s on branch %s...", workflowFileName, branch))
 	if err := dispatchWithRetry(ctx, client, sourceRepo, workflowFileName, dispatchReq, targetSpecified); err != nil {
 		return fmt.Errorf("failed to trigger workflow_dispatch for %s: %w", workflowFileName, err)
 	}
 	logger.Info("Migration workflow dispatched!")
+
+	if config.Wait {
+		return waitForWorkflowRun(ctx, client, sourceRepo, runConfig, preDispatchMaxNumber)
+	}
 
 	return nil
 }

@@ -404,6 +404,22 @@ gh secret-kit migrate repo dispatch \
   --workflow-name gh-secret-kit-migrate
 ```
 
+### Waiting for Completion
+
+Both modes support `--wait` / `-w` to block until the dispatched workflow run
+finishes. Use `--timeout` to control the maximum wait duration (default
+`10m`). Use `--unarchive` to temporarily unarchive the source repository if
+it is archived:
+
+```sh
+gh secret-kit migrate repo dispatch \
+  --src owner/src-repo \
+  --dst owner/dest-repo \
+  --runner-label self-hosted \
+  --wait \
+  --timeout 20m
+```
+
 ## Security Notes
 
 - Secret values are **never written to disk** on the runner.

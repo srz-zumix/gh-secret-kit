@@ -400,6 +400,22 @@ gh secret-kit migrate repo dispatch \
   --workflow-name gh-secret-kit-migrate
 ```
 
+### 完了まで待機する
+
+両モードとも `--wait` / `-w` を指定すると、dispatch したワークフロー実行が
+完了するまでブロックします。`--timeout` で最大待機時間を制御できます
+（デフォルト: `10m`）。アーカイブ済みのソースリポジトリを一時的にアーカイブ解除する場合は
+`--unarchive` を指定します：
+
+```sh
+gh secret-kit migrate repo dispatch \
+  --src owner/src-repo \
+  --dst owner/dest-repo \
+  --runner-label self-hosted \
+  --wait \
+  --timeout 20m
+```
+
 ## セキュリティに関する注意
 
 - シークレットの値はランナー上のディスクに**一切書き込まれません**。
