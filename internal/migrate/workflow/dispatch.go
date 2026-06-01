@@ -13,6 +13,7 @@ import (
 	"github.com/srz-zumix/gh-secret-kit/pkg/migrator"
 	"github.com/srz-zumix/go-gh-extension/pkg/actions"
 	"github.com/srz-zumix/go-gh-extension/pkg/gh"
+	"github.com/srz-zumix/go-gh-extension/pkg/gitutil"
 	"github.com/srz-zumix/go-gh-extension/pkg/logger"
 	"github.com/srz-zumix/go-gh-extension/pkg/parser"
 )
@@ -173,7 +174,7 @@ func RunDispatch(ctx context.Context, config *DispatchConfig) error {
 	// names must not contain shell metacharacters because the branch name is
 	// embedded in the cleanup script that runs inside the generated workflow.
 	if config.Branch != "" {
-		if err := validateBranchName(config.Branch); err != nil {
+		if err := gitutil.ValidateBranchName(config.Branch); err != nil {
 			return err
 		}
 	}
@@ -347,41 +348,4 @@ func currentActionsRepository() string {
 		return host
 	}
 	return full
-}
-
-// validateBranchName rejects branch names that contain characters which are
-// either invalid in a Git ref or could be interpreted as shell metacharacters
-// when embedded in the cleanup script. Only the characters [a-zA-Z0-9._/-] are
-// permitted, matching the typical branch naming conventions and avoiding any
-// shell expansion risk.
-func validateBranchName(branch string) error {
-	if branch == "" {
-		return fmt.Errorf("branch name must not be empty")
-	}
-	if strings.HasPrefix(branch, "/") || strings.HasSuffix(branch, "/") {
-		return fmt.Errorf("branch name must not start or end with /")
-	}
-	if strings.HasSuffix(branch, ".") {
-		return fmt.Errorf("branch name must not end with .")
-	}
-	if strings.Contains(branch, "//") || strings.Contains(branch, "..") {
-		return fmt.Errorf("branch name must not contain empty path components or ..")
-	}
-	for _, part := range strings.Split(branch, "/") {
-		if strings.HasPrefix(part, ".") || strings.HasSuffix(part, ".lock") {
-			return fmt.Errorf("branch path component %q must not start with . or end with .lock", part)
-		}
-	}
-	for i, c := range branch {
-		switch {
-		case c >= 'a' && c <= 'z':
-		case c >= 'A' && c <= 'Z':
-		case c >= '0' && c <= '9':
-		case c == '-' || c == '_' || c == '.' || c == '/':
-		default:
-			return fmt.Errorf("branch name contains invalid character %q at position %d: only [a-zA-Z0-9._/-] are allowed", c, i)
-		}
-	}
-	return nil
-}
 }
