@@ -337,6 +337,85 @@ gh secret-kit migrate repo all -s source-org/repo-b -d dest-org/repo-b
 gh secret-kit migrate runner teardown source-org
 ```
 
+## ワークフロー内からのディスパッチ
+
+`migrate repo dispatch` は、シークレット移行ワークフローを生成してダミーの
+ブランチへ push し、`workflow_dispatch` でトリガーする高度なコマンドです。
+2 つのモードがあります。
+
+### セルフ書き換えモード（`--src` なし）
+
+`workflow_dispatch` でトリガーされたワークフローの**内部から**実行し、実行中の
+ワークフロー自身を移行ワークフローで書き換えます。
+
+主な挙動:
+
+- 現在のイベントが `workflow_dispatch` で、かつ GitHub Actions 上で実行されて
+  いない限り、実行を拒否します。
+- 生成されるワークフローは、`--runner-label` を指定しない限り、実行中の
+  ワークフローと**同じランナー設定**（`runs-on`）を使用します。
+- ダミーブランチは移行成功後に生成されたワークフロー自身が削除するため、別途
+  `delete` を実行する必要はありません。
+
+```yaml
+# .github/workflows/migrate.yml
+on:
+  workflow_dispatch:
+permissions:
+  actions: write
+  contents: write
+jobs:
+  migrate:
+    runs-on: self-hosted
+    steps:
+      - name: Dispatch secret migration
+        run: gh secret-kit migrate repo dispatch -d owner/dest-repo
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+### ターゲット指定モード（`--src` あり）
+
+`--src` を指定した場合、コマンドはワークフロー内部で実行する必要がなく、ソース
+リポジトリはアクセス可能な任意のリポジトリを指定できます。移行ワークフローは
+ソースリポジトリのデフォルトブランチに存在しないため、通常の `workflow_dispatch` は
+404 になります。これを回避するため、まず syntax error のあるワークフローを push
+して dispatch を試み（失敗しますがワークフローが**登録**されます）、その後に
+修正済みワークフローを push して dispatch します。
+
+主な挙動:
+
+- ワークフロー内実行の事前条件チェックはスキップされます。
+- `--runner-label` は**必須**です（実行中ワークフローの `runs-on` を再利用でき
+  ないため）。
+- `--workflow-name` でワークフローファイル名を選択します（デフォルトは
+  `gh-secret-kit-migrate`）。
+- ダミーブランチは移行成功後に生成されたワークフロー自身が削除します。
+
+```sh
+gh secret-kit migrate repo dispatch \
+  --src owner/src-repo \
+  --dst owner/dest-repo \
+  --runner-label self-hosted \
+  --workflow-name gh-secret-kit-migrate
+```
+
+### 完了まで待機する
+
+両モードとも `--wait` / `-w` を指定すると、dispatch したワークフロー実行が
+完了するまでブロックします。`--timeout` で最大待機時間を制御できます
+（デフォルト: `10m`）。アーカイブ済みのソースリポジトリを一時的にアーカイブ解除する場合は
+`--unarchive` を指定します：
+
+```sh
+gh secret-kit migrate repo dispatch \
+  --src owner/src-repo \
+  --dst owner/dest-repo \
+  --runner-label self-hosted \
+  --wait \
+  --timeout 20m
+```
+
 ## セキュリティに関する注意
 
 - シークレットの値はランナー上のディスクに**一切書き込まれません**。

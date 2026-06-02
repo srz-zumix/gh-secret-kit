@@ -339,6 +339,87 @@ gh secret-kit migrate repo all -s source-org/repo-b -d dest-org/repo-b
 gh secret-kit migrate runner teardown source-org
 ```
 
+## Dispatching from Within a Workflow
+
+`migrate repo dispatch` is an advanced alternative that generates a secret
+migration workflow, pushes it to a temporary branch, and triggers it via
+`workflow_dispatch`. It has two modes.
+
+### Self-rewrite mode (no `--src`)
+
+It runs from **inside** a `workflow_dispatch`-triggered workflow and rewrites the
+currently running workflow with the migration workflow.
+
+Key behaviors:
+
+- It refuses to run unless the current event is `workflow_dispatch` and it is
+  running inside GitHub Actions.
+- The generated workflow reuses the **same runner setting** (`runs-on`) as the
+  running workflow, unless `--runner-label` is given.
+- The temporary branch is deleted by the generated workflow after a successful
+  run, so no separate `delete` step is required.
+
+```yaml
+# .github/workflows/migrate.yml
+on:
+  workflow_dispatch:
+permissions:
+  actions: write
+  contents: write
+jobs:
+  migrate:
+    runs-on: self-hosted
+    steps:
+      - name: Dispatch secret migration
+        run: gh secret-kit migrate repo dispatch -d owner/dest-repo
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+### Target-specified mode (`--src` given)
+
+When `--src` is given, the workflow does **not** need to run inside a workflow,
+and the source repository can be any repository you have access to. Because the
+migration workflow does not exist on the source repository's default branch, a plain
+`workflow_dispatch` would return 404. To work around this, a syntax-error
+workflow is pushed first and a dispatch is attempted (which fails but
+**registers** the workflow), then the corrected workflow is pushed and
+dispatched.
+
+Key behaviors:
+
+- The in-workflow precondition is skipped.
+- `--runner-label` is **required** (the running workflow's `runs-on` cannot be
+  reused).
+- `--workflow-name` selects the workflow file name (default
+  `gh-secret-kit-migrate`).
+- The temporary branch is deleted by the generated workflow after a successful
+  run.
+
+```sh
+gh secret-kit migrate repo dispatch \
+  --src owner/src-repo \
+  --dst owner/dest-repo \
+  --runner-label self-hosted \
+  --workflow-name gh-secret-kit-migrate
+```
+
+### Waiting for Completion
+
+Both modes support `--wait` / `-w` to block until the dispatched workflow run
+finishes. Use `--timeout` to control the maximum wait duration (default
+`10m`). Use `--unarchive` to temporarily unarchive the source repository if
+it is archived:
+
+```sh
+gh secret-kit migrate repo dispatch \
+  --src owner/src-repo \
+  --dst owner/dest-repo \
+  --runner-label self-hosted \
+  --wait \
+  --timeout 20m
+```
+
 ## Security Notes
 
 - Secret values are **never written to disk** on the runner.

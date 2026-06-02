@@ -68,6 +68,52 @@ type DeleteConfig struct {
 	SkipArchiveCheck bool
 }
 
+// DispatchConfig holds configuration for the dispatch operation. It supports two
+// modes:
+//
+//   - Self-rewrite (Source empty): run from inside a workflow_dispatch-triggered
+//     workflow. The currently running workflow is rewritten with a migration
+//     workflow, pushed to a temporary branch, and re-triggered via
+//     workflow_dispatch. The runs-on of the running workflow is reused.
+//   - Target-specified (Source set): the workflow does not exist in the target
+//     repository, so the precondition that it runs inside a workflow is skipped.
+//     A syntax-error workflow is pushed first to register it, then the corrected
+//     workflow is pushed and dispatched. RunnerLabel is required in this mode.
+type DispatchConfig struct {
+	Source                 string
+	Destination            string
+	SourceEnv              string
+	DestinationEnv         string
+	Secrets                []string
+	ExcludeSecrets         []string
+	Rename                 []string
+	Overwrite              bool
+	DestinationTokenSecret string
+	Scope                  migrator.SecretScope
+	// RunnerLabel overrides the runs-on value of the generated workflow. When
+	// empty in self-rewrite mode, the runs-on of the currently running workflow
+	// is reused. It is required in target-specified mode.
+	RunnerLabel string
+	// WorkflowName is the workflow file name (without extension) used in
+	// target-specified mode. It is ignored in self-rewrite mode, where the
+	// running workflow file name is used.
+	WorkflowName string
+	// Branch is the temporary dispatch branch name. When empty, a unique name
+	// derived from the workflow run ID or a timestamp is used.
+	Branch string
+	// Wait, when true, causes RunDispatch to block until the dispatched workflow
+	// run finishes (or Timeout elapses).
+	Wait bool
+	// Timeout is the maximum duration to wait when Wait is true (e.g. "10m").
+	Timeout string
+	// Unarchive, when true, temporarily unarchives the source repository if it
+	// is archived, then re-archives it after the dispatch completes.
+	Unarchive bool
+	// SkipArchiveCheck skips the archived-repository check. Set internally by
+	// RunAll to avoid a redundant API call when the check was already done.
+	SkipArchiveCheck bool
+}
+
 // CheckConfig holds configuration for the check operation
 type CheckConfig struct {
 	Source           string
