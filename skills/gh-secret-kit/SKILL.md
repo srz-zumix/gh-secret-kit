@@ -710,8 +710,7 @@ gh secret-kit migrate env dispatch -s owner/source -d owner/dest \
 | `--timeout string` | Timeout duration when waiting for workflow completion (e.g., 5m, 1h) | 10m |
 | `--unarchive` | Temporarily unarchive the source repository if archived, then re-archive after dispatch | false |
 | `--wait` / `-w` | Wait for the dispatched workflow run to complete | false |
-| `--workflow-name string` | Workflow file name for target-specified mode | gh-secret-kit-migrate |
-
+| `--workflow-name string` | Workflow file name (without extension) for target-specified mode | gh-secret-kit-migrate |
 ### Migrate Check (Org-Wide)
 
 ```bash
