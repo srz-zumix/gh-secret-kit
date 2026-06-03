@@ -314,7 +314,7 @@ gh secret-kit migrate runner setup -R owner/source-repo
 gh secret-kit migrate repo all \
   -s owner/source-repo \
   -d ghes.example.com/owner/dest-repo \
-  --dst-token DST_PAT
+  --dst-token-secret DST_PAT
 
 # クリーンアップ
 gh secret-kit migrate runner teardown -R owner/source-repo
@@ -421,4 +421,4 @@ gh secret-kit migrate repo dispatch \
 - シークレットの値はランナー上のディスクに**一切書き込まれません**。
 - 移行ワークフローは `secrets` コンテキストでシークレットを読み取り、GitHub API を直接呼び出してコピー先に設定します。
 - 生成されたワークフローとトピックブランチは `delete` によりクリーンアップされます。
-- `--dst-token` は**通常ほとんど使われません**。スケールセットランナーが `gh auth login` 済みでコピー先の権限を持っている場合（同一ホスト内の移行など）は不要です。ランナーがコピー先ホストに対して認証されていない場合（例: GitHub.com → GHES などクロスホスト移行）にのみ、コピー先用 PAT を保持するシークレット変数名（例: `DST_PAT`）を指定します。トークンの値はワークフロー YAML に埋め込まれず、実行時に `${{ secrets.DST_PAT }}` として読み取られます。
+- `--dst-token-secret` は**通常ほとんど使われません**。スケールセットランナーが `gh auth login` 済みでコピー先の権限を持っている場合（同一ホスト内の移行など）は不要です。ランナーがコピー先ホストに対して認証されていない場合（例: GitHub.com → GHES などクロスホスト移行）にのみ、コピー先用 PAT を保持するシークレット変数名（例: `DST_PAT`）を指定します。トークンの値はワークフロー YAML に埋め込まれず、実行時に `${{ secrets.DST_PAT }}` として読み取られます。

@@ -7,6 +7,7 @@ import (
 	"github.com/srz-zumix/gh-secret-kit/internal/migrate/types"
 	"github.com/srz-zumix/gh-secret-kit/internal/migrate/workflow"
 	"github.com/srz-zumix/gh-secret-kit/pkg/migrator"
+	"github.com/srz-zumix/go-gh-extension/pkg/parser"
 )
 
 // NewCreateCmd creates the env create command
@@ -21,6 +22,9 @@ func NewCreateCmd() *cobra.Command {
 from the source repository's environment to the destination repository's environment.
 The workflow is pushed to the source repository on a topic branch.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := parser.ValidateTokenSecretName(config.DestinationTokenSecret); err != nil {
+				return err
+			}
 			return workflow.RunCreate(context.Background(), &config)
 		},
 		Args: cobra.NoArgs,
@@ -35,9 +39,8 @@ The workflow is pushed to the source repository on a topic branch.`,
 	f.StringSliceVar(&config.ExcludeSecrets, "exclude-secrets", []string{}, "Secret names to exclude from migration (comma-separated or repeated flag)")
 	f.StringSliceVar(&config.Rename, "rename", []string{}, "Rename mapping in OLD_NAME=NEW_NAME format (repeatable)")
 	f.BoolVar(&config.Overwrite, "overwrite", false, "Overwrite existing secrets at destination")
-	f.StringVar(&config.DestinationTokenSecret, "dst-token", "", "Secret variable name that holds the PAT for the destination (e.g. DST_PAT; referenced as ${{ secrets.<name> }} in the workflow)")
+	f.StringVar(&config.DestinationTokenSecret, "dst-token-secret", "", "Secret variable name that holds the PAT for the destination (e.g. DST_PAT; referenced as ${{ secrets.<name> }} in the workflow)")
 	f.StringVar(&config.RunnerLabel, "runner-label", types.DefaultRunnerLabel, "Runner label for the workflow")
-	_ = cmd.Flags().MarkHidden("dst-token")
 	f.StringVar(&config.WorkflowName, "workflow-name", types.DefaultWorkflowName, "Name of the generated workflow file")
 	f.StringVar(&config.Branch, "branch", types.DefaultBranch, "Branch to push the workflow to")
 	f.StringVar(&config.Label, "label", types.DefaultLabel, "Label name for triggering the migration workflow")

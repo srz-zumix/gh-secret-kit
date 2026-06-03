@@ -341,6 +341,7 @@ This command initializes the stub workflow, generates and pushes the migration w
 - `--branch string`: Branch to push the workflow to (default: "gh-secret-kit-migrate")
 - `--dst string` / `-d`: Destination repository (e.g., owner/repo or HOST/OWNER/REPO) (required)
 - `--dst-env string`: Destination environment name (required)
+- `--dst-token-secret string`: Secret variable name that holds the PAT for the destination (e.g. `DST_PAT`; referenced as `${{ secrets.<name> }}` in the generated workflow)
 - `--label string`: Label name for triggering the migration workflow (default: "gh-secret-kit-migrate")
 - `--overwrite`: Overwrite existing secrets at destination
 - `--rename strings`: Rename mapping in OLD\_NAME=NEW\_NAME format (repeatable)
@@ -349,6 +350,7 @@ This command initializes the stub workflow, generates and pushes the migration w
 - `--exclude-secrets strings`: Secret names to exclude from migration (comma-separated or repeated flag)
 - `--src string` / `-s`: Source repository (e.g., owner/repo; defaults to current repository)
 - `--src-env string`: Source environment name (required)
+- `--skip-check`: Skip the check step
 - `--timeout string`: Timeout duration when waiting for workflow completion (e.g., 5m, 1h) (default: "10m")
 - `--unarchive`: Temporarily unarchive the repository if it is archived, then re-archive after completion
 - `--workflow-name string`: Name of the generated workflow file (default: "gh-secret-kit-migrate")
@@ -384,7 +386,7 @@ Generate a GitHub Actions workflow that migrates environment secrets from the so
 - `--branch string`: Branch to push the workflow to (default: "gh-secret-kit-migrate")
 - `--dst string` / `-d`: Destination repository (e.g., owner/repo or HOST/OWNER/REPO)
 - `--dst-env string`: Destination environment name
-- `--dst-token string`: PAT or token for the destination (required if destination is on a different host)
+- `--dst-token-secret string`: Secret variable name that holds the PAT for the destination (e.g. `DST_PAT`; referenced as `${{ secrets.<name> }}` in the generated workflow)
 - `--label string`: Label name for triggering the migration workflow (default: "gh-secret-kit-migrate")
 - `--overwrite`: Overwrite existing secrets at destination
 - `--rename strings`: Rename mapping in OLD\_NAME=NEW\_NAME format (repeatable)
@@ -540,6 +542,7 @@ This command initializes the stub workflow, generates and pushes the migration w
 
 - `--branch string`: Branch to push the workflow to (default: "gh-secret-kit-migrate")
 - `--dst string` / `-d`: Destination organization (e.g., org or HOST/org) (required)
+- `--dst-token-secret string`: Secret variable name that holds the PAT for the destination (e.g. `DST_PAT`; referenced as `${{ secrets.<name> }}` in the generated workflow)
 - `--label string`: Label name for triggering the migration workflow (default: "gh-secret-kit-migrate")
 - `--overwrite`: Overwrite existing secrets at destination
 - `--rename strings`: Rename mapping in OLD\_NAME=NEW\_NAME format (repeatable)
@@ -547,6 +550,7 @@ This command initializes the stub workflow, generates and pushes the migration w
 - `--secrets strings`: Specific secret names to migrate (comma-separated or repeated flag; defaults to all)
 - `--exclude-secrets strings`: Secret names to exclude from migration (comma-separated or repeated flag)
 - `--src string` / `-s`: Source repository (e.g., owner/repo; defaults to current repository)
+- `--skip-check`: Skip the check step
 - `--timeout string`: Timeout duration when waiting for workflow completion (e.g., 5m, 1h) (default: "10m")
 - `--unarchive`: Temporarily unarchive the repository if it is archived, then re-archive after completion
 - `--workflow-name string`: Name of the generated workflow file (default: "gh-secret-kit-migrate")
@@ -579,7 +583,7 @@ Generate a GitHub Actions workflow that migrates organization secrets from the s
 
 - `--branch string`: Branch to push the workflow to (default: "gh-secret-kit-migrate")
 - `--dst string` / `-d`: Destination organization (e.g., org or HOST/org)
-- `--dst-token string`: PAT or token for the destination (required if destination is on a different host)
+- `--dst-token-secret string`: Secret variable name that holds the PAT for the destination (e.g. `DST_PAT`; referenced as `${{ secrets.<name> }}` in the generated workflow)
 - `--label string`: Label name for triggering the migration workflow (default: "gh-secret-kit-migrate")
 - `--overwrite`: Overwrite existing secrets at destination
 - `--rename strings`: Rename mapping in OLD\_NAME=NEW\_NAME format (repeatable)
@@ -659,6 +663,7 @@ This command initializes the stub workflow, generates and pushes the migration w
 
 - `--branch string`: Branch to push the workflow to (default: "gh-secret-kit-migrate")
 - `--dst string` / `-d`: Destination repository (e.g., owner/repo or HOST/OWNER/REPO) (required)
+- `--dst-token-secret string`: Secret variable name that holds the PAT for the destination (e.g. `DST_PAT`; referenced as `${{ secrets.<name> }}` in the generated workflow)
 - `--label string`: Label name for triggering the migration workflow (default: "gh-secret-kit-migrate")
 - `--overwrite`: Overwrite existing secrets at destination
 - `--rename strings`: Rename mapping in OLD\_NAME=NEW\_NAME format (repeatable)
@@ -666,6 +671,7 @@ This command initializes the stub workflow, generates and pushes the migration w
 - `--secrets strings`: Specific secret names to migrate (comma-separated or repeated flag; defaults to all)
 - `--exclude-secrets strings`: Secret names to exclude from migration (comma-separated or repeated flag)
 - `--src string` / `-s`: Source repository (e.g., owner/repo; defaults to current repository)
+- `--skip-check`: Skip the check step
 - `--timeout string`: Timeout duration when waiting for workflow completion (e.g., 5m, 1h) (default: "10m")
 - `--unarchive`: Temporarily unarchive the repository if it is archived, then re-archive after completion
 - `--workflow-name string`: Name of the generated workflow file (default: "gh-secret-kit-migrate")
@@ -698,7 +704,7 @@ Generate a GitHub Actions workflow that migrates repository secrets from the sou
 
 - `--branch string`: Branch to push the workflow to (default: "gh-secret-kit-migrate")
 - `--dst string` / `-d`: Destination repository (e.g., owner/repo or HOST/OWNER/REPO)
-- `--dst-token string`: PAT or token for the destination (required if destination is on a different host)
+- `--dst-token-secret string`: Secret variable name that holds the PAT for the destination (e.g. `DST_PAT`; referenced as `${{ secrets.<name> }}` in the generated workflow)
 - `--label string`: Label name for triggering the migration workflow (default: "gh-secret-kit-migrate")
 - `--overwrite`: Overwrite existing secrets at destination
 - `--rename strings`: Rename mapping in OLD\_NAME=NEW\_NAME format (repeatable)
@@ -736,7 +742,7 @@ Generate a secret migration workflow, push it to a temporary branch, and trigger
 
 - `--branch string`: Temporary dispatch branch name (default: unique name derived from the workflow run ID, or a timestamp outside GitHub Actions)
 - `--dst string` / `-d`: Destination repository (e.g., owner/repo or HOST/OWNER/REPO) (required)
-- `--dst-token string`: Secret variable name that holds the PAT for the destination (referenced as `${{ secrets.<name> }}` in the workflow)
+- `--dst-token-secret string`: Secret variable name that holds the PAT for the destination (e.g. `DST_PAT`; referenced as `${{ secrets.<name> }}` in the workflow)
 - `--exclude-secrets strings`: Secret names to exclude from migration (comma-separated or repeated flag)
 - `--overwrite`: Overwrite existing secrets at destination
 - `--rename strings`: Rename mapping in OLD\_NAME=NEW\_NAME format (repeatable)
@@ -909,7 +915,7 @@ gh secret-kit migrate env create \
 gh secret-kit migrate repo create \
   -s owner/source-repo \
   -d owner2/dest-repo \
-  --dst-token ghp_xxx \
+  --dst-token-secret DST_PAT \
   --secrets API_KEY,DB_PASSWORD \
   --rename API_KEY=PROD_API_KEY \
   --overwrite

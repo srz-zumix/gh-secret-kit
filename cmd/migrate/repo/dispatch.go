@@ -7,6 +7,7 @@ import (
 	"github.com/srz-zumix/gh-secret-kit/internal/migrate/types"
 	"github.com/srz-zumix/gh-secret-kit/internal/migrate/workflow"
 	"github.com/srz-zumix/gh-secret-kit/pkg/migrator"
+	"github.com/srz-zumix/go-gh-extension/pkg/parser"
 )
 
 // NewDispatchCmd creates the repo dispatch command
@@ -34,6 +35,9 @@ This command has two modes:
 
 The temporary branch is deleted by the generated workflow after a successful run.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := parser.ValidateTokenSecretName(config.DestinationTokenSecret); err != nil {
+				return err
+			}
 			return workflow.RunDispatch(context.Background(), &config)
 		},
 		Args: cobra.NoArgs,
@@ -46,8 +50,7 @@ The temporary branch is deleted by the generated workflow after a successful run
 	f.StringSliceVar(&config.ExcludeSecrets, "exclude-secrets", []string{}, "Secret names to exclude from migration (comma-separated or repeated flag)")
 	f.StringSliceVar(&config.Rename, "rename", []string{}, "Rename mapping in OLD_NAME=NEW_NAME format (repeatable)")
 	f.BoolVar(&config.Overwrite, "overwrite", false, "Overwrite existing secrets at destination")
-	f.StringVar(&config.DestinationTokenSecret, "dst-token", "", "Secret variable name that holds the PAT for the destination (e.g. DST_PAT; referenced as ${{ secrets.<name> }} in the workflow)")
-	_ = cmd.Flags().MarkHidden("dst-token")
+	f.StringVar(&config.DestinationTokenSecret, "dst-token-secret", "", "Secret variable name that holds the PAT for the destination (e.g. DST_PAT; referenced as ${{ secrets.<name> }} in the workflow)")
 	f.StringVar(&config.RunnerLabel, "runner-label", "", "Runner label for runs-on (defaults to the running workflow's runner setting; required with --src)")
 	f.StringVar(&config.WorkflowName, "workflow-name", types.DefaultWorkflowName, "Workflow file name (without extension) for target-specified mode")
 	f.StringVar(&config.Branch, "branch", "", "Temporary dispatch branch name (defaults to a unique name derived from the workflow run ID or a timestamp)")

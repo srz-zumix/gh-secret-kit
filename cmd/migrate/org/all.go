@@ -7,6 +7,7 @@ import (
 	"github.com/srz-zumix/gh-secret-kit/internal/migrate/types"
 	"github.com/srz-zumix/gh-secret-kit/internal/migrate/workflow"
 	"github.com/srz-zumix/gh-secret-kit/pkg/migrator"
+	"github.com/srz-zumix/go-gh-extension/pkg/parser"
 )
 
 // NewAllCmd creates the org all command
@@ -22,6 +23,9 @@ func NewAllCmd() *cobra.Command {
 This command initializes the stub workflow, generates and pushes the migration
 workflow, triggers it, waits for completion, verifies the results, and cleans up.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := parser.ValidateTokenSecretName(config.DestinationTokenSecret); err != nil {
+				return err
+			}
 			return workflow.RunAll(context.Background(), &config)
 		},
 		Args: cobra.NoArgs,
@@ -34,13 +38,15 @@ workflow, triggers it, waits for completion, verifies the results, and cleans up
 	f.StringSliceVar(&config.ExcludeSecrets, "exclude-secrets", []string{}, "Secret names to exclude from migration (comma-separated or repeated flag)")
 	f.StringSliceVar(&config.Rename, "rename", []string{}, "Rename mapping in OLD_NAME=NEW_NAME format (repeatable)")
 	f.BoolVar(&config.Overwrite, "overwrite", false, "Overwrite existing secrets at destination")
-	f.StringVar(&config.DestinationTokenSecret, "dst-token", "", "Secret variable name that holds the PAT for the destination (e.g. DST_PAT; referenced as ${{ secrets.<name> }} in the workflow)")
+	f.StringVar(&config.DestinationTokenSecret, "dst-token-secret", "", "Secret variable name that holds the PAT for the destination (e.g. DST_PAT; referenced as ${{ secrets.<name> }} in the workflow)")
+	f.StringVar(&config.DestinationToken, "dst-token", "", "PAT or token for the destination, used in the check step (required if destination is on a different host)")
 	f.StringVar(&config.RunnerLabel, "runner-label", types.DefaultRunnerLabel, "Runner label for the workflow")
 	_ = cmd.Flags().MarkHidden("dst-token")
 	f.StringVar(&config.WorkflowName, "workflow-name", types.DefaultWorkflowName, "Name of the generated workflow file")
 	f.StringVar(&config.Branch, "branch", types.DefaultBranch, "Branch to push the workflow to")
 	f.StringVar(&config.Label, "label", types.DefaultLabel, "Label name for triggering the migration workflow")
 	f.StringVar(&config.Timeout, "timeout", "10m", "Timeout duration when waiting for workflow completion (e.g., 5m, 1h)")
+	f.BoolVar(&config.SkipCheck, "skip-check", false, "Skip the check step")
 	f.BoolVar(&config.Unarchive, "unarchive", false, "Temporarily unarchive the repository if it is archived, then re-archive after completion")
 
 	_ = cmd.MarkFlagRequired("dst")
