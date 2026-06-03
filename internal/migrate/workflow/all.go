@@ -119,9 +119,13 @@ func RunAll(ctx context.Context, config *AllConfig) error {
 	}
 
 	// Step 4: check
-	logger.Info("Step 4/5: Checking migration results...")
-	if err := RunCheck(ctx, checkConfig); err != nil {
-		return fmt.Errorf("check failed: %w", err)
+	if config.SkipCheck {
+		logger.Info("Step 4/5: Skipping check step (--skip-check specified).")
+	} else {
+		logger.Info("Step 4/5: Checking migration results...")
+		if err := RunCheck(ctx, checkConfig); err != nil {
+			return fmt.Errorf("check failed: %w", err)
+		}
 	}
 
 	// Step 5: delete

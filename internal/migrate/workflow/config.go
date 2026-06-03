@@ -140,6 +140,7 @@ type AllConfig struct {
 	Overwrite              bool
 	DestinationTokenSecret string
 	DestinationToken       string
+	SkipCheck              bool
 	Scope                  migrator.SecretScope
 	RunnerLabel            string
 	WorkflowName           string
