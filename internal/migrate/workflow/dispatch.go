@@ -126,8 +126,17 @@ func RunDispatch(ctx context.Context, config *DispatchConfig) error {
 	// Resolve the list of secrets to migrate.
 	secrets := config.Secrets
 	if len(secrets) == 0 {
-		logger.Info("No specific secrets specified, fetching repo secrets from source...")
-		secrets, err = fetchRepoSecrets(ctx, client, sourceRepo)
+		switch config.Scope {
+		case migrator.SecretScopeEnv:
+			logger.Info("No specific secrets specified, fetching env secrets from source...")
+			secrets, err = fetchEnvSecrets(ctx, client, sourceRepo, config.SourceEnv)
+		case migrator.SecretScopeOrg:
+			logger.Info("No specific secrets specified, fetching org secrets from source...")
+			secrets, err = fetchOrgSecrets(ctx, client, sourceRepo)
+		default:
+			logger.Info("No specific secrets specified, fetching repo secrets from source...")
+			secrets, err = fetchRepoSecrets(ctx, client, sourceRepo)
+		}
 		if err != nil {
 			return fmt.Errorf("failed to fetch secrets from source: %w", err)
 		}

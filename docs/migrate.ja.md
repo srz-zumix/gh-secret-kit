@@ -339,9 +339,9 @@ gh secret-kit migrate runner teardown source-org
 
 ## ワークフロー内からのディスパッチ
 
-`migrate repo dispatch` は、シークレット移行ワークフローを生成してダミーの
-ブランチへ push し、`workflow_dispatch` でトリガーする高度なコマンドです。
-2 つのモードがあります。
+`migrate repo dispatch` および `migrate env dispatch` は、シークレット移行ワークフローを
+生成してダミーブランチへ push し、`workflow_dispatch` でトリガーする高度なコマンドです。
+共通の 2 つのモードがあります。
 
 ### セルフ書き換えモード（`--src` なし）
 
@@ -374,6 +374,19 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
 
+環境シークレットの場合は `--src-env` と `--dst-env` を追加します:
+
+```yaml
+      - name: Dispatch environment secret migration
+        run: |
+          gh secret-kit migrate env dispatch \
+            -d owner/dest-repo \
+            --src-env staging \
+            --dst-env production
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
 ### ターゲット指定モード（`--src` あり）
 
 `--src` を指定した場合、コマンドはワークフロー内部で実行する必要がなく、ソース
@@ -398,6 +411,13 @@ gh secret-kit migrate repo dispatch \
   --dst owner/dest-repo \
   --runner-label self-hosted \
   --workflow-name gh-secret-kit-migrate
+
+gh secret-kit migrate env dispatch \
+  --src owner/src-repo \
+  --dst owner/dest-repo \
+  --src-env staging \
+  --dst-env production \
+  --runner-label self-hosted
 ```
 
 ### 完了まで待機する

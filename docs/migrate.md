@@ -341,9 +341,9 @@ gh secret-kit migrate runner teardown source-org
 
 ## Dispatching from Within a Workflow
 
-`migrate repo dispatch` is an advanced alternative that generates a secret
-migration workflow, pushes it to a temporary branch, and triggers it via
-`workflow_dispatch`. It has two modes.
+`migrate repo dispatch` and `migrate env dispatch` are advanced alternatives that
+generate a secret migration workflow, push it to a temporary branch, and trigger it
+via `workflow_dispatch`. They share the same two modes.
 
 ### Self-rewrite mode (no `--src`)
 
@@ -376,6 +376,19 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
 
+For environment secrets, add `--src-env` and `--dst-env`:
+
+```yaml
+      - name: Dispatch environment secret migration
+        run: |
+          gh secret-kit migrate env dispatch \
+            -d owner/dest-repo \
+            --src-env staging \
+            --dst-env production
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
 ### Target-specified mode (`--src` given)
 
 When `--src` is given, the workflow does **not** need to run inside a workflow,
@@ -402,6 +415,13 @@ gh secret-kit migrate repo dispatch \
   --dst owner/dest-repo \
   --runner-label self-hosted \
   --workflow-name gh-secret-kit-migrate
+
+gh secret-kit migrate env dispatch \
+  --src owner/src-repo \
+  --dst owner/dest-repo \
+  --src-env staging \
+  --dst-env production \
+  --runner-label self-hosted
 ```
 
 ### Waiting for Completion
