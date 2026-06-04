@@ -668,6 +668,49 @@ Same flags as `migrate repo` plus:
 | `--dst-env string` | Destination environment name (required) | |
 | `--src-env string` | Source environment name (required) | |
 
+#### migrate env dispatch
+
+Generate an environment secret migration workflow, push it to a temporary branch,
+and trigger it via `workflow_dispatch`. Two modes:
+
+- **Self-rewrite** (no `--src`): run from inside a `workflow_dispatch`-triggered
+  workflow; it rewrites the currently running workflow and reuses the same runner
+  setting unless `--runner-label` is given.
+- **Target-specified** (`--src` given): the workflow need not run inside a
+  workflow. The workflow is registered in the source repository using a
+  syntax-error workflow trick, then the corrected workflow is pushed and
+  dispatched. `--runner-label` is required and `--workflow-name` selects the
+  workflow file name.
+
+The temporary branch is deleted by the generated workflow after a successful run.
+
+```bash
+# Self-rewrite: inside a workflow_dispatch job
+gh secret-kit migrate env dispatch -d owner/dest --src-env staging --dst-env production
+
+# Target-specified: dispatch into a repository that has no workflow yet
+gh secret-kit migrate env dispatch -s owner/source -d owner/dest \
+  --src-env staging --dst-env production \
+  --runner-label self-hosted --workflow-name gh-secret-kit-migrate
+```
+
+| Flag | Description | Default |
+| --- | --- | --- |
+| `--branch string` | Temporary dispatch branch name | unique name from run ID, or timestamp outside GitHub Actions |
+| `--dst string` / `-d` | Destination repository (`owner/repo` or `HOST/OWNER/REPO`) | |
+| `--dst-env string` | Destination environment name (required) | |
+| `--dst-token-secret string` | Secret name holding the destination PAT (referenced as `${{ secrets.<name> }}`) | |
+| `--exclude-secrets strings` | Secret names to exclude (comma-separated or repeated) | |
+| `--overwrite` | Overwrite existing secrets | false |
+| `--rename strings` | `OLD_NAME=NEW_NAME` mapping (repeatable) | |
+| `--runner-label string` | Runner label for `runs-on` (required with `--src`) | running workflow's runner |
+| `--secrets strings` | Specific secret names (comma-separated or repeated) | all |
+| `--src string` / `-s` | Source repository (when set, enables target-specified mode) | current repo |
+| `--src-env string` | Source environment name (required) | |
+| `--timeout string` | Timeout duration when waiting for workflow completion (e.g., 5m, 1h) | 10m |
+| `--unarchive` | Temporarily unarchive the source repository if archived, then re-archive after dispatch | false |
+| `--wait` / `-w` | Wait for the dispatched workflow run to complete | false |
+| `--workflow-name string` | Workflow file name (without extension) for target-specified mode | gh-secret-kit-migrate |
 ### Migrate Check (Org-Wide)
 
 ```bash

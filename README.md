@@ -324,7 +324,7 @@ The secret scope is determined by the subcommand: `org` for organization secrets
 
 Migrate environment secrets between repositories.
 
-Each subcommand (`all`, `init`, `create`, `run`, `delete`, `check`) operates on environment-scoped secrets.
+Each subcommand (`all`, `init`, `create`, `run`, `delete`, `check`, `dispatch`) operates on environment-scoped secrets.
 
 #### migrate env all
 
@@ -410,6 +410,32 @@ Close any open pull requests from the migration topic branch and then delete the
 - `--src string` / `-s`: Source repository (e.g., owner/repo; defaults to current repository)
 - `--unarchive`: Temporarily unarchive the repository if it is archived
 - `--workflow-name string`: Name of the workflow file (default: "gh-secret-kit-migrate")
+
+#### migrate env dispatch
+
+```sh
+gh secret-kit migrate env dispatch [flags]
+```
+
+Generate an environment secret migration workflow, push it to a temporary branch, and trigger it via `workflow_dispatch`. This command has two modes. In **self-rewrite** mode (no `--src`), it must be invoked from inside a `workflow_dispatch`-triggered workflow and rewrites the currently running workflow, reusing the same runner setting (unless `--runner-label` is given). In **target-specified** mode (`--src` given), the workflow does not need to run inside a workflow; the workflow is registered in the source repository using a syntax-error workflow trick, then the corrected workflow is pushed and dispatched. In target-specified mode, `--runner-label` is required and `--workflow-name` selects the workflow file name. The temporary branch is deleted by the generated workflow after a successful run.
+
+**Options:**
+
+- `--branch string`: Temporary dispatch branch name (default: unique name derived from the workflow run ID, or a timestamp outside GitHub Actions)
+- `--dst string` / `-d`: Destination repository (e.g., owner/repo or HOST/OWNER/REPO) (required)
+- `--dst-env string`: Destination environment name (required)
+- `--dst-token-secret string`: Secret variable name that holds the PAT for the destination (referenced as `${{ secrets.<name> }}` in the workflow)
+- `--exclude-secrets strings`: Secret names to exclude from migration (comma-separated or repeated flag)
+- `--overwrite`: Overwrite existing secrets at destination
+- `--rename strings`: Rename mapping in OLD\_NAME=NEW\_NAME format (repeatable)
+- `--runner-label string`: Runner label for `runs-on` (default: the running workflow's runner setting; required with `--src`)
+- `--secrets strings`: Specific secret names to migrate (comma-separated or repeated flag; defaults to all)
+- `--src string` / `-s`: Source repository (e.g., owner/repo; defaults to the repository running the workflow; when set, enables target-specified mode)
+- `--src-env string`: Source environment name (required)
+- `--timeout string`: Timeout duration when waiting for workflow completion (e.g., 5m, 1h) (default: "10m")
+- `--unarchive`: Temporarily unarchive the source repository if it is archived, then re-archive after the dispatch
+- `--wait` / `-w`: Wait for the dispatched workflow run to complete
+- `--workflow-name string`: Workflow file name (without extension) for target-specified mode (default: "gh-secret-kit-migrate")
 
 #### migrate env init
 
@@ -647,7 +673,7 @@ Trigger the migration workflow by removing and re-adding the trigger label on th
 
 Migrate repository secrets between repositories.
 
-Each subcommand (`all`, `init`, `create`, `run`, `delete`, `check`) operates on repository-scoped secrets.
+Each subcommand (`all`, `init`, `create`, `run`, `delete`, `check`, `dispatch`) operates on repository-scoped secrets.
 
 #### migrate repo all
 
