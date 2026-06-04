@@ -324,7 +324,7 @@ The secret scope is determined by the subcommand: `org` for organization secrets
 
 Migrate environment secrets between repositories.
 
-Each subcommand (`all`, `init`, `create`, `run`, `delete`, `check`) operates on environment-scoped secrets.
+Each subcommand (`all`, `init`, `create`, `run`, `delete`, `check`, `dispatch`) operates on environment-scoped secrets.
 
 #### migrate env all
 
@@ -673,7 +673,7 @@ Trigger the migration workflow by removing and re-adding the trigger label on th
 
 Migrate repository secrets between repositories.
 
-Each subcommand (`all`, `init`, `create`, `run`, `delete`, `check`) operates on repository-scoped secrets.
+Each subcommand (`all`, `init`, `create`, `run`, `delete`, `check`, `dispatch`) operates on repository-scoped secrets.
 
 #### migrate repo all
 
