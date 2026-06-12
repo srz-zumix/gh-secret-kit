@@ -1,0 +1,74 @@
+name: Bump version PR
+
+on:
+  workflow_call:
+    inputs:
+      tag_name:
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  bump_version_pr:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      TAG: ${{ inputs.tag_name }}
+      BRANCH: "bump/${{ inputs.tag_name }}"
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - uses: aquaproj/aqua-installer@11dd79b4e498d471a9385aa9fb7f62bb5f52a73c # v4.0.4
+        with:
+          aqua_version: v2.60.0
+
+      - name: Update version files
+        id: update-version
+        run: |
+
+          VERSION=${TAG#v}
+
+          sed -i "s/var Version = \".*\"/var Version = \"${VERSION}\"/" version/version.go
+
+          make licenses
+
+          if git diff --quiet; then
+            echo "No changes"
+            echo "diff=0" >> "${GITHUB_OUTPUT}"
+          else
+            echo "diff=1" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Commit changes
+        uses: suzuki-shunsuke/commit-action@06e3b49d4706498d325d29bd85adc82ecf2f5d8f # v1.0.0
+        if: steps.update-version.outputs.diff == '1'
+        with:
+          commit_message: "Bump version to ${{ inputs.tag_name }}"
+          branch: ${{ env.BRANCH }}
+          force_push: true
+          files: |
+            version/version.go
+            third_party/LICENSES
+
+      - name: Create pull request
+        if: steps.update-version.outputs.diff == '1'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if ! gh pr list --head "${BRANCH}" --state open --json number --jq '.[0].number' | grep -q .; then
+            gh pr create \
+              --title "Release ${TAG}" \
+              --body "Bump version to ${TAG}" \
+              --base main \
+              --head "${BRANCH}"
+          fi

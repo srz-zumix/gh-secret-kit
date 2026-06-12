@@ -18,6 +18,19 @@ build:
 test: ## run tests
 	go test -v ./...
 
+licenses: go.mod go.sum ## generate LICENSES (single file)
+	aqua i -l
+	@{ \
+		printf '================================================================================\n'; \
+		printf 'Package: Go standard library (%s)\n' "$$(go env GOVERSION)"; \
+		printf 'License: BSD-3-Clause\n'; \
+		printf 'URL: https://cs.opensource.google/go/go/+/refs/tags/%s:LICENSE\n' "$$(go env GOVERSION)"; \
+		printf '================================================================================\n'; \
+		cat "$$(go env GOROOT)/../LICENSE"; \
+		printf '\n'; \
+	} > third_party/LICENSES
+	go-licenses report ./... --template=third_party/licenses.tmpl 2>/dev/null >> third_party/LICENSES
+
 clean:
 	rm -f go.work
 
