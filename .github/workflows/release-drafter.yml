@@ -27,6 +27,16 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  bump_version_pr:
+    needs: draft_release
+    if: github.event_name != 'workflow_dispatch'
+    uses: ./.github/workflows/bump-version-pr.yml
+    permissions:
+      contents: write
+      pull-requests: write
+    with:
+      tag_name: ${{ needs.draft_release.outputs.tag_name }}
+
   publish_release:
     needs: draft_release
     uses: ./.github/workflows/release.yml
