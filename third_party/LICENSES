@@ -1,7 +1,7 @@
 ================================================================================
-Package: Go standard library (go1.26.2)
+Package: Go standard library (go1.26.1)
 License: BSD-3-Clause
-URL: https://cs.opensource.google/go/go/+/refs/tags/go1.26.2:LICENSE
+URL: https://cs.opensource.google/go/go/+/refs/tags/go1.26.1:LICENSE
 ================================================================================
 Copyright 2009 The Go Authors.
 
@@ -3687,7 +3687,7 @@ SOFTWARE.
 ================================================================================
 Package: github.com/srz-zumix/go-gh-extension/pkg
 License: MIT
-URL: https://github.com/srz-zumix/go-gh-extension/blob/HEAD/LICENSE
+URL: https://github.com/srz-zumix/go-gh-extension/blob/v0.5.0/LICENSE
 ================================================================================
 MIT License
 
