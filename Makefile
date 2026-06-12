@@ -26,7 +26,7 @@ licenses: go.mod go.sum ## generate LICENSES (single file)
 		printf 'License: BSD-3-Clause\n'; \
 		printf 'URL: https://cs.opensource.google/go/go/+/refs/tags/%s:LICENSE\n' "$$(go env GOVERSION)"; \
 		printf '================================================================================\n'; \
-		cat "$$(go env GOROOT)/../LICENSE"; \
+		cat "$$(go env GOROOT)/LICENSE" 2>/dev/null || cat "$$(go env GOROOT)/../LICENSE"; \
 		printf '\n'; \
 	} > third_party/LICENSES
 	go-licenses report ./... --template=third_party/licenses.tmpl 2>/dev/null >> third_party/LICENSES
