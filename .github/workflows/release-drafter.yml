@@ -22,7 +22,7 @@ jobs:
     outputs:
       tag_name: ${{ steps.release-drafter.outputs.tag_name }}
     steps:
-      - uses: release-drafter/release-drafter@ed4bc48ec97379be2258e7b7ac2624a3e26ab809 # v7.4.0
+      - uses: release-drafter/release-drafter@4d75298e00d9e34c483e5ff8c68d0ea1c1940c1e # v7.5.1
         id: release-drafter
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -30,7 +30,7 @@ jobs:
   bump_version_pr:
     needs: draft_release
     if: github.event_name != 'workflow_dispatch'
-    uses: srz-zumix/go-gh-extension/.github/workflows/reusable-bump-version-pr.yml@a86e7120e8ece693df01b6f67c72af6a6fdc2d42 # v0.5.2
+    uses: srz-zumix/go-gh-extension/.github/workflows/reusable-bump-version-pr.yml@a173d18cfce55816b823f993d1d5053e02c25ce5 # v0.5.4
     permissions:
       contents: write
       pull-requests: write
