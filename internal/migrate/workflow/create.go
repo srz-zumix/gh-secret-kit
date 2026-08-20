@@ -277,11 +277,7 @@ func fetchOrgSecrets(ctx context.Context, client *gh.GitHubClient, repo reposito
 }
 
 func fetchEnvSecrets(ctx context.Context, client *gh.GitHubClient, repo repository.Repository, env string) ([]string, error) {
-	repoInfo, err := gh.GetRepository(ctx, client, repo)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get repository info: %w", err)
-	}
-	secrets, err := gh.ListEnvSecrets(ctx, client, repoInfo, env)
+	secrets, err := gh.ListEnvSecrets(ctx, client, repo, env)
 	if err != nil {
 		return nil, err
 	}

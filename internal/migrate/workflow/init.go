@@ -169,7 +169,7 @@ func RunInit(ctx context.Context, config *InitConfig) (int, error) {
 		logger.Info(fmt.Sprintf("Creating trigger label: %s", labelName))
 		desc := "Trigger label for gh-secret-kit migration workflow"
 		color := "0075ca"
-		_, err = gh.CreateLabel(ctx, client, sourceRepo, &labelName, &desc, &color)
+		_, err = gh.CreateLabel(ctx, client, sourceRepo, labelName, &desc, &color)
 		if err != nil {
 			return 0, fmt.Errorf("failed to create trigger label %s: %w", labelName, err)
 		}
