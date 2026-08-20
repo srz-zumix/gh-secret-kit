@@ -154,11 +154,7 @@ func RunCheck(ctx context.Context, config *CheckConfig) error {
 func listSecretNamesByScope(ctx context.Context, client *gh.GitHubClient, repo repository.Repository, scope migrator.SecretScope, env string) ([]string, error) {
 	switch scope {
 	case migrator.SecretScopeEnv:
-		repoInfo, err := gh.GetRepository(ctx, client, repo)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get repository info: %w", err)
-		}
-		secrets, err := gh.ListEnvSecrets(ctx, client, repoInfo, env)
+		secrets, err := gh.ListEnvSecrets(ctx, client, repo, env)
 		if err != nil {
 			return nil, err
 		}

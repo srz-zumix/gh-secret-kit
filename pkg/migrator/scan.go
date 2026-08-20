@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/cli/go-gh/v2/pkg/repository"
-	"github.com/google/go-github/v88/github"
+	"github.com/google/go-github/v90/github"
 	"github.com/srz-zumix/go-gh-extension/pkg/gh"
 	"github.com/srz-zumix/go-gh-extension/pkg/logger"
 	"github.com/srz-zumix/go-gh-extension/pkg/parser"
@@ -90,7 +90,7 @@ type RepoMatch struct {
 // repos in the destination org, returning secret metadata for each pair.
 // Repos with no secrets are still included so callers can track all matches.
 func ScanMatchingRepos(ctx context.Context, src, dst *OrgContext) ([]RepoMatch, error) {
-	repos, err := gh.ListOwnerRepositories(ctx, src.Client, src.OwnerRepo.Owner)
+	repos, err := gh.ListOwnerRepositories(ctx, src.Client, src.OwnerRepo)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list source repositories: %w", err)
 	}
@@ -239,7 +239,7 @@ func collectEnvDataWithReviewers(
 	for _, env := range envs {
 		name := env.GetName()
 		envReviewers[name] = envHasReviewers(env)
-		secrets, err := gh.ListEnvSecrets(ctx, g, repo, name)
+		secrets, err := gh.ListEnvSecrets(ctx, g, repoRef, name)
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("failed to list secrets for environment %s: %w", name, err)
 		}
@@ -272,7 +272,7 @@ func envHasReviewers(env *github.Environment) bool {
 
 // ScanOrgRepos scans an org's repositories and returns those with secrets.
 func ScanOrgRepos(ctx context.Context, oc *OrgContext) ([]gh.RepoWithSecrets, error) {
-	repos, err := gh.ListOwnerRepositories(ctx, oc.Client, oc.OwnerRepo.Owner)
+	repos, err := gh.ListOwnerRepositories(ctx, oc.Client, oc.OwnerRepo)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list repositories for %s: %w", oc.OwnerRepo.Owner, err)
 	}
