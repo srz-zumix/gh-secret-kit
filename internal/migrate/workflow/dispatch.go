@@ -149,6 +149,17 @@ func prepareDispatchSetup(ctx context.Context, source, runnerLabel, workflowName
 	}, cleanup, nil
 }
 
+// validateDeleteRunAfterWait rejects --delete-run-after-wait when --wait is not
+// set, because the run to delete is only known after waiting for completion.
+// It is called before any repository mutation so an invalid flag combination
+// fails fast without creating a dispatch branch or pushing a workflow.
+func validateDeleteRunAfterWait(wait, deleteRunAfterWait bool) error {
+	if deleteRunAfterWait && !wait {
+		return fmt.Errorf("--delete-run-after-wait requires --wait")
+	}
+	return nil
+}
+
 // resolveDispatchBranch validates a user-supplied branch name, or generates a
 // unique one from prefix and the current workflow run ID (falling back to a
 // timestamp outside GitHub Actions).
@@ -253,7 +264,7 @@ func triggerDispatchWorkflow(ctx context.Context, client *gh.GitHubClient, repo 
 	}
 
 	if deleteRunAfterWait {
-		logger.Info(fmt.Sprintf("Deleting workflow run #%d history...", runID))
+		logger.Info(fmt.Sprintf("Deleting workflow run ID %d history...", runID))
 		if derr := gh.DeleteWorkflowRun(ctx, client, repo, runID); derr != nil {
 			return fmt.Errorf("failed to delete workflow run history: %w", derr)
 		}
@@ -262,7 +273,6 @@ func triggerDispatchWorkflow(ctx context.Context, client *gh.GitHubClient, repo 
 
 	return nil
 }
-
 
 // excludeSecrets removes any secret names present in exclude from secrets,
 // preserving order.
@@ -299,6 +309,10 @@ func excludeSecrets(secrets, exclude []string) []string {
 //     pushed and dispatched. --runner-label is required in this mode.
 func RunDispatch(ctx context.Context, config *DispatchConfig) error {
 	logger.Info("Dispatching migration workflow")
+
+	if err := validateDeleteRunAfterWait(config.Wait, config.DeleteRunAfterWait); err != nil {
+		return err
+	}
 
 	setup, cleanup, err := prepareDispatchSetup(ctx, config.Source, config.RunnerLabel, config.WorkflowName, config.Unarchive, config.SkipArchiveCheck)
 	if err != nil {

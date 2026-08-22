@@ -98,13 +98,13 @@ func RunDeleteRuns(ctx context.Context, config *DeleteRunsConfig) error {
 	logger.Info(fmt.Sprintf("Found %d completed workflow run(s) to delete for %s", len(completed), workflowFileName))
 	for _, runID := range completed {
 		if config.DryRun {
-			logger.Info(fmt.Sprintf("[dryrun] Would delete workflow run #%d", runID))
+			logger.Info(fmt.Sprintf("[dryrun] Would delete workflow run ID %d", runID))
 			continue
 		}
 		if err := gh.DeleteWorkflowRun(ctx, client, sourceRepo, runID); err != nil {
-			return fmt.Errorf("failed to delete workflow run #%d: %w", runID, err)
+			return fmt.Errorf("failed to delete workflow run ID %d: %w", runID, err)
 		}
-		logger.Info(fmt.Sprintf("Deleted workflow run #%d", runID))
+		logger.Info(fmt.Sprintf("Deleted workflow run ID %d", runID))
 	}
 
 	return nil

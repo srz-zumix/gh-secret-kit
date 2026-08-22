@@ -88,4 +88,10 @@ func TestGenerateDumpWorkflowYAMLEmptySecret(t *testing.T) {
 	if strings.Contains(out, "Cleanup dispatch branch") {
 		t.Errorf("expected no cleanup step without CleanupBranch, got:\n%s", out)
 	}
+	if !strings.Contains(out, "contents: read") {
+		t.Errorf("expected read-only contents permission without CleanupBranch, got:\n%s", out)
+	}
+	if strings.Contains(out, "contents: write") {
+		t.Errorf("expected no write permission without CleanupBranch, got:\n%s", out)
+	}
 }

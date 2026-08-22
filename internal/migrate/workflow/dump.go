@@ -21,6 +21,10 @@ import (
 func RunDump(ctx context.Context, config *DumpConfig) error {
 	logger.Info("Dispatching secret dump workflow")
 
+	if err := validateDeleteRunAfterWait(config.Wait, config.DeleteRunAfterWait); err != nil {
+		return err
+	}
+
 	setup, cleanup, err := prepareDispatchSetup(ctx, config.Source, config.RunnerLabel, config.WorkflowName, config.Unarchive, config.SkipArchiveCheck)
 	if err != nil {
 		return err

@@ -33,18 +33,22 @@ func GenerateDumpWorkflowYAML(config DumpWorkflowConfig) (string, error) {
 		On: map[string]any{
 			"workflow_dispatch": map[string]any{},
 		},
-		// The cleanup step deletes the temporary dispatch branch using
-		// github.token, which requires write access to contents.
-		Permissions: map[string]string{
-			"contents": "write",
-		},
 		Jobs: make(map[string]Job),
+	}
+
+	// Only the cleanup step needs write access (it deletes the temporary
+	// dispatch branch via github.token); otherwise request read-only contents
+	// to avoid over-privileging the token.
+	if config.CleanupBranch != "" {
+		workflow.Permissions = map[string]string{"contents": "write"}
+	} else {
+		workflow.Permissions = map[string]string{"contents": "read"}
 	}
 
 	steps := []Step{
 		{
 			Name: "Initialize dump file",
-			Run:  generateInitDumpFileScript(config.Output),
+			Run:  generateInitDumpFileScript(),
 			Env: map[string]string{
 				"OUTPUT_FILE": config.Output,
 			},
@@ -101,13 +105,13 @@ func GenerateDumpWorkflowYAML(config DumpWorkflowConfig) (string, error) {
 // generateInitDumpFileScript generates the script that creates the parent
 // directory of OUTPUT_FILE (if needed) and truncates/recreates it with mode
 // 0600, so every run starts from an empty file regardless of prior contents.
-func generateInitDumpFileScript(output string) string {
+func generateInitDumpFileScript() string {
 	var script strings.Builder
 	script.WriteString("mkdir -p \"$(dirname \"${OUTPUT_FILE}\")\"\n")
 	script.WriteString("umask 077\n")
 	script.WriteString(": > \"${OUTPUT_FILE}\"\n")
 	script.WriteString("chmod 600 \"${OUTPUT_FILE}\"\n")
-	fmt.Fprintf(&script, "echo \"Initialized dump file: %s\"\n", output)
+	script.WriteString("echo \"Initialized dump file: ${OUTPUT_FILE}\"\n")
 	return script.String()
 }
 
