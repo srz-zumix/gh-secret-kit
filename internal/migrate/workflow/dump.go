@@ -61,5 +61,5 @@ func RunDump(ctx context.Context, config *DumpConfig) error {
 		return err
 	}
 
-	return triggerDispatchWorkflow(ctx, setup.client, setup.sourceRepo, setup, branch, workflowName, workflowYAML, config.Wait, config.Timeout)
+	return triggerDispatchWorkflow(ctx, setup.client, setup.sourceRepo, setup, branch, workflowName, workflowYAML, config.Wait, config.DeleteRunAfterWait, config.Timeout)
 }

@@ -54,6 +54,7 @@ gh secret-kit                           # Root command
 │       └── copy                        # Copy env variables to destinations
 ├── migrate                             # Secret migration
 │   ├── check                           # Verify org-wide migration status
+│   ├── delete-runs                     # Delete completed dispatch/dump run history
 │   ├── list                            # List repos with secrets
 │   ├── plan                            # Generate migration commands
 │   ├── env                             # Environment secrets
@@ -61,6 +62,7 @@ gh secret-kit                           # Root command
 │   │   ├── check                       # Verify env secrets
 │   │   ├── create                      # Generate migration workflow
 │   │   ├── delete                      # Clean up PR and branch
+│   │   ├── dispatch                    # Dispatch migration via workflow_dispatch
 │   │   ├── init                        # Initialize stub workflow via draft PR
 │   │   └── run                         # Trigger migration workflow
 │   ├── org                             # Organization secrets
@@ -75,6 +77,7 @@ gh secret-kit                           # Root command
 │   │   ├── check                       # Verify repo secrets
 │   │   ├── create                      # Generate migration workflow
 │   │   ├── delete                      # Clean up PR and branch
+│   │   ├── dispatch                    # Dispatch migration via workflow_dispatch
 │   │   ├── init                        # Initialize stub workflow via draft PR
 │   │   └── run                         # Trigger migration workflow
 │   └── runner                          # Self-hosted runner management
@@ -576,6 +579,7 @@ gh secret-kit migrate repo dispatch -s owner/source -d owner/dest \
 | Flag | Description | Default |
 | --- | --- | --- |
 | `--branch string` | Temporary dispatch branch name | unique name from run ID, or timestamp outside GitHub Actions |
+| `--delete-run-after-wait` | Delete the dispatched workflow run's history after it completes successfully (requires `--wait`) | false |
 | `--dst string` / `-d` | Destination repository (`owner/repo` or `HOST/OWNER/REPO`) | |
 | `--dst-token-secret string` | Secret name holding the destination PAT (referenced as `${{ secrets.<name> }}`) | |
 | `--exclude-secrets strings` | Secret names to exclude (exact name match only — no substring matching; use `migrate list` first to find exact names, comma-separated or repeated) | |
@@ -697,6 +701,7 @@ gh secret-kit migrate env dispatch -s owner/source -d owner/dest \
 | Flag | Description | Default |
 | --- | --- | --- |
 | `--branch string` | Temporary dispatch branch name | unique name from run ID, or timestamp outside GitHub Actions |
+| `--delete-run-after-wait` | Delete the dispatched workflow run's history after it completes successfully (requires `--wait`) | false |
 | `--dst string` / `-d` | Destination repository (`owner/repo` or `HOST/OWNER/REPO`) | |
 | `--dst-env string` | Destination environment name (required) | |
 | `--dst-token-secret string` | Secret name holding the destination PAT (referenced as `${{ secrets.<name> }}`) | |
@@ -723,6 +728,36 @@ Checks repository secrets, environment secrets, and organization secrets across 
 | Flag | Description | Default |
 | --- | --- | --- |
 | `--dst string` / `-d` | Destination organization (required) | |
+
+### Migrate Delete Runs
+
+```bash
+# Delete all completed run history for the migrate dispatch workflow
+gh secret-kit migrate delete-runs -R owner/repo
+
+# Keep the 5 most recent completed runs, delete the rest
+gh secret-kit migrate delete-runs -R owner/repo --keep-last 5
+
+# Preview what would be deleted, without deleting
+gh secret-kit migrate delete-runs -R owner/repo --dryrun
+
+# Clean up run history left behind by `migrate repo dump` instead
+gh secret-kit migrate delete-runs -R owner/repo --workflow-name gh-secret-kit-dump
+```
+
+Deletes completed workflow run history for a given workflow file name. This
+targets the run history left behind by `dispatch`/`dump`: their per-run
+dispatch branches self-delete after a successful run, but the run entries
+themselves remain in the Actions UI until removed. In-progress runs are never
+deleted.
+
+| Flag | Description | Default |
+| --- | --- | --- |
+| `--dryrun` / `-n` | List the runs that would be deleted without deleting them | false |
+| `--keep-last int` | Keep the N most recent completed runs and delete the rest (0 deletes all completed runs) | 0 |
+| `--repo string` / `-R` | Source repository | current repo |
+| `--unarchive` | Temporarily unarchive the repository if archived, then re-archive after completion | false |
+| `--workflow-name string` | Workflow file name (without extension) to delete run history for | gh-secret-kit-migrate |
 
 ### Migrate List
 

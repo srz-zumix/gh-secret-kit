@@ -422,6 +422,7 @@ Generate an environment secret migration workflow, push it to a temporary branch
 **Options:**
 
 - `--branch string`: Temporary dispatch branch name (default: unique name derived from the workflow run ID, or a timestamp outside GitHub Actions)
+- `--delete-run-after-wait`: Delete the dispatched workflow run's history after it completes successfully (requires `--wait`)
 - `--dst string` / `-d`: Destination repository (e.g., owner/repo or HOST/OWNER/REPO) (required)
 - `--dst-env string`: Destination environment name (required)
 - `--dst-token-secret string`: Secret variable name that holds the PAT for the destination (referenced as `${{ secrets.<name> }}` in the workflow)
@@ -494,6 +495,22 @@ Exits with a non-zero status if any secrets have not been migrated yet.
 **Options:**
 
 - `--dst string` / `-d`: Destination organization (e.g., org or HOST/org) (required)
+
+#### migrate delete-runs
+
+```sh
+gh secret-kit migrate delete-runs [flags]
+```
+
+Delete completed workflow run history for the given workflow file name. This targets the run history left behind by the `dispatch`/`dump` commands: their per-run dispatch branches self-delete after a successful run, but the run entries themselves remain in the Actions UI until removed. In-progress runs are never deleted.
+
+**Options:**
+
+- `--dryrun` / `-n`: List the runs that would be deleted without deleting them
+- `--keep-last int`: Keep the N most recent completed runs and delete the rest (default: 0, deletes all completed runs)
+- `--repo string` / `-R`: Source repository (e.g., owner/repo; defaults to current repository)
+- `--unarchive`: Temporarily unarchive the repository if it is archived, then re-archive after completion
+- `--workflow-name string`: Workflow file name (without extension) to delete run history for (default: "gh-secret-kit-migrate")
 
 #### migrate list
 
@@ -767,6 +784,7 @@ Generate a secret migration workflow, push it to a temporary branch, and trigger
 **Options:**
 
 - `--branch string`: Temporary dispatch branch name (default: unique name derived from the workflow run ID, or a timestamp outside GitHub Actions)
+- `--delete-run-after-wait`: Delete the dispatched workflow run's history after it completes successfully (requires `--wait`)
 - `--dst string` / `-d`: Destination repository (e.g., owner/repo or HOST/OWNER/REPO) (required)
 - `--dst-token-secret string`: Secret variable name that holds the PAT for the destination (e.g. `DST_PAT`; referenced as `${{ secrets.<name> }}` in the workflow)
 - `--exclude-secrets strings`: Secret names to exclude from migration (comma-separated or repeated flag)

@@ -57,10 +57,10 @@ func prepareDispatchSetup(ctx context.Context, source, runnerLabel, workflowName
 		// Target-specified mode: --runner-label is required because the running
 		// workflow's runs-on cannot be reused.
 		if runnerLabel == "" {
-			return nil, nil, fmt.Errorf("--runner-label is required when --src is specified")
+			return nil, nil, fmt.Errorf("--runner-label is required when a source repository is specified")
 		}
 		if workflowName == "" {
-			return nil, nil, fmt.Errorf("--workflow-name must not be empty when --src is specified")
+			return nil, nil, fmt.Errorf("--workflow-name must not be empty when a source repository is specified")
 		}
 		workflowFileName = workflowName + ".yml"
 		workflowPath = ".github/workflows/" + workflowFileName
@@ -194,7 +194,7 @@ func createDispatchBranch(ctx context.Context, client *gh.GitHubClient, repo rep
 // triggerDispatchWorkflow registers (in target-specified mode), pushes, and
 // triggers workflowYAML on the dispatch branch, then optionally waits for the
 // run to complete.
-func triggerDispatchWorkflow(ctx context.Context, client *gh.GitHubClient, repo repository.Repository, setup *dispatchSetup, branch, workflowName, workflowYAML string, wait bool, timeout string) error {
+func triggerDispatchWorkflow(ctx context.Context, client *gh.GitHubClient, repo repository.Repository, setup *dispatchSetup, branch, workflowName, workflowYAML string, wait, deleteRunAfterWait bool, timeout string) error {
 	dispatchReq := github.CreateWorkflowDispatchEventRequest{Ref: branch}
 
 	if setup.targetSpecified {
@@ -243,12 +243,26 @@ func triggerDispatchWorkflow(ctx context.Context, client *gh.GitHubClient, repo 
 	}
 	logger.Info("Workflow dispatched!")
 
-	if wait {
-		return waitForWorkflowRun(ctx, client, repo, runConfig, preDispatchMaxNumber)
+	if !wait {
+		return nil
+	}
+
+	runID, err := waitForWorkflowRun(ctx, client, repo, runConfig, preDispatchMaxNumber)
+	if err != nil {
+		return err
+	}
+
+	if deleteRunAfterWait {
+		logger.Info(fmt.Sprintf("Deleting workflow run #%d history...", runID))
+		if derr := gh.DeleteWorkflowRun(ctx, client, repo, runID); derr != nil {
+			return fmt.Errorf("failed to delete workflow run history: %w", derr)
+		}
+		logger.Info("Workflow run history deleted")
 	}
 
 	return nil
 }
+
 
 // excludeSecrets removes any secret names present in exclude from secrets,
 // preserving order.
@@ -377,7 +391,7 @@ func RunDispatch(ctx context.Context, config *DispatchConfig) error {
 		return err
 	}
 
-	return triggerDispatchWorkflow(ctx, setup.client, setup.sourceRepo, setup, branch, workflowConfig.WorkflowName, workflowYAML, config.Wait, config.Timeout)
+	return triggerDispatchWorkflow(ctx, setup.client, setup.sourceRepo, setup, branch, workflowConfig.WorkflowName, workflowYAML, config.Wait, config.DeleteRunAfterWait, config.Timeout)
 }
 
 // pushWorkflowFile creates or updates the workflow file at workflowPath on the

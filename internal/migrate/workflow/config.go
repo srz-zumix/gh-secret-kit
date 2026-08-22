@@ -68,6 +68,22 @@ type DeleteConfig struct {
 	SkipArchiveCheck bool
 }
 
+// DeleteRunsConfig holds configuration for deleting completed workflow run
+// history for a given workflow, e.g. the runs left behind by the dispatch and
+// dump commands (which each use a unique, self-deleting branch per run, so
+// the run history itself is not cleaned up automatically).
+type DeleteRunsConfig struct {
+	Source       string
+	WorkflowName string
+	// KeepLast keeps the N most recent completed runs and deletes the rest.
+	// 0 deletes all completed runs.
+	KeepLast int
+	// DryRun, when true, lists the runs that would be deleted without deleting them.
+	DryRun           bool
+	Unarchive        bool
+	SkipArchiveCheck bool
+}
+
 // DispatchConfig holds configuration for the dispatch operation. It supports two
 // modes:
 //
@@ -106,6 +122,9 @@ type DispatchConfig struct {
 	Wait bool
 	// Timeout is the maximum duration to wait when Wait is true (e.g. "10m").
 	Timeout string
+	// DeleteRunAfterWait, when true and Wait is true, deletes the dispatched
+	// workflow run's history after it completes successfully.
+	DeleteRunAfterWait bool
 	// Unarchive, when true, temporarily unarchives the source repository if it
 	// is archived, then re-archives it after the dispatch completes.
 	Unarchive bool
@@ -141,6 +160,9 @@ type DumpConfig struct {
 	Wait bool
 	// Timeout is the maximum duration to wait when Wait is true (e.g. "10m").
 	Timeout string
+	// DeleteRunAfterWait, when true and Wait is true, deletes the dispatched
+	// workflow run's history after it completes successfully.
+	DeleteRunAfterWait bool
 	// Unarchive, when true, temporarily unarchives the source repository if it
 	// is archived, then re-archives it after the dispatch completes.
 	Unarchive bool
