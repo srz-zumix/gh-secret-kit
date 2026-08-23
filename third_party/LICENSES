@@ -34,7 +34,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ================================================================================
 Package: charm.land/bubbles/v2
 License: MIT
-URL: https://github.com/charmbracelet/bubbles/blob/v2.1.0/LICENSE
+URL: https://github.com/charmbracelet/bubbles/blob/v2.1.1/LICENSE
 ================================================================================
 MIT License
 
@@ -61,7 +61,7 @@ SOFTWARE.
 ================================================================================
 Package: charm.land/bubbletea/v2
 License: MIT
-URL: https://github.com/charmbracelet/bubbletea/blob/v2.0.6/LICENSE
+URL: https://github.com/charmbracelet/bubbletea/blob/v2.0.8/LICENSE
 ================================================================================
 MIT License
 
@@ -115,7 +115,7 @@ SOFTWARE.
 ================================================================================
 Package: charm.land/lipgloss/v2
 License: MIT
-URL: https://github.com/charmbracelet/lipgloss/blob/v2.0.3/LICENSE
+URL: https://github.com/charmbracelet/lipgloss/blob/v2.0.5/LICENSE
 ================================================================================
 MIT License
 
@@ -604,7 +604,7 @@ SOFTWARE.
 ================================================================================
 Package: github.com/bradleyfalzon/ghinstallation/v2
 License: Apache-2.0
-URL: https://github.com/bradleyfalzon/ghinstallation/blob/v2.18.0/LICENSE
+URL: https://github.com/bradleyfalzon/ghinstallation/blob/v2.19.0/LICENSE
 ================================================================================
 
                                  Apache License
@@ -1090,7 +1090,7 @@ SOFTWARE.
 ================================================================================
 Package: github.com/charmbracelet/ultraviolet
 License: MIT
-URL: https://github.com/charmbracelet/ultraviolet/blob/489999b90468/LICENSE
+URL: https://github.com/charmbracelet/ultraviolet/blob/f5a850f9c2b7/LICENSE
 ================================================================================
 MIT License
 
@@ -1335,7 +1335,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ================================================================================
 Package: github.com/cli/cli/v2
 License: MIT
-URL: https://github.com/cli/cli/blob/v2.93.0/LICENSE
+URL: https://github.com/cli/cli/blob/v2.97.0/LICENSE
 ================================================================================
 MIT License
 
@@ -1522,7 +1522,7 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ================================================================================
 Package: github.com/ddddddO/gtree
 License: BSD-2-Clause
-URL: https://github.com/ddddddO/gtree/blob/v1.13.6/LICENSE
+URL: https://github.com/ddddddO/gtree/blob/v1.14.9/LICENSE
 ================================================================================
 BSD 2-Clause License
 
@@ -1646,9 +1646,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 
 ================================================================================
-Package: github.com/google/go-github/v84/github
+Package: github.com/google/go-github/v88/github
 License: BSD-3-Clause
-URL: https://github.com/google/go-github/blob/v84.0.0/LICENSE
+URL: https://github.com/google/go-github/blob/v88.0.0/LICENSE
 ================================================================================
 Copyright (c) 2013 The go-github AUTHORS. All rights reserved.
 
@@ -1679,9 +1679,9 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ================================================================================
-Package: github.com/google/go-github/v88/github
+Package: github.com/google/go-github/v90/github
 License: BSD-3-Clause
-URL: https://github.com/google/go-github/blob/v88.0.0/LICENSE
+URL: https://github.com/google/go-github/blob/v90.0.0/LICENSE
 ================================================================================
 Copyright (c) 2013 The go-github AUTHORS. All rights reserved.
 
@@ -2875,7 +2875,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 ================================================================================
 Package: github.com/mattn/go-colorable
 License: MIT
-URL: https://github.com/mattn/go-colorable/blob/v0.1.14/LICENSE
+URL: https://github.com/mattn/go-colorable/blob/v0.1.15/LICENSE
 ================================================================================
 The MIT License (MIT)
 
@@ -2902,7 +2902,7 @@ SOFTWARE.
 ================================================================================
 Package: github.com/mattn/go-isatty
 License: MIT
-URL: https://github.com/mattn/go-isatty/blob/v0.0.22/LICENSE
+URL: https://github.com/mattn/go-isatty/blob/v0.0.24/LICENSE
 ================================================================================
 Copyright (c) Yasuhiro MATSUMOTO <mattn.jp@gmail.com>
 
@@ -2917,7 +2917,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 ================================================================================
 Package: github.com/mattn/go-runewidth
 License: MIT
-URL: https://github.com/mattn/go-runewidth/blob/v0.0.23/LICENSE
+URL: https://github.com/mattn/go-runewidth/blob/v0.0.24/LICENSE
 ================================================================================
 The MIT License (MIT)
 
@@ -3687,7 +3687,7 @@ SOFTWARE.
 ================================================================================
 Package: github.com/srz-zumix/go-gh-extension/pkg
 License: MIT
-URL: https://github.com/srz-zumix/go-gh-extension/blob/v0.5.0/LICENSE
+URL: https://github.com/srz-zumix/go-gh-extension/blob/v0.6.2/LICENSE
 ================================================================================
 MIT License
 
@@ -3798,7 +3798,7 @@ SOFTWARE.
 ================================================================================
 Package: golang.org/x/crypto
 License: BSD-3-Clause
-URL: https://cs.opensource.google/go/x/crypto/+/v0.52.0:LICENSE
+URL: https://cs.opensource.google/go/x/crypto/+/v0.54.0:LICENSE
 ================================================================================
 Copyright 2009 The Go Authors.
 
@@ -3831,7 +3831,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ================================================================================
 Package: golang.org/x/mod/semver
 License: BSD-3-Clause
-URL: https://cs.opensource.google/go/x/mod/+/v0.36.0:LICENSE
+URL: https://cs.opensource.google/go/x/mod/+/v0.37.0:LICENSE
 ================================================================================
 Copyright 2009 The Go Authors.
 
@@ -3864,7 +3864,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ================================================================================
 Package: golang.org/x/sync/errgroup
 License: BSD-3-Clause
-URL: https://cs.opensource.google/go/x/sync/+/v0.20.0:LICENSE
+URL: https://cs.opensource.google/go/x/sync/+/v0.22.0:LICENSE
 ================================================================================
 Copyright 2009 The Go Authors.
 
@@ -3897,7 +3897,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ================================================================================
 Package: golang.org/x/sys/unix
 License: BSD-3-Clause
-URL: https://cs.opensource.google/go/x/sys/+/v0.45.0:LICENSE
+URL: https://cs.opensource.google/go/x/sys/+/v0.47.0:LICENSE
 ================================================================================
 Copyright 2009 The Go Authors.
 
@@ -3930,7 +3930,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ================================================================================
 Package: golang.org/x/term
 License: BSD-3-Clause
-URL: https://cs.opensource.google/go/x/term/+/v0.43.0:LICENSE
+URL: https://cs.opensource.google/go/x/term/+/v0.45.0:LICENSE
 ================================================================================
 Copyright 2009 The Go Authors.
 
@@ -3963,7 +3963,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ================================================================================
 Package: golang.org/x/text
 License: BSD-3-Clause
-URL: https://cs.opensource.google/go/x/text/+/v0.37.0:LICENSE
+URL: https://cs.opensource.google/go/x/text/+/v0.40.0:LICENSE
 ================================================================================
 Copyright 2009 The Go Authors.
 
