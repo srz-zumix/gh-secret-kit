@@ -12,11 +12,6 @@ import (
 	"github.com/srz-zumix/go-gh-extension/pkg/cmdflags"
 )
 
-var (
-	logLevel string
-	readOnly bool
-)
-
 var rootCmd = &cobra.Command{
 	Use:     "gh-secret-kit",
 	Short:   "Secret-related operations extensions for GitHub CLI",
