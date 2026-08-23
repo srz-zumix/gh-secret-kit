@@ -239,7 +239,7 @@ teardown が完了せず、孤立したランナーが GitHub に残っている
 
 ```sh
 # プレビュー（削除しない）
-gh secret-kit migrate runner prune --dry-run owner-org
+gh secret-kit migrate runner prune --dryrun owner-org
 
 # デフォルトラベルの gh-secret-kit- ランナーをすべて削除
 gh secret-kit migrate runner prune owner-org
@@ -252,7 +252,7 @@ gh secret-kit migrate runner prune --runner-label "" owner-org
 | --- | --- |
 | `--repo` / `-R` | コピー元リポジトリ（`owner/repo`）。省略すると組織スコープになります |
 | `--runner-label` | このラベルを持つランナーのみ削除（デフォルト: `gh-secret-kit-migrate`；`""` = すべての gh-secret-kit ランナー） |
-| `--dry-run` / `-n` | 削除せずにプレビューのみ表示 |
+| `--dryrun` / `-n` | 削除せずにプレビューのみ表示 |
 
 ## 組織全体の移行状況を確認する
 
