@@ -68,6 +68,22 @@ type DeleteConfig struct {
 	SkipArchiveCheck bool
 }
 
+// DeleteRunsConfig holds configuration for deleting completed workflow run
+// history for a given workflow, e.g. the runs left behind by the dispatch and
+// dump commands (which each use a unique, self-deleting branch per run, so
+// the run history itself is not cleaned up automatically).
+type DeleteRunsConfig struct {
+	Source       string
+	WorkflowName string
+	// KeepLast keeps the N most recent completed runs and deletes the rest.
+	// 0 deletes all completed runs.
+	KeepLast int
+	// DryRun, when true, lists the runs that would be deleted without deleting them.
+	DryRun           bool
+	Unarchive        bool
+	SkipArchiveCheck bool
+}
+
 // DispatchConfig holds configuration for the dispatch operation. It supports two
 // modes:
 //
@@ -106,11 +122,51 @@ type DispatchConfig struct {
 	Wait bool
 	// Timeout is the maximum duration to wait when Wait is true (e.g. "10m").
 	Timeout string
+	// DeleteRunAfterWait, when true and Wait is true, deletes the dispatched
+	// workflow run's history after it completes successfully.
+	DeleteRunAfterWait bool
 	// Unarchive, when true, temporarily unarchives the source repository if it
 	// is archived, then re-archives it after the dispatch completes.
 	Unarchive bool
 	// SkipArchiveCheck skips the archived-repository check. Set internally by
 	// RunAll to avoid a redundant API call when the check was already done.
+	SkipArchiveCheck bool
+}
+
+// DumpConfig holds configuration for the (undocumented) dump operation, which
+// writes repository secret values to a file on the workflow runner's
+// filesystem via the same dispatch transport as DispatchConfig.
+type DumpConfig struct {
+	Source string
+	// Output is the path (relative to the runner's working directory, or
+	// absolute) of the file to write NAME=BASE64_VALUE lines to. The file is
+	// truncated and recreated on every run.
+	Output         string
+	Secrets        []string
+	ExcludeSecrets []string
+	// RunnerLabel overrides the runs-on value of the generated workflow. When
+	// empty in self-rewrite mode, the runs-on of the currently running workflow
+	// is reused. It is required in target-specified mode.
+	RunnerLabel string
+	// WorkflowName is the workflow file name (without extension) used in
+	// target-specified mode. It is ignored in self-rewrite mode, where the
+	// running workflow file name is used.
+	WorkflowName string
+	// Branch is the temporary dispatch branch name. When empty, a unique name
+	// derived from the workflow run ID or a timestamp is used.
+	Branch string
+	// Wait, when true, causes RunDump to block until the dispatched workflow
+	// run finishes (or Timeout elapses).
+	Wait bool
+	// Timeout is the maximum duration to wait when Wait is true (e.g. "10m").
+	Timeout string
+	// DeleteRunAfterWait, when true and Wait is true, deletes the dispatched
+	// workflow run's history after it completes successfully.
+	DeleteRunAfterWait bool
+	// Unarchive, when true, temporarily unarchives the source repository if it
+	// is archived, then re-archives it after the dispatch completes.
+	Unarchive bool
+	// SkipArchiveCheck skips the archived-repository check.
 	SkipArchiveCheck bool
 }
 

@@ -20,6 +20,7 @@ secret values and sets them directly to the destination via API.`,
 
 	// Add subcommands
 	cmd.AddCommand(migrate.NewCheckCmd())
+	cmd.AddCommand(migrate.NewDeleteRunsCmd())
 	cmd.AddCommand(migrate.NewEnvCmd())
 	cmd.AddCommand(migrate.NewListCmd())
 	cmd.AddCommand(migrate.NewOrgCmd())

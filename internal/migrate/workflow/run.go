@@ -130,7 +130,8 @@ func RunWorkflow(ctx context.Context, config *RunConfig) error {
 			}
 		}
 
-		return waitForWorkflowRun(ctx, client, sourceRepo, config, preRunMaxNumber)
+		_, err := waitForWorkflowRun(ctx, client, sourceRepo, config, preRunMaxNumber)
+		return err
 	}
 
 	return fmt.Errorf("workflow did not queue after %d label trigger attempt(s); check that the workflow file is valid and the runner is online", maxAttempts)
@@ -191,10 +192,11 @@ func waitForWorkflowQueued(ctx context.Context, client *gh.GitHubClient, sourceR
 
 // waitForWorkflowRun polls for workflow completion until the run finishes or timeout expires.
 // A run is considered new when its RunNumber exceeds preRunMaxNumber (captured before triggering).
-func waitForWorkflowRun(ctx context.Context, client *gh.GitHubClient, sourceRepo repository.Repository, config *RunConfig, preRunMaxNumber int) error {
+// On success it also returns the completed run's ID so callers can optionally delete its history.
+func waitForWorkflowRun(ctx context.Context, client *gh.GitHubClient, sourceRepo repository.Repository, config *RunConfig, preRunMaxNumber int) (int64, error) {
 	timeout, err := time.ParseDuration(config.Timeout)
 	if err != nil {
-		return fmt.Errorf("invalid timeout duration %q: %w", config.Timeout, err)
+		return 0, fmt.Errorf("invalid timeout duration %q: %w", config.Timeout, err)
 	}
 
 	workflowFileName := config.WorkflowName + ".yml"
@@ -207,7 +209,7 @@ func waitForWorkflowRun(ctx context.Context, client *gh.GitHubClient, sourceRepo
 
 	for {
 		if time.Now().After(deadline) {
-			return fmt.Errorf("timeout waiting for workflow run to complete")
+			return 0, fmt.Errorf("timeout waiting for workflow run to complete")
 		}
 
 		runs, err := gh.ListWorkflowRunsByFileName(ctx, client, sourceRepo, workflowFileName, &gh.ListWorkflowRunsOptions{
@@ -221,7 +223,7 @@ func waitForWorkflowRun(ctx context.Context, client *gh.GitHubClient, sourceRepo
 				time.Sleep(pollInterval)
 				continue
 			}
-			return fmt.Errorf("failed to list workflow runs: %w", err)
+			return 0, fmt.Errorf("failed to list workflow runs: %w", err)
 		}
 		for _, latestRun := range runs {
 			if latestRun.GetRunNumber() <= preRunMaxNumber {
@@ -234,9 +236,9 @@ func waitForWorkflowRun(ctx context.Context, client *gh.GitHubClient, sourceRepo
 			if status == "completed" {
 				if conclusion == "success" {
 					logger.Info("Workflow run completed successfully!")
-					return nil
+					return latestRun.GetID(), nil
 				}
-				return fmt.Errorf("workflow run completed with conclusion: %s", conclusion)
+				return 0, fmt.Errorf("workflow run completed with conclusion: %s", conclusion)
 			}
 			break // found a new run that is still in progress; stop scanning
 		}

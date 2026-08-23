@@ -6,6 +6,9 @@ const (
 	DefaultWorkflowName = "gh-secret-kit-migrate"
 	DefaultBranch       = "gh-secret-kit-migrate"
 	DefaultLabel        = "gh-secret-kit-migrate"
+	// DefaultDumpWorkflowName is the target-specified mode workflow file name
+	// (without extension) for the undocumented "migrate repo dump" command.
+	DefaultDumpWorkflowName = "gh-secret-kit-dump"
 )
 
 // CommonOptions holds common options for migrate commands

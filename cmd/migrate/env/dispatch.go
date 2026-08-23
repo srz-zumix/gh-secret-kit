@@ -58,6 +58,7 @@ The temporary branch is deleted by the generated workflow after a successful run
 	f.StringVar(&config.Branch, "branch", "", "Temporary dispatch branch name (defaults to a unique name derived from the workflow run ID or a timestamp)")
 	f.BoolVarP(&config.Wait, "wait", "w", false, "Wait for the dispatched workflow run to complete")
 	f.StringVar(&config.Timeout, "timeout", "10m", "Timeout duration when waiting for workflow completion (e.g., 5m, 1h)")
+	f.BoolVar(&config.DeleteRunAfterWait, "delete-run-after-wait", false, "Delete the dispatched workflow run's history after it completes successfully (requires --wait)")
 	f.BoolVar(&config.Unarchive, "unarchive", false, "Temporarily unarchive the source repository if it is archived, then re-archive after the dispatch")
 
 	_ = cmd.MarkFlagRequired("dst")
