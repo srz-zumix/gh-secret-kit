@@ -238,7 +238,7 @@ If teardown was not completed and orphaned runners remain registered in GitHub, 
 
 ```sh
 # Preview (no deletion)
-gh secret-kit migrate runner prune --dry-run owner-org
+gh secret-kit migrate runner prune --dryrun owner-org
 
 # Remove all gh-secret-kit- runners with the default label
 gh secret-kit migrate runner prune owner-org
@@ -254,7 +254,7 @@ gh secret-kit migrate runner prune --runner-label= owner-org
 | --- | --- |
 | `--repo` / `-R` | Source repository (`owner/repo`). Omit to use org scope. |
 | `--runner-label` | Only remove runners with this label (default: `gh-secret-kit-migrate`; pass an empty value as `--runner-label ""` (quotes required) or `--runner-label=` to target all gh-secret-kit runners) |
-| `--dry-run` / `-n` | Preview without deleting |
+| `--dryrun` / `-n` | Preview without deleting |
 
 ## Checking Migration Status Across an Organization
 

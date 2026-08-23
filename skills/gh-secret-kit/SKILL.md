@@ -477,18 +477,18 @@ gh secret-kit migrate runner prune myorg
 gh secret-kit migrate runner prune myorg --runner-label ""
 
 # Preview without deleting
-gh secret-kit migrate runner prune myorg --dry-run
+gh secret-kit migrate runner prune myorg --dryrun
 
 # Prune runners in a specific runner group
 gh secret-kit migrate runner prune myorg --runner-group my-runner-group
 
-# Prune runners in a specific runner group (dry-run)
-gh secret-kit migrate runner prune myorg --runner-group my-runner-group --dry-run
+# Prune runners in a specific runner group (dryrun)
+gh secret-kit migrate runner prune myorg --runner-group my-runner-group --dryrun
 ```
 
 | Flag | Description | Default |
 | --- | --- | --- |
-| `--dry-run` / `-n` | Preview without deleting | false |
+| `--dryrun` / `-n` | Preview without deleting | false |
 | `--repo string` / `-R` | Source repository (mutually exclusive with `--runner-group`) | |
 | `--runner-group string` | Only remove runners in this group (org-level only; mutually exclusive with `--repo`) | |
 | `--runner-label string` | Filter by label (empty = all gh-secret-kit runners) | gh-secret-kit-migrate |

@@ -32,7 +32,7 @@ removed.
 By default, only runners matching the runner-label are removed. Use
 --runner-label "" to target all gh-secret-kit runners regardless of label.
 
-Use --dry-run to preview which runners would be removed without actually
+Use --dryrun to preview which runners would be removed without actually
 deleting them.
 
 Arguments:
@@ -45,7 +45,7 @@ Arguments:
 	f.StringVarP(&pruneRepo, "repo", "R", "", "Source repository (owner/repo); when omitted uses the first argument as org or falls back to the current repository")
 	f.StringVar(&pruneRunnerOpts.RunnerLabel, "runner-label", types.DefaultRunnerLabel, "Only remove runners that have this label (empty string matches all gh-secret-kit runners)")
 	f.StringVar(&pruneRunnerOpts.RunnerGroup, "runner-group", "", "Only remove runners belonging to this runner group name (org-level only; cannot be combined with --repo)")
-	f.BoolVarP(&pruneDryRun, "dry-run", "n", false, "Print runners that would be removed without deleting them")
+	f.BoolVarP(&pruneDryRun, "dryrun", "n", false, "Print runners that would be removed without deleting them")
 
 	// Runner groups are org/enterprise only; combining with --repo (repo-level runner) makes no sense.
 	cmd.MarkFlagsMutuallyExclusive("repo", "runner-group")
@@ -100,7 +100,7 @@ func runPrune(cmd *cobra.Command, args []string) error {
 		busy := runner.GetBusy()
 
 		if pruneDryRun {
-			logger.Info(fmt.Sprintf("[dry-run] Would remove runner: %s (ID: %d, status: %s, busy: %v)",
+			logger.Info(fmt.Sprintf("[dryrun] Would remove runner: %s (ID: %d, status: %s, busy: %v)",
 				name, runner.GetID(), status, busy))
 			removed++
 			continue
