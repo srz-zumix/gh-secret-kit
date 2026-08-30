@@ -236,7 +236,13 @@ func findRegistrationRuns(ctx context.Context, client *gh.GitHubClient, repo rep
 			logger.Debug("No registration workflow run found")
 			return nil
 		}
-		time.Sleep(registrationRunPollInterval)
+		// Wait before the next poll, but exit promptly if the context is
+		// canceled so cancellation stays responsive.
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-time.After(registrationRunPollInterval):
+		}
 	}
 }
 
