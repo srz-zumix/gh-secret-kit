@@ -28,6 +28,52 @@ For details, see [Songmu/skillsmith](https://github.com/Songmu/skillsmith).
 
 ## Commands
 
+### Copy GitHub Actions Secrets
+
+Copy GitHub Actions secrets from a source repository to one or more destinations.
+
+```sh
+gh secret-kit secret [command]
+```
+
+Since the GitHub API does not expose secret values, the copy is performed by a workflow generated in the source repository and triggered via `workflow_dispatch`. The token for each destination host is taken from the local `gh` authentication (or from `--dst-token`) and registered as a temporary source repository secret, so a GitHub-hosted runner can reach the destination and no self-hosted runner is required.
+
+> **Note**: The destination host must be reachable from the runner. When the destination is a GitHub Enterprise Server instance that is not reachable from GitHub-hosted runners, use `gh secret-kit migrate` with a self-hosted runner instead.
+
+#### secret copy
+
+```sh
+gh secret-kit secret copy <dst> [dst...] [flags]
+```
+
+Copy all (or specific) GitHub Actions secrets from a source repository to one or more destinations. The `--scope` flag selects which secrets are copied: `repo` for repository secrets of `--repo`, `org` for organization secrets visible to `--repo`, and `env` for environment secrets of `--src-env`.
+
+Each destination argument is `[host/]owner/repo`, or `[host/]org` when `--scope` is `org`. Destinations without a host use the source host. Existing secrets at the destination are skipped unless `--overwrite` is set.
+
+The command waits for the generated workflow run to finish, then deletes the temporary branch, the temporary token secrets, and the workflow run history.
+
+**Arguments:**
+
+- `<dst> [dst...]`: One or more destination repositories, or organizations when `--scope` is `org` (required)
+
+**Options:**
+
+- `--branch string`: Temporary branch name (defaults to a unique name derived from a timestamp)
+- `--dst-env string`: Destination environment name (defaults to `--src-env`)
+- `--dst-token string`: PAT or token for the destination host (defaults to the local `gh` authentication; cannot be used when the destinations span multiple hosts)
+- `--exclude-secrets strings`: Secret names to exclude from the copy (comma-separated or repeated flag)
+- `--overwrite`: Overwrite existing secrets at destination (default: false)
+- `--rename strings`: Rename mapping in `OLD_NAME=NEW_NAME` format (repeatable)
+- `--repo string` / `-R`: Source repository (e.g., `owner/repo`; defaults to current repository)
+- `--runner-label string`: Runner label for `runs-on` of the generated workflow (default: `ubuntu-latest`)
+- `--scope string`: Secret scope to copy: `repo`, `org`, or `env` (default: `repo`)
+- `--secrets strings`: Specific secret names to copy (comma-separated or repeated flag; defaults to all)
+- `--src-env string`: Source environment name (required with `--scope env`)
+- `--timeout string`: Timeout duration when waiting for workflow completion (e.g., `5m`, `1h`) (default: `10m`)
+- `--token-secret-name string`: Base name of the temporary source repository secret holding the destination token (default: `GH_SECRET_KIT_COPY_TOKEN`)
+- `--unarchive`: Temporarily unarchive the source repository if it is archived, then re-archive after the copy (default: false)
+- `--workflow-name string`: Workflow file name (without extension) of the generated workflow (default: `gh-secret-kit-copy`)
+
 ### Copy GitHub Actions Variables
 
 Copy GitHub Actions variables from a source repository or organization to one or more destinations.
@@ -798,7 +844,6 @@ Generate a secret migration workflow, push it to a temporary branch, and trigger
 - `--wait` / `-w`: Wait for the dispatched workflow run to complete
 - `--workflow-name string`: Workflow file name (without extension) for target-specified mode (default: "gh-secret-kit-migrate")
 
-
 #### migrate repo init
 
 ```sh
@@ -909,6 +954,24 @@ Use `--runner-group` to restrict pruning to runners belonging to a specific runn
 - `--runner-label string`: Only remove runners that have this label (default: "gh-secret-kit-migrate"; empty string matches all gh-secret-kit runners)
 
 ### Examples
+
+#### Copy repository secrets without a self-hosted runner
+
+```sh
+# Copy every repository secret to two destinations
+gh secret-kit secret copy -R owner/source-repo owner/dest-repo other-owner/dest-repo
+
+# Copy specific environment secrets with rename
+gh secret-kit secret copy \
+  -R owner/source-repo \
+  --scope env \
+  --src-env staging \
+  --dst-env production \
+  --secrets API_KEY \
+  --rename API_KEY=PROD_API_KEY \
+  --overwrite \
+  owner/dest-repo
+```
 
 #### Migrate all repository secrets between repos
 

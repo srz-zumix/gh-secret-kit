@@ -35,6 +35,8 @@ gh auth login --hostname enterprise.internal
 
 ```
 gh secret-kit                           # Root command
+├── secret                              # GitHub Actions secrets
+│   └── copy                            # Copy secrets to destinations via workflow_dispatch
 ├── variable                            # GitHub Actions variables
 │   └── copy                            # Copy variables to destinations
 ├── deploy-key                          # Repository deploy keys
@@ -96,6 +98,58 @@ gh secret-kit                           # Root command
 | `--log-level` / `-L` | Set log level |
 | `--read-only` | Run in read-only mode (prevent write operations) |
 | `--version` | Show version |
+
+## Secrets (gh secret-kit secret)
+
+### Copy Secrets
+
+Secret values are not readable through the API, so the copy runs inside a
+workflow generated in the source repository and triggered via
+`workflow_dispatch`. The destination token is taken from the local `gh`
+authentication and registered as a temporary source repository secret, so a
+GitHub-hosted runner is enough — no self-hosted runner is required. After the
+run finishes, the temporary branch, token secrets, and run history are deleted.
+
+```bash
+# Copy all repository secrets from the current repo to a destination
+gh secret-kit secret copy owner/dest-repo
+
+# Copy to multiple destinations in a single workflow run
+gh secret-kit secret copy -R owner/source-repo owner/repo1 owner/repo2
+
+# Copy organization secrets visible to the source repo to another organization
+gh secret-kit secret copy -R owner/source-repo --scope org dest-org
+
+# Copy environment secrets to a different destination environment
+gh secret-kit secret copy -R owner/source-repo \
+  --scope env --src-env staging --dst-env production owner/dest-repo
+
+# Copy specific secrets with rename, overwriting existing ones
+gh secret-kit secret copy -R owner/source-repo \
+  --secrets API_KEY,DB_PASSWORD --rename API_KEY=PROD_API_KEY --overwrite owner/dest-repo
+```
+
+| Flag | Description | Default |
+| --- | --- | --- |
+| `--branch string` | Temporary branch name | unique timestamp-based name |
+| `--dst-env string` | Destination environment name | `--src-env` |
+| `--dst-token string` | Token for the destination host (single host only) | local `gh` authentication |
+| `--exclude-secrets strings` | Secret names to exclude | |
+| `--overwrite` | Overwrite existing secrets at destination | false |
+| `--rename strings` | Rename mapping in `OLD_NAME=NEW_NAME` format | |
+| `--repo string` / `-R` | Source repository | current repo |
+| `--runner-label string` | Runner label for `runs-on` | `ubuntu-latest` |
+| `--scope string` | Secret scope: `repo`, `org`, or `env` | `repo` |
+| `--secrets strings` | Specific secret names to copy | all |
+| `--src-env string` | Source environment name (required with `--scope env`) | |
+| `--timeout string` | Timeout when waiting for workflow completion | `10m` |
+| `--token-secret-name string` | Base name of the temporary token secret | `GH_SECRET_KIT_COPY_TOKEN` |
+| `--unarchive` | Temporarily unarchive an archived source repository | false |
+| `--workflow-name string` | Generated workflow file name (without extension) | `gh-secret-kit-copy` |
+
+> The destination host must be reachable from the runner. When the destination
+> is a GitHub Enterprise Server instance that GitHub-hosted runners cannot
+> reach, use `gh secret-kit migrate` with a self-hosted runner instead.
 
 ## Variables (gh secret-kit variable)
 
