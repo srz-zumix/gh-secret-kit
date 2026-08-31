@@ -53,7 +53,7 @@ func RunCopy(ctx context.Context, config *CopyConfig) error {
 	}
 	// Environments only exist for Actions secrets.
 	if app != migrator.SecretAppActions && config.DestinationEnv != "" {
-		return fmt.Errorf("--dst-env cannot be used with --dst-app %s", app)
+		return fmt.Errorf("--dst-env cannot be used with --dst-app %q", app)
 	}
 
 	sourceRepo, err := parser.Repository(parser.RepositoryInput(config.Source))
