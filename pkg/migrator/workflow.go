@@ -22,6 +22,46 @@ const (
 	SecretScopeEnv SecretScope = "env"
 )
 
+// SecretApp is the gh CLI --app value that selects which kind of secret store
+// the destination secret is written to.
+type SecretApp string
+
+const (
+	// SecretAppActions targets GitHub Actions secrets
+	SecretAppActions SecretApp = "actions"
+	// SecretAppAgents targets Copilot cloud agent (Agents) secrets
+	SecretAppAgents SecretApp = "agents"
+	// SecretAppCodespaces targets Codespaces secrets
+	SecretAppCodespaces SecretApp = "codespaces"
+	// SecretAppDependabot targets Dependabot secrets
+	SecretAppDependabot SecretApp = "dependabot"
+)
+
+// SecretAppValues returns the supported --app values in a stable order. It is
+// the single source of truth for the CLI enum flag and validation.
+func SecretAppValues() []string {
+	return []string{
+		string(SecretAppActions),
+		string(SecretAppAgents),
+		string(SecretAppCodespaces),
+		string(SecretAppDependabot),
+	}
+}
+
+// ValidateSecretApp reports whether app is a supported destination secret store.
+// An empty value is treated as the default (actions) and is considered valid.
+// It is the single source of truth for the allowed --app values and is called at
+// every trust boundary (CLI, RunCopy, and the workflow generator) so an
+// unsupported value can never reach the generated shell script.
+func ValidateSecretApp(app SecretApp) error {
+	switch app {
+	case "", SecretAppActions, SecretAppAgents, SecretAppCodespaces, SecretAppDependabot:
+		return nil
+	default:
+		return fmt.Errorf("invalid secret app %q: expected actions, agents, codespaces, or dependabot", app)
+	}
+}
+
 // WorkflowConfig holds configuration for generating migration workflow
 type WorkflowConfig struct {
 	WorkflowName           string
@@ -218,6 +258,7 @@ func marshalWorkflow(workflow *WorkflowYAML) (string, error) {
 // depends on, so the migration and copy workflow generators can share it.
 type secretScriptConfig struct {
 	Scope          SecretScope
+	DestinationApp SecretApp
 	DestinationEnv string
 	Overwrite      bool
 }
@@ -236,6 +277,12 @@ func generateSecretMigrationScript(config secretScriptConfig, srcName, destName 
 		listScopeFlag = "--org \"${DESTINATION}\""
 	}
 
+	// Actions is the gh CLI default, so the flag is only emitted for other apps.
+	appFlag := ""
+	if config.DestinationApp != "" && config.DestinationApp != SecretAppActions {
+		appFlag = fmt.Sprintf(" --app %s", config.DestinationApp)
+	}
+
 	// Check if secret value is empty
 	script.WriteString("if [ -z \"${SECRET_VALUE}\" ]; then\n")
 	fmt.Fprintf(&script, "  echo \"Secret %s is empty or does not exist, skipping...\"\n", srcName)
@@ -248,7 +295,7 @@ func generateSecretMigrationScript(config secretScriptConfig, srcName, destName 
 		if config.DestinationEnv != "" {
 			fmt.Fprintf(&script, "if gh secret list --env \"${DEST_ENV}\" -R \"${DESTINATION}\" | grep -q \"^%s\"; then\n", destName)
 		} else {
-			fmt.Fprintf(&script, "if gh secret list %s | grep -q \"^%s\"; then\n", listScopeFlag, destName)
+			fmt.Fprintf(&script, "if gh secret list %s%s | grep -q \"^%s\"; then\n", listScopeFlag, appFlag, destName)
 		}
 		fmt.Fprintf(&script, "  echo \"Secret %s already exists at destination, skipping...\"\n", destName)
 		script.WriteString("  exit 0\n")
@@ -261,7 +308,7 @@ func generateSecretMigrationScript(config secretScriptConfig, srcName, destName 
 	if config.DestinationEnv != "" {
 		fmt.Fprintf(&script, "  gh secret set %s --env \"${DEST_ENV}\" -R \"${DESTINATION}\"\n", destName)
 	} else {
-		fmt.Fprintf(&script, "  gh secret set %s %s\n", destName, scopeFlag)
+		fmt.Fprintf(&script, "  gh secret set %s %s%s\n", destName, scopeFlag, appFlag)
 	}
 
 	fmt.Fprintf(&script, "echo \"Successfully migrated secret: %s -> %s\"\n", srcName, destName)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/cli/cli/v2/pkg/cmdutil"
 	"github.com/spf13/cobra"
 	"github.com/srz-zumix/gh-secret-kit/internal/migrate/types"
 	"github.com/srz-zumix/gh-secret-kit/internal/migrate/workflow"
@@ -15,6 +16,7 @@ import (
 func NewCopyCmd() *cobra.Command {
 	var config workflow.CopyConfig
 	var scope string
+	var dstApp string
 
 	cmd := &cobra.Command{
 		Use:   "copy <dst> [dst...]",
@@ -36,6 +38,16 @@ Use --scope to select which secrets are copied:
 Each destination argument is [host/]owner/repo, or [host/]org when --scope is org.
 Destinations without a host use the source host.
 
+Use --dst-app to select which secret store the destination secrets are written to:
+
+  - actions (default): GitHub Actions secrets
+  - agents:            Copilot cloud agent (Agents) secrets
+  - codespaces:        Codespaces secrets
+  - dependabot:        Dependabot secrets
+
+Since only Actions secrets are readable from a workflow, --dst-app changes the
+destination store only; the source is always read as Actions secrets.
+
 Once the workflow run finishes, the temporary branch, the temporary token secrets,
 and the workflow run history are deleted.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -45,6 +57,7 @@ and the workflow run history are deleted.`,
 			default:
 				return fmt.Errorf("invalid --scope %q: expected repo, org, or env", scope)
 			}
+			config.DestinationApp = migrator.SecretApp(dstApp)
 			if err := parser.ValidateTokenSecretName(config.TokenSecretName); err != nil {
 				return err
 			}
@@ -57,8 +70,9 @@ and the workflow run history are deleted.`,
 	f := cmd.Flags()
 	f.StringVarP(&config.Source, "repo", "R", "", "Source repository (e.g., owner/repo; defaults to current repository)")
 	f.StringVar(&scope, "scope", string(migrator.SecretScopeRepo), "Secret scope to copy: repo, org, or env")
+	cmdutil.StringEnumFlag(cmd, &dstApp, "dst-app", "", string(migrator.SecretAppActions), migrator.SecretAppValues(), "Destination secret store")
 	f.StringVar(&config.SourceEnv, "src-env", "", "Source environment name (required with --scope env)")
-	f.StringVar(&config.DestinationEnv, "dst-env", "", "Destination environment name (defaults to --src-env)")
+	f.StringVar(&config.DestinationEnv, "dst-env", "", "Destination environment name (Actions only; with --scope env, defaults to --src-env)")
 	f.StringSliceVar(&config.Secrets, "secrets", []string{}, "Specific secret names to copy (comma-separated or repeated flag; defaults to all)")
 	f.StringSliceVar(&config.ExcludeSecrets, "exclude-secrets", []string{}, "Secret names to exclude from the copy (comma-separated or repeated flag)")
 	f.StringSliceVar(&config.Rename, "rename", []string{}, "Rename mapping in OLD_NAME=NEW_NAME format (repeatable)")

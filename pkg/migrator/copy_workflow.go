@@ -21,13 +21,15 @@ type CopyDestination struct {
 type CopyWorkflowConfig struct {
 	WorkflowName string
 	// RunsOn is the job runs-on value. It accepts any YAML value (string or list).
-	RunsOn       any
-	Scope        SecretScope
-	SourceEnv    string
-	Secrets      []string
-	Rename       map[string]string // OLD_NAME -> NEW_NAME
-	Overwrite    bool
-	Destinations []CopyDestination
+	RunsOn any
+	Scope  SecretScope
+	// DestinationApp selects the destination secret store. Empty means actions.
+	DestinationApp SecretApp
+	SourceEnv      string
+	Secrets        []string
+	Rename         map[string]string // OLD_NAME -> NEW_NAME
+	Overwrite      bool
+	Destinations   []CopyDestination
 }
 
 // GenerateCopyWorkflowYAML generates a workflow_dispatch-triggered GitHub
@@ -41,6 +43,9 @@ func GenerateCopyWorkflowYAML(config CopyWorkflowConfig) (string, error) {
 	}
 	if len(config.Secrets) == 0 {
 		return "", fmt.Errorf("no secret specified")
+	}
+	if err := ValidateSecretApp(config.DestinationApp); err != nil {
+		return "", err
 	}
 
 	workflow := WorkflowYAML{
@@ -86,6 +91,7 @@ func GenerateCopyWorkflowYAML(config CopyWorkflowConfig) (string, error) {
 				Name: fmt.Sprintf("Copy secret to %s: %s", dest.Target, secretName),
 				Run: generateSecretMigrationScript(secretScriptConfig{
 					Scope:          config.Scope,
+					DestinationApp: config.DestinationApp,
 					DestinationEnv: dest.Env,
 					Overwrite:      config.Overwrite,
 				}, secretName, destSecretName),

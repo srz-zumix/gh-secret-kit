@@ -223,6 +223,9 @@ type CopyConfig struct {
 	Rename         []string
 	Overwrite      bool
 	Scope          migrator.SecretScope
+	// DestinationApp selects which secret store the destination secrets are
+	// written to. Empty means migrator.SecretAppActions.
+	DestinationApp migrator.SecretApp
 	// DestinationToken overrides the token resolved from the local gh
 	// authentication for the destination host. It cannot be used when the
 	// destinations span multiple hosts.

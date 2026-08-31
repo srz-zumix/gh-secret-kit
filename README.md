@@ -50,6 +50,8 @@ Copy all (or specific) GitHub Actions secrets from a source repository to one or
 
 Each destination argument is `[host/]owner/repo`, or `[host/]org` when `--scope` is `org`. Destinations without a host use the source host. Existing secrets at the destination are skipped unless `--overwrite` is set.
 
+The `--dst-app` flag selects which secret store the destination secrets are written to: `actions` for GitHub Actions secrets, `agents` for Copilot cloud agent (Agents) secrets, `codespaces` for Codespaces secrets, and `dependabot` for Dependabot secrets. Since only Actions secrets are readable from a workflow, `--dst-app` changes the destination store only; the source is always read as Actions secrets. `--dst-env` cannot be combined with a `--dst-app` other than `actions` because those stores have no environment level.
+
 The command waits for the generated workflow run to finish, then deletes the temporary branch, the temporary token secrets, and the workflow run history.
 
 **Arguments:**
@@ -59,7 +61,8 @@ The command waits for the generated workflow run to finish, then deletes the tem
 **Options:**
 
 - `--branch string`: Temporary branch name (defaults to a unique name derived from a timestamp)
-- `--dst-env string`: Destination environment name (defaults to `--src-env`)
+- `--dst-app string`: Destination secret store: `actions`, `agents`, `codespaces`, or `dependabot` (default: `actions`)
+- `--dst-env string`: Destination environment name (defaults to `--src-env` when `--scope` is `env`; cannot be used with a non-`actions` `--dst-app`)
 - `--dst-token string`: PAT or token for the destination host (defaults to the local `gh` authentication; cannot be used when the destinations span multiple hosts)
 - `--exclude-secrets strings`: Secret names to exclude from the copy (comma-separated or repeated flag)
 - `--overwrite`: Overwrite existing secrets at destination (default: false)

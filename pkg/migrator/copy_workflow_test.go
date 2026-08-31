@@ -125,6 +125,35 @@ func TestGenerateCopyWorkflowYAMLOrgScope(t *testing.T) {
 	}
 }
 
+func TestGenerateCopyWorkflowYAMLDestinationApp(t *testing.T) {
+	config := CopyWorkflowConfig{
+		WorkflowName:   "gh-secret-kit-copy",
+		RunsOn:         "ubuntu-latest",
+		Scope:          SecretScopeRepo,
+		DestinationApp: SecretAppAgents,
+		Secrets:        []string{"FOO"},
+		Destinations: []CopyDestination{
+			{Target: "owner/dest", Host: "github.com", TokenSecret: "COPY_TOKEN_GITHUB_COM"},
+		},
+	}
+
+	out, err := GenerateCopyWorkflowYAML(config)
+	if err != nil {
+		t.Fatalf("GenerateCopyWorkflowYAML returned error: %v", err)
+	}
+
+	if !strings.Contains(out, "gh secret set FOO -R \"${DESTINATION}\" --app agents") {
+		t.Errorf("expected an agents-scoped gh secret set, got:\n%s", out)
+	}
+	if !strings.Contains(out, "gh secret list -R \"${DESTINATION}\" --app agents") {
+		t.Errorf("expected the existence check to use the agents app, got:\n%s", out)
+	}
+	// The source is always read as an Actions secret.
+	if !strings.Contains(out, "SECRET_VALUE: ${{ secrets.FOO }}") {
+		t.Errorf("expected the source to be read from Actions secrets, got:\n%s", out)
+	}
+}
+
 func TestGenerateCopyWorkflowYAMLValidation(t *testing.T) {
 	if _, err := GenerateCopyWorkflowYAML(CopyWorkflowConfig{Secrets: []string{"FOO"}}); err == nil {
 		t.Error("expected an error when no destination is specified")
@@ -133,5 +162,16 @@ func TestGenerateCopyWorkflowYAMLValidation(t *testing.T) {
 		Destinations: []CopyDestination{{Target: "owner/dest"}},
 	}); err == nil {
 		t.Error("expected an error when no secret is specified")
+	}
+	out, err := GenerateCopyWorkflowYAML(CopyWorkflowConfig{
+		Secrets:        []string{"FOO"},
+		Destinations:   []CopyDestination{{Target: "owner/dest"}},
+		DestinationApp: SecretApp("agents; echo injected"),
+	})
+	if err == nil {
+		t.Error("expected an error for an unsupported destination app")
+	}
+	if strings.Contains(out, "injected") {
+		t.Errorf("unsupported app value must not reach the generated workflow, got:\n%s", out)
 	}
 }
