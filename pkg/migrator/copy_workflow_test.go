@@ -163,4 +163,15 @@ func TestGenerateCopyWorkflowYAMLValidation(t *testing.T) {
 	}); err == nil {
 		t.Error("expected an error when no secret is specified")
 	}
+	out, err := GenerateCopyWorkflowYAML(CopyWorkflowConfig{
+		Secrets:        []string{"FOO"},
+		Destinations:   []CopyDestination{{Target: "owner/dest"}},
+		DestinationApp: SecretApp("agents; echo injected"),
+	})
+	if err == nil {
+		t.Error("expected an error for an unsupported destination app")
+	}
+	if strings.Contains(out, "injected") {
+		t.Errorf("unsupported app value must not reach the generated workflow, got:\n%s", out)
+	}
 }

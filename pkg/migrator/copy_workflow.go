@@ -44,6 +44,9 @@ func GenerateCopyWorkflowYAML(config CopyWorkflowConfig) (string, error) {
 	if len(config.Secrets) == 0 {
 		return "", fmt.Errorf("no secret specified")
 	}
+	if err := ValidateSecretApp(config.DestinationApp); err != nil {
+		return "", err
+	}
 
 	workflow := WorkflowYAML{
 		Name: config.WorkflowName,

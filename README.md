@@ -62,7 +62,7 @@ The command waits for the generated workflow run to finish, then deletes the tem
 
 - `--branch string`: Temporary branch name (defaults to a unique name derived from a timestamp)
 - `--dst-app string`: Destination secret store: `actions`, `agents`, `codespaces`, or `dependabot` (default: `actions`)
-- `--dst-env string`: Destination environment name (defaults to `--src-env`; cannot be used with a non-`actions` `--dst-app`)
+- `--dst-env string`: Destination environment name (defaults to `--src-env` when `--scope` is `env`; cannot be used with a non-`actions` `--dst-app`)
 - `--dst-token string`: PAT or token for the destination host (defaults to the local `gh` authentication; cannot be used when the destinations span multiple hosts)
 - `--exclude-secrets strings`: Secret names to exclude from the copy (comma-separated or repeated flag)
 - `--overwrite`: Overwrite existing secrets at destination (default: false)

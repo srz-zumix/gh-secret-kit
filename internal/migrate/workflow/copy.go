@@ -48,6 +48,9 @@ func RunCopy(ctx context.Context, config *CopyConfig) error {
 	if app == "" {
 		app = migrator.SecretAppActions
 	}
+	if err := migrator.ValidateSecretApp(app); err != nil {
+		return err
+	}
 	// Environments only exist for Actions secrets.
 	if app != migrator.SecretAppActions && config.DestinationEnv != "" {
 		return fmt.Errorf("--dst-env cannot be used with --dst-app %s", app)

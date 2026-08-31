@@ -37,6 +37,31 @@ const (
 	SecretAppDependabot SecretApp = "dependabot"
 )
 
+// SecretAppValues returns the supported --app values in a stable order. It is
+// the single source of truth for the CLI enum flag and validation.
+func SecretAppValues() []string {
+	return []string{
+		string(SecretAppActions),
+		string(SecretAppAgents),
+		string(SecretAppCodespaces),
+		string(SecretAppDependabot),
+	}
+}
+
+// ValidateSecretApp reports whether app is a supported destination secret store.
+// An empty value is treated as the default (actions) and is considered valid.
+// It is the single source of truth for the allowed --app values and is called at
+// every trust boundary (CLI, RunCopy, and the workflow generator) so an
+// unsupported value can never reach the generated shell script.
+func ValidateSecretApp(app SecretApp) error {
+	switch app {
+	case "", SecretAppActions, SecretAppAgents, SecretAppCodespaces, SecretAppDependabot:
+		return nil
+	default:
+		return fmt.Errorf("invalid secret app %q: expected actions, agents, codespaces, or dependabot", app)
+	}
+}
+
 // WorkflowConfig holds configuration for generating migration workflow
 type WorkflowConfig struct {
 	WorkflowName           string
