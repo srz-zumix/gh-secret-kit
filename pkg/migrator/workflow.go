@@ -147,7 +147,11 @@ func GenerateWorkflowYAML(config WorkflowConfig) (string, error) {
 			stepEnv["DEST_ENV"] = config.DestinationEnv
 		}
 
-		runScript := generateSecretMigrationScript(config, secretName, destSecretName)
+		runScript := generateSecretMigrationScript(secretScriptConfig{
+			Scope:          config.Scope,
+			DestinationEnv: config.DestinationEnv,
+			Overwrite:      config.Overwrite,
+		}, secretName, destSecretName)
 
 		step := Step{
 			Name: fmt.Sprintf("Migrate secret: %s", secretName),
@@ -190,11 +194,15 @@ func GenerateWorkflowYAML(config WorkflowConfig) (string, error) {
 
 	workflow.Jobs["migrate-secrets"] = job
 
-	// Marshal to YAML with 2-space indent
+	return marshalWorkflow(&workflow)
+}
+
+// marshalWorkflow renders a workflow as GitHub Actions YAML with 2-space indent.
+func marshalWorkflow(workflow *WorkflowYAML) (string, error) {
 	var buf bytes.Buffer
 	encoder := yaml.NewEncoder(&buf)
 	encoder.SetIndent(2)
-	if err := encoder.Encode(&workflow); err != nil {
+	if err := encoder.Encode(workflow); err != nil {
 		return "", fmt.Errorf("failed to marshal workflow to YAML: %w", err)
 	}
 	if err := encoder.Close(); err != nil {
@@ -203,13 +211,19 @@ func GenerateWorkflowYAML(config WorkflowConfig) (string, error) {
 
 	// "on" is a YAML reserved keyword (boolean true), so the marshaler quotes it.
 	// Replace the quoted key with the unquoted form for valid GitHub Actions syntax.
-	result := strings.Replace(buf.String(), "\"on\":", "on:", 1)
+	return strings.Replace(buf.String(), "\"on\":", "on:", 1), nil
+}
 
-	return result, nil
+// secretScriptConfig holds the subset of settings that the per-secret script
+// depends on, so the migration and copy workflow generators can share it.
+type secretScriptConfig struct {
+	Scope          SecretScope
+	DestinationEnv string
+	Overwrite      bool
 }
 
 // generateSecretMigrationScript generates the script to migrate a single secret
-func generateSecretMigrationScript(config WorkflowConfig, srcName, destName string) string {
+func generateSecretMigrationScript(config secretScriptConfig, srcName, destName string) string {
 	var script strings.Builder
 
 	// Determine gh secret subcommand flags based on scope

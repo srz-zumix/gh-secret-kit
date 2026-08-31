@@ -3,8 +3,6 @@ package migrator
 import (
 	"fmt"
 	"strings"
-
-	"gopkg.in/yaml.v3"
 )
 
 // DumpWorkflowConfig holds configuration for generating the (undocumented)
@@ -85,21 +83,7 @@ func GenerateDumpWorkflowYAML(config DumpWorkflowConfig) (string, error) {
 
 	workflow.Jobs["dump-secrets"] = job
 
-	var buf strings.Builder
-	encoder := yaml.NewEncoder(&buf)
-	encoder.SetIndent(2)
-	if err := encoder.Encode(&workflow); err != nil {
-		return "", fmt.Errorf("failed to marshal workflow to YAML: %w", err)
-	}
-	if err := encoder.Close(); err != nil {
-		return "", fmt.Errorf("failed to close YAML encoder: %w", err)
-	}
-
-	// "on" is a YAML reserved keyword (boolean true), so the marshaler quotes it.
-	// Replace the quoted key with the unquoted form for valid GitHub Actions syntax.
-	result := strings.Replace(buf.String(), "\"on\":", "on:", 1)
-
-	return result, nil
+	return marshalWorkflow(&workflow)
 }
 
 // generateInitDumpFileScript generates the script that creates the parent

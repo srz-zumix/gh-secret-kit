@@ -205,3 +205,39 @@ type AllConfig struct {
 	Timeout                string
 	Unarchive              bool
 }
+
+// CopyConfig holds configuration for the copy operation. Unlike the migrate
+// commands, the destination token is taken from the local gh authentication and
+// registered as a temporary source repository secret, so the generated workflow
+// can run on a GitHub-hosted runner. The temporary branch, token secrets, and
+// run history are removed by the CLI once the copy finishes.
+type CopyConfig struct {
+	Source string
+	// Destinations are [HOST/]OWNER/REPO references, or [HOST/]ORG when Scope
+	// is SecretScopeOrg.
+	Destinations   []string
+	SourceEnv      string
+	DestinationEnv string
+	Secrets        []string
+	ExcludeSecrets []string
+	Rename         []string
+	Overwrite      bool
+	Scope          migrator.SecretScope
+	// DestinationToken overrides the token resolved from the local gh
+	// authentication for the destination host. It cannot be used when the
+	// destinations span multiple hosts.
+	DestinationToken string
+	// TokenSecretName is the base name of the temporary source repository secret
+	// holding the destination token. The destination host is appended to it.
+	TokenSecretName string
+	RunnerLabel     string
+	WorkflowName    string
+	// Branch is the temporary dispatch branch name. When empty, a unique name
+	// derived from a timestamp is used.
+	Branch string
+	// Timeout is the maximum duration to wait for the workflow run (e.g. "10m").
+	Timeout string
+	// Unarchive, when true, temporarily unarchives the source repository if it
+	// is archived, then re-archives it after the copy completes.
+	Unarchive bool
+}

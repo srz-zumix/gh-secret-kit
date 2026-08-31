@@ -202,6 +202,63 @@ func createDispatchBranch(ctx context.Context, client *gh.GitHubClient, repo rep
 	return nil
 }
 
+// registrationRunDetectTimeout bounds how long to wait for the run created by
+// the syntax-error registration trick to become visible, and
+// registrationRunPollInterval is the polling interval within that window.
+const (
+	registrationRunDetectTimeout = 15 * time.Second
+	registrationRunPollInterval  = 3 * time.Second
+)
+
+// findRegistrationRuns returns the IDs of the workflow runs produced by the
+// syntax-error registration trick. GitHub records a startup_failure run for the
+// invalid workflow file, and the dispatch branch is always freshly created, so
+// every run on it at this point belongs to the registration attempt. Run
+// creation is asynchronous, so it polls until a run appears.
+func findRegistrationRuns(ctx context.Context, client *gh.GitHubClient, repo repository.Repository, workflowFileName, branch string) []int64 {
+	deadline := time.Now().Add(registrationRunDetectTimeout)
+	for {
+		runs, err := gh.ListWorkflowRunsByFileName(ctx, client, repo, workflowFileName, &gh.ListWorkflowRunsOptions{
+			Branch: branch,
+		})
+		if err != nil && !gh.IsHTTPNotFound(err) {
+			logger.Warn(fmt.Sprintf("Failed to list registration workflow runs: %v", err))
+			return nil
+		}
+		if len(runs) > 0 {
+			ids := make([]int64, 0, len(runs))
+			for _, run := range runs {
+				ids = append(ids, run.GetID())
+			}
+			return ids
+		}
+		if time.Now().After(deadline) {
+			logger.Debug("No registration workflow run found")
+			return nil
+		}
+		// Wait before the next poll, but exit promptly if the context is
+		// canceled so cancellation stays responsive.
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-time.After(registrationRunPollInterval):
+		}
+	}
+}
+
+// deleteRegistrationRuns removes the registration runs left in the Actions
+// history. It must not be called before the real workflow is dispatched,
+// because workflow_dispatch stays available only while the workflow has a run.
+// Failures are only logged so cleanup never aborts the dispatch.
+func deleteRegistrationRuns(ctx context.Context, client *gh.GitHubClient, repo repository.Repository, runIDs []int64) {
+	for _, runID := range runIDs {
+		logger.Info(fmt.Sprintf("Deleting registration workflow run ID %d...", runID))
+		if err := gh.DeleteWorkflowRun(ctx, client, repo, runID); err != nil {
+			logger.Warn(fmt.Sprintf("Failed to delete registration workflow run ID %d: %v", runID, err))
+		}
+	}
+}
+
 // triggerDispatchWorkflow registers (in target-specified mode), pushes, and
 // triggers workflowYAML on the dispatch branch, then optionally waits for the
 // run to complete.
@@ -226,6 +283,10 @@ func triggerDispatchWorkflow(ctx context.Context, client *gh.GitHubClient, repo 
 		if _, derr := gh.CreateWorkflowDispatchEventByFileName(ctx, client, repo, setup.workflowFileName, dispatchReq); derr != nil {
 			logger.Debug(fmt.Sprintf("Registration dispatch returned an expected error: %v", derr))
 		}
+		// The registration run keeps workflow_dispatch available, so only collect it
+		// here and delete it once the real workflow has been dispatched.
+		registrationRunIDs := findRegistrationRuns(ctx, client, repo, setup.workflowFileName, branch)
+		defer deleteRegistrationRuns(ctx, client, repo, registrationRunIDs)
 	}
 
 	// Push the generated workflow file to the dispatch branch.
