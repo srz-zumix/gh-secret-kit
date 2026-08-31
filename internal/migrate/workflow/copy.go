@@ -44,6 +44,15 @@ func RunCopy(ctx context.Context, config *CopyConfig) error {
 		return fmt.Errorf("--src-env is required when --scope is env")
 	}
 
+	app := config.DestinationApp
+	if app == "" {
+		app = migrator.SecretAppActions
+	}
+	// Environments only exist for Actions secrets.
+	if app != migrator.SecretAppActions && config.DestinationEnv != "" {
+		return fmt.Errorf("--dst-env cannot be used with --dst-app %s", app)
+	}
+
 	sourceRepo, err := parser.Repository(parser.RepositoryInput(config.Source))
 	if err != nil {
 		return fmt.Errorf("failed to parse source repository: %w", err)
@@ -92,14 +101,15 @@ func RunCopy(ctx context.Context, config *CopyConfig) error {
 	}
 
 	workflowConfig := migrator.CopyWorkflowConfig{
-		WorkflowName: config.WorkflowName,
-		RunsOn:       config.RunnerLabel,
-		Scope:        scope,
-		SourceEnv:    config.SourceEnv,
-		Secrets:      secrets,
-		Rename:       renameMap,
-		Overwrite:    config.Overwrite,
-		Destinations: buildWorkflowDestinations(config, scope, destinations),
+		WorkflowName:   config.WorkflowName,
+		RunsOn:         config.RunnerLabel,
+		Scope:          scope,
+		DestinationApp: app,
+		SourceEnv:      config.SourceEnv,
+		Secrets:        secrets,
+		Rename:         renameMap,
+		Overwrite:      config.Overwrite,
+		Destinations:   buildWorkflowDestinations(config, scope, app, destinations),
 	}
 	logger.Info("Generating copy workflow YAML...")
 	workflowYAML, err := migrator.GenerateCopyWorkflowYAML(workflowConfig)
@@ -307,10 +317,15 @@ func collectCopySecrets(ctx context.Context, client *gh.GitHubClient, sourceRepo
 
 // buildWorkflowDestinations converts the resolved destinations into the form
 // expected by the workflow generator.
-func buildWorkflowDestinations(config *CopyConfig, scope migrator.SecretScope, destinations []*copyDestination) []migrator.CopyDestination {
+func buildWorkflowDestinations(config *CopyConfig, scope migrator.SecretScope, app migrator.SecretApp, destinations []*copyDestination) []migrator.CopyDestination {
 	destEnv := config.DestinationEnv
 	if scope == migrator.SecretScopeEnv && destEnv == "" {
 		destEnv = config.SourceEnv
+	}
+	// Non-Actions stores have no environment level, so the copy targets the
+	// repository or organization level regardless of the source scope.
+	if app != migrator.SecretAppActions {
+		destEnv = ""
 	}
 	result := make([]migrator.CopyDestination, 0, len(destinations))
 	for _, dest := range destinations {

@@ -127,12 +127,16 @@ gh secret-kit secret copy -R owner/source-repo \
 # Copy specific secrets with rename, overwriting existing ones
 gh secret-kit secret copy -R owner/source-repo \
   --secrets API_KEY,DB_PASSWORD --rename API_KEY=PROD_API_KEY --overwrite owner/dest-repo
+
+# Copy Actions secrets into the destination's Copilot cloud agent (Agents) secrets
+gh secret-kit secret copy -R owner/source-repo --dst-app agents owner/dest-repo
 ```
 
 | Flag | Description | Default |
 | --- | --- | --- |
 | `--branch string` | Temporary branch name | unique timestamp-based name |
-| `--dst-env string` | Destination environment name | `--src-env` |
+| `--dst-app string` | Destination secret store: `actions`, `agents`, `codespaces`, or `dependabot` | `actions` |
+| `--dst-env string` | Destination environment name (not allowed with a non-`actions` `--dst-app`) | `--src-env` |
 | `--dst-token string` | Token for the destination host (single host only) | local `gh` authentication |
 | `--exclude-secrets strings` | Secret names to exclude | |
 | `--overwrite` | Overwrite existing secrets at destination | false |
@@ -150,6 +154,9 @@ gh secret-kit secret copy -R owner/source-repo \
 > The destination host must be reachable from the runner. When the destination
 > is a GitHub Enterprise Server instance that GitHub-hosted runners cannot
 > reach, use `gh secret-kit migrate` with a self-hosted runner instead.
+
+> Only Actions secrets are readable from a workflow, so the source is always
+> read as Actions secrets and `--dst-app` changes the destination store only.
 
 ## Variables (gh secret-kit variable)
 
