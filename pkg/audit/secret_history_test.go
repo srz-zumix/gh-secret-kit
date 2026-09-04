@@ -95,6 +95,7 @@ func TestCreatedPhrase(t *testing.T) {
 		{name: "until only", until: "2024-01-02", want: "created:<=2024-01-02"},
 		{name: "range", since: "2024-01-02", until: "2024-02-03", want: "created:2024-01-02..2024-02-03"},
 		{name: "rfc3339", since: "2024-01-02T03:04:05Z", want: "created:>=2024-01-02"},
+		{name: "rfc3339 fractional", since: "2024-01-02T03:04:05.123Z", want: "created:>=2024-01-02"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

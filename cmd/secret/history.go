@@ -21,12 +21,13 @@ func NewHistoryCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:     "history",
-		Short:   "Show the change history of GitHub Actions secrets",
+		Short:   "Show secret change history from the organization audit log",
 		Aliases: []string{"log"},
 		Long: `Show the create, update and remove history of secrets from the organization audit log.
 
 The audit log API is organization scoped, so the history is read from the organization
-that owns --repo (or from --owner) and repository scoped events are filtered by repository.
+that owns --repo (or from --owner). When targeting a repository, repository and environment
+scoped events are filtered to that repository; organization scoped events are not.
 Secret values are never recorded in the audit log; only the secret name and the actor are.
 
 Requires GitHub Enterprise Cloud or GitHub Enterprise Server, organization owner
@@ -66,7 +67,11 @@ each combination of --scope, --secret-type and operation, and the results are me
 				Limit:       limit,
 			})
 			if err != nil {
-				return fmt.Errorf("failed to get secret history for %q: %w", r.Owner, err)
+				target := r.Owner
+				if r.Name != "" {
+					target = r.Owner + "/" + r.Name
+				}
+				return fmt.Errorf("failed to get secret history for %q: %w", target, err)
 			}
 
 			headers := []string{"TIMESTAMP", "ACTION"}
