@@ -7,9 +7,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/cli/go-gh/v2/pkg/repository"
 	"github.com/google/go-github/v90/github"
@@ -159,7 +157,11 @@ func RunCopy(ctx context.Context, config *CopyConfig) error {
 	if err != nil {
 		return err
 	}
-	defer os.Remove(tokenFile)
+	defer func() {
+		if rerr := os.Remove(tokenFile); rerr != nil && !os.IsNotExist(rerr) {
+			logger.Warn(fmt.Sprintf("Failed to remove temporary token file %s: %v", tokenFile, rerr))
+		}
+	}()
 
 	// "gh codespace create" prompts for a machine type when it is omitted, which
 	// fails because the codespace is created without a terminal.
@@ -253,9 +255,19 @@ func writeTokenFile(destinations []*destination.Destination, tokenEnvNames, host
 		fmt.Fprintf(&content, "%s='%s'\n", tokenEnvNames[dest.Host], token)
 	}
 
-	path := filepath.Join(os.TempDir(), fmt.Sprintf("gh-secret-kit-copy-%d.env", time.Now().UnixNano()))
-	if err := os.WriteFile(path, []byte(content.String()), 0o600); err != nil {
+	file, err := os.CreateTemp("", "gh-secret-kit-copy-*.env")
+	if err != nil {
+		return "", fmt.Errorf("failed to create the temporary token file: %w", err)
+	}
+	path := file.Name()
+	if _, err := file.WriteString(content.String()); err != nil {
+		_ = file.Close()
+		_ = os.Remove(path)
 		return "", fmt.Errorf("failed to write the temporary token file: %w", err)
+	}
+	if err := file.Close(); err != nil {
+		_ = os.Remove(path)
+		return "", fmt.Errorf("failed to close the temporary token file: %w", err)
 	}
 	return path, nil
 }
