@@ -30,7 +30,7 @@ For details, see [Songmu/skillsmith](https://github.com/Songmu/skillsmith).
 
 ### Manage GitHub Actions Secrets
 
-Copy GitHub Actions secrets to other repositories and review their change history.
+Copy GitHub Actions and Codespaces secrets to other repositories and review their change history.
 
 ```sh
 gh secret-kit secret [command]
@@ -76,6 +76,43 @@ The command waits for the generated workflow run to finish, then deletes the tem
 - `--token-secret-name string`: Base name of the temporary source repository secret holding the destination token (default: `GH_SECRET_KIT_COPY_TOKEN`)
 - `--unarchive`: Temporarily unarchive the source repository if it is archived, then re-archive after the copy (default: false)
 - `--workflow-name string`: Workflow file name (without extension) of the generated workflow (default: `gh-secret-kit-copy`)
+
+#### secret codespaces copy
+
+```sh
+gh secret-kit secret codespaces copy <dst> [dst...] [flags]
+```
+
+Copy all (or specific) GitHub Codespaces development environment secrets from a source repository to one or more destinations. The `--scope` flag selects which secrets are copied and at which level they are written: `repo` for repository Codespaces secrets of `--repo`, and `org` for organization Codespaces secrets of the source owner. Add `--include-user-secrets` to also copy the Codespaces secrets of the authenticated user that the source repository has access to.
+
+Codespaces secret values are not readable through the GitHub API; they are only exposed as environment variables inside a running codespace. The command therefore creates an ephemeral codespace on the source repository, copies only the destination tokens into it, runs the copy from within it, and deletes it afterwards. The secret values never reach the local machine.
+
+Each destination argument is `[host/]owner/repo`, or `[host/]org` when `--scope` is `org`. Destinations without a host use the source host. Existing secrets at the destination are skipped unless `--overwrite` is set. Use `--dst-app` to write the values to a different destination secret store.
+
+> **Note**: The source must be on github.com because Codespaces is not available on GitHub Enterprise Server, the `gh` authentication must have the `codespace` scope (`gh auth refresh -s codespace`), creating a codespace consumes Codespaces compute and storage quota, and the destination host must be reachable from the codespace.
+
+**Arguments:**
+
+- `<dst> [dst...]`: One or more destination repositories, or organizations when `--scope` is `org` (required)
+
+**Options:**
+
+- `--branch string`: Source repository branch the codespace is created from (defaults to the default branch)
+- `--devcontainer-path string`: Path to the `devcontainer.json` used for the codespace (defaults to the repository default)
+- `--dst-app string`: Destination secret store: `actions`, `agents`, `codespaces`, or `dependabot` (default: `codespaces`)
+- `--dst-token string`: PAT or token for the destination host (defaults to the local `gh` authentication; cannot be used when the destinations span multiple hosts)
+- `--exclude-secrets strings`: Secret names to exclude from the copy (comma-separated or repeated flag)
+- `--idle-timeout string`: Allowed inactivity before the codespace is stopped (e.g., `5m`, `1h`) (default: `5m`)
+- `--include-user-secrets`: Also copy the Codespaces secrets of the authenticated user (default: false)
+- `--keep-codespace`: Keep the codespace after the copy instead of deleting it (default: false)
+- `--machine string`: Machine type of the codespace (defaults to the smallest machine type available for the source repository)
+- `--overwrite`: Overwrite existing secrets at destination (default: false)
+- `--rename strings`: Rename mapping in `OLD_NAME=NEW_NAME` format (repeatable)
+- `--repo string` / `-R`: Source repository (e.g., `owner/repo`; defaults to current repository)
+- `--retention-period string`: Allowed time after shutting down before the codespace is deleted (e.g., `1h`, `72h`) (default: `1h`)
+- `--scope string`: Secret scope to copy: `repo` or `org` (default: `repo`)
+- `--secrets strings`: Specific secret names to copy (comma-separated or repeated flag; defaults to all)
+- `--token-env-name string`: Base name of the environment variable holding the destination token inside the codespace (default: `GH_SECRET_KIT_COPY_TOKEN`)
 
 #### secret history
 
