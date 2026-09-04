@@ -1,6 +1,6 @@
 ---
 name: gh-secret-kit
-description: GitHub CLI extension (gh secret-kit) for managing GitHub Actions secrets, variables, deploy keys, and environments — including cross-host migration of secrets using self-hosted runners.
+description: GitHub CLI extension (gh secret-kit) for managing GitHub Actions secrets, variables, deploy keys, and environments — including secret change history from the organization audit log and cross-host migration of secrets using self-hosted runners.
 ---
 
 # gh-secret-kit
@@ -36,7 +36,8 @@ gh auth login --hostname enterprise.internal
 ```
 gh secret-kit                           # Root command
 ├── secret                              # GitHub Actions secrets
-│   └── copy                            # Copy secrets to destinations via workflow_dispatch
+│   ├── copy                            # Copy secrets to destinations via workflow_dispatch
+│   └── history (log)                   # Show secret change history from the audit log
 ├── variable                            # GitHub Actions variables
 │   └── copy                            # Copy variables to destinations
 ├── deploy-key                          # Repository deploy keys
@@ -157,6 +158,54 @@ gh secret-kit secret copy -R owner/source-repo --dst-app agents owner/dest-repo
 
 > Only Actions secrets are readable from a workflow, so the source is always
 > read as Actions secrets and `--dst-app` changes the destination store only.
+
+### Secret History
+
+Secret create, update and remove events are read from the organization audit
+log. The audit log API is organization scoped, so the history comes from the
+organization that owns `--repo` (or from `--owner`), and repository and
+environment scoped events are filtered by repository. Secret values are never
+recorded in the audit log; only the secret name and the actor are.
+
+```bash
+# Show the last 100 secret events of the current repository and its organization
+gh secret-kit secret history
+
+# Show organization secret events for a specific secret in a date range
+gh secret-kit secret history --owner my-org --scope org \
+  --secret API_KEY --since 2024-01-01 --until 2024-12-31
+
+# Show environment secret events of one environment, oldest first
+gh secret-kit secret history -R owner/repo --scope environment --env production --order asc
+
+# Show Dependabot secret events as JSON
+gh secret-kit secret history -R owner/repo --secret-type dependabot --format json
+```
+
+| Flag | Description | Default |
+| --- | --- | --- |
+| `--env string` | Environment name to filter environment secret events by | all environments |
+| `--format string` | Output format: `json` | table |
+| `--jq expression` / `-q` | Filter JSON output using a jq expression (requires `--format json`) | |
+| `--limit int` | Maximum number of events to show (0 or negative for unlimited) | `100` |
+| `--order string` | Sort order of the events: `asc` or `desc` | `desc` |
+| `--owner string` | Organization/owner to show the history for, without repository filtering | |
+| `--repo string` / `-R` | Repository to show the history for | current repo |
+| `--scope strings` | Secret scopes: `repo`, `org`, or `environment` | all |
+| `--secret string` | Secret name to filter events by | all secrets |
+| `--secret-type strings` | Secret stores: `actions`, `dependabot`, or `codespaces` | all |
+| `--since time` | Show events created on or after this date (`YYYY-MM-DD` or RFC3339) | |
+| `--template string` / `-t` | Format JSON output using a Go template (requires `--format json`) | |
+| `--until time` | Show events created on or before this date (`YYYY-MM-DD` or RFC3339) | |
+
+> This command requires GitHub Enterprise Cloud or GitHub Enterprise Server,
+> organization owner permission, and a token with the `read:audit_log` scope.
+> The audit log retains events for a limited period (180 days on GitHub
+> Enterprise Cloud).
+>
+> The audit log search accepts a single action per query, so one request is
+> issued for each combination of `--scope`, `--secret-type` and operation, and
+> the results are merged, sorted and truncated to `--limit`.
 
 ## Variables (gh secret-kit variable)
 

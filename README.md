@@ -28,17 +28,13 @@ For details, see [Songmu/skillsmith](https://github.com/Songmu/skillsmith).
 
 ## Commands
 
-### Copy GitHub Actions Secrets
+### Manage GitHub Actions Secrets
 
-Copy GitHub Actions secrets from a source repository to one or more destinations.
+Copy GitHub Actions secrets to other repositories and review their change history.
 
 ```sh
 gh secret-kit secret [command]
 ```
-
-Since the GitHub API does not expose secret values, the copy is performed by a workflow generated in the source repository and triggered via `workflow_dispatch`. The token for each destination host is taken from the local `gh` authentication (or from `--dst-token`) and registered as a temporary source repository secret, so a GitHub-hosted runner can reach the destination and no self-hosted runner is required.
-
-> **Note**: The destination host must be reachable from the runner. When the destination is a GitHub Enterprise Server instance that is not reachable from GitHub-hosted runners, use `gh secret-kit migrate` with a self-hosted runner instead.
 
 #### secret copy
 
@@ -47,6 +43,10 @@ gh secret-kit secret copy <dst> [dst...] [flags]
 ```
 
 Copy all (or specific) GitHub Actions secrets from a source repository to one or more destinations. The `--scope` flag selects which secrets are copied: `repo` for repository secrets of `--repo`, `org` for organization secrets visible to `--repo`, and `env` for environment secrets of `--src-env`.
+
+Since the GitHub API does not expose secret values, the copy is performed by a workflow generated in the source repository and triggered via `workflow_dispatch`. The token for each destination host is taken from the local `gh` authentication (or from `--dst-token`) and registered as a temporary source repository secret, so a GitHub-hosted runner can reach the destination and no self-hosted runner is required.
+
+> **Note**: The destination host must be reachable from the runner. When the destination is a GitHub Enterprise Server instance that is not reachable from GitHub-hosted runners, use `gh secret-kit migrate` with a self-hosted runner instead.
 
 Each destination argument is `[host/]owner/repo`, or `[host/]org` when `--scope` is `org`. Destinations without a host use the source host. Existing secrets at the destination are skipped unless `--overwrite` is set.
 
@@ -76,6 +76,34 @@ The command waits for the generated workflow run to finish, then deletes the tem
 - `--token-secret-name string`: Base name of the temporary source repository secret holding the destination token (default: `GH_SECRET_KIT_COPY_TOKEN`)
 - `--unarchive`: Temporarily unarchive the source repository if it is archived, then re-archive after the copy (default: false)
 - `--workflow-name string`: Workflow file name (without extension) of the generated workflow (default: `gh-secret-kit-copy`)
+
+#### secret history
+
+```sh
+gh secret-kit secret history [flags]
+```
+
+Show the create, update and remove history of secrets from the organization audit log. The audit log API is organization scoped, so the history is read from the organization that owns `--repo` (or from `--owner`), and repository and environment scoped events are filtered by repository. Secret values are never recorded in the audit log; only the secret name and the actor are.
+
+The audit log search accepts a single action per query, so one request is issued for each combination of `--scope`, `--secret-type` and operation, and the results are merged, sorted and truncated to `--limit`.
+
+> **Note**: This command requires GitHub Enterprise Cloud or GitHub Enterprise Server, organization owner permission, and a token with the `read:audit_log` scope. The audit log retains events for a limited period (180 days on GitHub Enterprise Cloud).
+
+**Options:**
+
+- `--env string`: Environment name to filter environment secret events by (defaults to all environments)
+- `--format string`: Output format: `json` (defaults to a table)
+- `--jq expression` / `-q`: Filter JSON output using a jq expression (requires `--format json`)
+- `--limit int`: Maximum number of events to show; 0 or negative for unlimited (default: `100`)
+- `--order string`: Sort order of the events: `asc` or `desc` (default: `desc`)
+- `--owner string`: Organization/owner to show the secret history for, without filtering by repository. Mutually exclusive with `--repo`
+- `--repo string` / `-R`: Repository to show the secret history for (e.g., `owner/repo`; defaults to current repository). Mutually exclusive with `--owner`
+- `--scope strings`: Secret scopes to show: `repo`, `org`, or `environment` (comma-separated or repeated flag; defaults to all)
+- `--secret string`: Secret name to filter events by (defaults to all secrets)
+- `--secret-type strings`: Secret stores to show: `actions`, `dependabot`, or `codespaces` (comma-separated or repeated flag; defaults to all)
+- `--since time`: Show events created on or after this date (`YYYY-MM-DD` or RFC3339)
+- `--template string` / `-t`: Format JSON output using a Go template (requires `--format json`)
+- `--until time`: Show events created on or before this date (`YYYY-MM-DD` or RFC3339)
 
 ### Copy GitHub Actions Variables
 
@@ -974,6 +1002,19 @@ gh secret-kit secret copy \
   --rename API_KEY=PROD_API_KEY \
   --overwrite \
   owner/dest-repo
+```
+
+#### Review secret change history
+
+```sh
+# Show the last 100 secret events of the current repository and its organization
+gh secret-kit secret history
+
+# Show who changed a specific organization secret in 2024
+gh secret-kit secret history --owner my-org --scope org --secret API_KEY --since 2024-01-01 --until 2024-12-31
+
+# Show Dependabot secret events of a repository as JSON
+gh secret-kit secret history -R owner/repo --secret-type dependabot --format json
 ```
 
 #### Migrate all repository secrets between repos

@@ -14,6 +14,7 @@ func NewSecretCmd() *cobra.Command {
 	}
 
 	cmd.AddCommand(secret.NewCopyCmd())
+	cmd.AddCommand(secret.NewHistoryCmd())
 
 	return cmd
 }
