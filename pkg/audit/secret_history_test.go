@@ -1,5 +1,4 @@
 package audit
-package audit
 
 import (
 	"strings"
