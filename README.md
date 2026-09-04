@@ -101,9 +101,9 @@ The audit log search accepts a single action per query, so one request is issued
 - `--scope strings`: Secret scopes to show: `repo`, `org`, or `environment` (comma-separated or repeated flag; defaults to all)
 - `--secret string`: Secret name to filter events by (defaults to all secrets)
 - `--secret-type strings`: Secret stores to show: `actions`, `dependabot`, or `codespaces` (comma-separated or repeated flag; defaults to all)
-- `--since string`: Show events created on or after this date (`YYYY-MM-DD` or RFC3339)
+- `--since time`: Show events created on or after this date (`YYYY-MM-DD` or RFC3339)
 - `--template string` / `-t`: Format JSON output using a Go template (requires `--format json`)
-- `--until string`: Show events created on or before this date (`YYYY-MM-DD` or RFC3339)
+- `--until time`: Show events created on or before this date (`YYYY-MM-DD` or RFC3339)
 
 ### Copy GitHub Actions Variables
 

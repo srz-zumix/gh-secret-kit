@@ -84,6 +84,17 @@ func TestPhrase(t *testing.T) {
 }
 
 func TestCreatedPhrase(t *testing.T) {
+	mustParse := func(value string) time.Time {
+		t.Helper()
+		for _, layout := range DateFormats {
+			if parsed, err := time.Parse(layout, value); err == nil {
+				return parsed
+			}
+		}
+		t.Fatalf("failed to parse %q", value)
+		return time.Time{}
+	}
+
 	tests := []struct {
 		name  string
 		since string
@@ -99,20 +110,17 @@ func TestCreatedPhrase(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			opts := SecretHistoryOptions{Since: tt.since, Until: tt.until}
-			got, err := opts.createdPhrase()
-			if err != nil {
-				t.Fatalf("createdPhrase returned error: %v", err)
+			opts := SecretHistoryOptions{}
+			if tt.since != "" {
+				opts.Since = mustParse(tt.since)
 			}
-			if got != tt.want {
+			if tt.until != "" {
+				opts.Until = mustParse(tt.until)
+			}
+			if got := opts.createdPhrase(); got != tt.want {
 				t.Errorf("expected %q, got %q", tt.want, got)
 			}
 		})
-	}
-
-	opts := SecretHistoryOptions{Since: "yesterday"}
-	if _, err := opts.createdPhrase(); err == nil {
-		t.Fatal("expected an error for an invalid date")
 	}
 }
 

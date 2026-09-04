@@ -194,9 +194,9 @@ gh secret-kit secret history -R owner/repo --secret-type dependabot --format jso
 | `--scope strings` | Secret scopes: `repo`, `org`, or `environment` | all |
 | `--secret string` | Secret name to filter events by | all secrets |
 | `--secret-type strings` | Secret stores: `actions`, `dependabot`, or `codespaces` | all |
-| `--since string` | Show events created on or after this date (`YYYY-MM-DD` or RFC3339) | |
+| `--since time` | Show events created on or after this date (`YYYY-MM-DD` or RFC3339) | |
 | `--template string` / `-t` | Format JSON output using a Go template (requires `--format json`) | |
-| `--until string` | Show events created on or before this date (`YYYY-MM-DD` or RFC3339) | |
+| `--until time` | Show events created on or before this date (`YYYY-MM-DD` or RFC3339) | |
 
 > This command requires GitHub Enterprise Cloud or GitHub Enterprise Server,
 > organization owner permission, and a token with the `read:audit_log` scope.

@@ -40,8 +40,8 @@ var SecretTypes = []string{SecretTypeActions, SecretTypeDependabot, SecretTypeCo
 // operations lists the audit log operations recorded for a secret.
 var operations = []string{"create", "update", "remove"}
 
-// dateFormats lists the accepted layouts for the --since and --until values.
-var dateFormats = []string{time.RFC3339, "2006-01-02"}
+// DateFormats lists the accepted layouts for the Since and Until options.
+var DateFormats = []string{time.RFC3339, time.DateOnly}
 
 // SecretHistoryOptions holds the filters used to build audit log queries.
 type SecretHistoryOptions struct {
@@ -56,9 +56,9 @@ type SecretHistoryOptions struct {
 	SecretName string
 	// Environment filters environment scoped entries by environment name.
 	Environment string
-	// Since and Until filter entries by event date ("YYYY-MM-DD" or RFC3339).
-	Since string
-	Until string
+	// Since and Until filter entries by event date. The zero value disables the filter.
+	Since time.Time
+	Until time.Time
 	// Order is the sort order of the returned entries: "asc" or "desc".
 	Order string
 	// Limit caps the number of returned entries. Zero or negative means unlimited.
@@ -82,10 +82,7 @@ func SecretHistory(ctx context.Context, g *gh.GitHubClient, opts SecretHistoryOp
 	if err != nil {
 		return nil, err
 	}
-	createdPhrase, err := opts.createdPhrase()
-	if err != nil {
-		return nil, err
-	}
+	createdPhrase := opts.createdPhrase()
 
 	order := opts.Order
 	if order == "" {
@@ -175,24 +172,21 @@ func (o *SecretHistoryOptions) phrase(q query, createdPhrase string) string {
 }
 
 // createdPhrase builds the "created:" qualifier from the Since and Until options.
-func (o *SecretHistoryOptions) createdPhrase() (string, error) {
-	since, err := normalizeDate(o.Since, "since")
-	if err != nil {
-		return "", err
-	}
-	until, err := normalizeDate(o.Until, "until")
-	if err != nil {
-		return "", err
-	}
+func (o *SecretHistoryOptions) createdPhrase() string {
 	switch {
-	case since != "" && until != "":
-		return fmt.Sprintf("created:%s..%s", since, until), nil
-	case since != "":
-		return "created:>=" + since, nil
-	case until != "":
-		return "created:<=" + until, nil
+	case !o.Since.IsZero() && !o.Until.IsZero():
+		return fmt.Sprintf("created:%s..%s", formatDate(o.Since), formatDate(o.Until))
+	case !o.Since.IsZero():
+		return "created:>=" + formatDate(o.Since)
+	case !o.Until.IsZero():
+		return "created:<=" + formatDate(o.Until)
 	}
-	return "", nil
+	return ""
+}
+
+// formatDate formats a date for the audit log "created:" qualifier.
+func formatDate(t time.Time) string {
+	return t.Format(time.DateOnly)
 }
 
 // match reports whether an entry passes the filters that the audit log search
@@ -267,18 +261,4 @@ func normalizeValues(values, allowed []string, label string) ([]string, error) {
 		}
 	}
 	return ordered, nil
-}
-
-// normalizeDate validates a date option and returns it as a "YYYY-MM-DD" value.
-func normalizeDate(value, label string) (string, error) {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return "", nil
-	}
-	for _, layout := range dateFormats {
-		if parsed, err := time.Parse(layout, value); err == nil {
-			return parsed.Format("2006-01-02"), nil
-		}
-	}
-	return "", fmt.Errorf("invalid --%s value %q: expected YYYY-MM-DD or RFC3339 format", label, value)
 }

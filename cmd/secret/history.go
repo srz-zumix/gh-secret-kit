@@ -3,6 +3,7 @@ package secret
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/cli/cli/v2/pkg/cmdutil"
 	"github.com/spf13/cobra"
@@ -14,7 +15,8 @@ import (
 
 // NewHistoryCmd creates the secret history command
 func NewHistoryCmd() *cobra.Command {
-	var repo, owner, envName, secretName, since, until, order string
+	var repo, owner, envName, secretName, order string
+	var since, until time.Time
 	var scopes, secretTypes []string
 	var limit int
 	var exporter cmdutil.Exporter
@@ -92,8 +94,8 @@ each combination of --scope, --secret-type and operation, and the results are me
 	f.StringVar(&secretName, "secret", "", "Secret name to filter events by (defaults to all secrets)")
 	f.StringSliceVar(&scopes, "scope", []string{}, "Secret scopes to show: repo, org, or environment (comma-separated or repeated flag; defaults to all)")
 	f.StringSliceVar(&secretTypes, "secret-type", []string{}, "Secret stores to show: actions, dependabot, or codespaces (comma-separated or repeated flag; defaults to all)")
-	f.StringVar(&since, "since", "", "Show events created on or after this date (YYYY-MM-DD or RFC3339)")
-	f.StringVar(&until, "until", "", "Show events created on or before this date (YYYY-MM-DD or RFC3339)")
+	f.TimeVar(&since, "since", time.Time{}, audit.DateFormats, "Show events created on or after this date (YYYY-MM-DD or RFC3339)")
+	f.TimeVar(&until, "until", time.Time{}, audit.DateFormats, "Show events created on or before this date (YYYY-MM-DD or RFC3339)")
 	f.StringVar(&order, "order", "desc", "Sort order of the events: asc or desc")
 	f.IntVar(&limit, "limit", 100, "Maximum number of events to show (0 or negative for unlimited)")
 	cmd.MarkFlagsMutuallyExclusive("repo", "owner")
