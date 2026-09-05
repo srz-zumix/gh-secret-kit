@@ -13,7 +13,7 @@ install-released:
 	gh extension install "srz-zumix/gh-${EXTENSION_NAME}"
 
 build:
-	go build -o gh-secret-kit
+	go build -o gh-${EXTENSION_NAME}
 
 test: ## run tests
 	go test -v ./...

@@ -161,6 +161,9 @@ func GenerateWorkflowYAML(config WorkflowConfig) (string, error) {
 	}
 
 	// Generate secrets migration steps
+	if err := validateSecretNames(config.Secrets, config.Rename); err != nil {
+		return "", err
+	}
 	for _, secretName := range config.Secrets {
 		destSecretName := secretName
 		if newName, ok := config.Rename[secretName]; ok {
