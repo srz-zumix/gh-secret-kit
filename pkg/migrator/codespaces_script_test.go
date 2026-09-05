@@ -173,6 +173,57 @@ func TestGenerateCodespacesCopyScriptValidation(t *testing.T) {
 				TokenEnvFile: "/tmp/token.env",
 			},
 		},
+		{
+			name: "source secret collides with script variable",
+			config: CodespacesCopyConfig{
+				Secrets:      []string{"DESTINATION"},
+				Destinations: validDestinations,
+				TokenEnvFile: "/tmp/token.env",
+			},
+		},
+		{
+			name: "source secret collides with unset script variable",
+			config: CodespacesCopyConfig{
+				Secrets:      []string{"GH_TOKEN"},
+				Destinations: validDestinations,
+				TokenEnvFile: "/tmp/token.env",
+			},
+		},
+		{
+			name: "source secret collides with bash special variable",
+			config: CodespacesCopyConfig{
+				Secrets:      []string{"RANDOM"},
+				Destinations: validDestinations,
+				TokenEnvFile: "/tmp/token.env",
+			},
+		},
+		{
+			name: "source secret collides with destination token variable",
+			config: CodespacesCopyConfig{
+				Secrets:      []string{"TOKEN"},
+				Destinations: validDestinations,
+				TokenEnvFile: "/tmp/token.env",
+			},
+		},
+		{
+			name: "destination token variable is a reserved script variable",
+			config: CodespacesCopyConfig{
+				Secrets:      []string{"FOO"},
+				Destinations: []CodespacesCopyDestination{{Target: "dst-owner/dst-repo", Host: "github.com", TokenEnv: "GH_TOKEN"}},
+				TokenEnvFile: "/tmp/token.env",
+			},
+		},
+		{
+			name: "same token variable shared by different hosts",
+			config: CodespacesCopyConfig{
+				Secrets: []string{"FOO"},
+				Destinations: []CodespacesCopyDestination{
+					{Target: "dst-owner/dst-repo", Host: "foo-bar.example", TokenEnv: "TOKEN"},
+					{Target: "dst-owner/dst-repo", Host: "foo_bar.example", TokenEnv: "TOKEN"},
+				},
+				TokenEnvFile: "/tmp/token.env",
+			},
+		},
 	}
 
 	for _, tt := range tests {

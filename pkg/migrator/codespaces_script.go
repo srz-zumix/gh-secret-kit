@@ -43,6 +43,47 @@ var secretNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 // script free of shell metacharacters even for hand-written arguments.
 var shellLiteralPattern = regexp.MustCompile(`^[A-Za-z0-9._/-]+$`)
 
+// reservedScriptVars are the shell variables the generated copy script assigns
+// or unsets while it runs. A source secret or a destination token variable that
+// shares one of these names would be clobbered before it could be read, so the
+// script would silently copy the wrong value or, for the token variables,
+// disclose the destination token. Such names are rejected instead.
+var reservedScriptVars = map[string]struct{}{
+	"GITHUB_TOKEN":        {},
+	"GH_TOKEN":            {},
+	"GH_ENTERPRISE_TOKEN": {},
+	"GH_HOST":             {},
+	"GH_REPO":             {},
+	"DESTINATION":         {},
+	"SECRET_VALUE":        {},
+	"_token_file":         {},
+}
+
+// shellSpecialVars are Bash variables that change automatically or are
+// read-only. A source secret with one of these names cannot be dereferenced
+// reliably (for example "_" is rewritten after every command), so they are
+// rejected too.
+var shellSpecialVars = map[string]struct{}{
+	"_":       {},
+	"RANDOM":  {},
+	"SECONDS": {},
+	"LINENO":  {},
+	"PPID":    {},
+	"BASHPID": {},
+	"UID":     {},
+	"EUID":    {},
+}
+
+// isReservedSecretName reports whether name collides with a variable the
+// generated script controls or with a Bash special variable.
+func isReservedSecretName(name string) bool {
+	if _, ok := reservedScriptVars[name]; ok {
+		return true
+	}
+	_, ok := shellSpecialVars[name]
+	return ok
+}
+
 // GenerateCodespacesCopyScript generates the shell script that runs inside a
 // codespace and copies the Codespaces secrets exposed to it to every
 // destination. The values never leave the codespace: the script reads them from
@@ -66,6 +107,12 @@ func GenerateCodespacesCopyScript(config CodespacesCopyConfig) (string, error) {
 	if err := validateSecretNames(config.Secrets, config.Rename); err != nil {
 		return "", err
 	}
+	// tokenEnvHosts maps each destination token variable to the host that owns
+	// it. Because host names are normalized into variable names, two different
+	// hosts can normalize to the same token variable; sourcing the token file
+	// would then send one host's token to the other, so such collisions are
+	// rejected.
+	tokenEnvHosts := make(map[string]string, len(config.Destinations))
 	for _, dest := range config.Destinations {
 		if !shellLiteralPattern.MatchString(dest.Target) {
 			return "", fmt.Errorf("invalid destination %q", dest.Target)
@@ -75,6 +122,24 @@ func GenerateCodespacesCopyScript(config CodespacesCopyConfig) (string, error) {
 		}
 		if !secretNamePattern.MatchString(dest.TokenEnv) {
 			return "", fmt.Errorf("invalid token environment variable name %q", dest.TokenEnv)
+		}
+		if isReservedSecretName(dest.TokenEnv) {
+			return "", fmt.Errorf("destination token variable %q conflicts with a variable used by the copy script", dest.TokenEnv)
+		}
+		if host, ok := tokenEnvHosts[dest.TokenEnv]; ok && host != dest.Host {
+			return "", fmt.Errorf("destination token variable %q is shared by hosts %q and %q", dest.TokenEnv, host, dest.Host)
+		}
+		tokenEnvHosts[dest.TokenEnv] = dest.Host
+	}
+	// A source secret whose name matches a script variable, a Bash special
+	// variable, or a destination token variable would be clobbered before it is
+	// read, so reject it rather than copy the wrong value.
+	for _, name := range config.Secrets {
+		if isReservedSecretName(name) {
+			return "", fmt.Errorf("source secret name %q conflicts with a variable used by the copy script", name)
+		}
+		if _, ok := tokenEnvHosts[name]; ok {
+			return "", fmt.Errorf("source secret name %q conflicts with a destination token variable", name)
 		}
 	}
 
