@@ -22,7 +22,7 @@ func TestRemoteCommand(t *testing.T) {
 	}
 	// The cleanup trap must be installed before anything can fail so both files
 	// are removed on every exit path.
-	if !(trapIdx < decodeIdx && decodeIdx < chmodIdx && chmodIdx < bashIdx) {
+	if trapIdx >= decodeIdx || decodeIdx >= chmodIdx || chmodIdx >= bashIdx {
 		t.Errorf("expected order trap < decode < chmod < bash, got %d/%d/%d/%d:\n%s",
 			trapIdx, decodeIdx, chmodIdx, bashIdx, cmd)
 	}
@@ -68,7 +68,7 @@ func TestWriteTokenFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("writeTokenFile returned error: %v", err)
 	}
-	defer os.Remove(path)
+	defer func() { _ = os.Remove(path) }()
 
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -107,7 +107,7 @@ func TestWriteTokenFileRejectsUnsafeToken(t *testing.T) {
 
 		path, err := writeTokenFile(destinations, tokenEnvNames, hostTokens)
 		if err == nil {
-			os.Remove(path)
+			_ = os.Remove(path)
 			t.Errorf("expected an error for token %q", token)
 		}
 		if path != "" {
