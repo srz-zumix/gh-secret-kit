@@ -63,15 +63,8 @@ func GenerateCodespacesCopyScript(config CodespacesCopyConfig) (string, error) {
 	if err := ValidateSecretApp(config.DestinationApp); err != nil {
 		return "", err
 	}
-	for _, name := range config.Secrets {
-		if err := ValidateSecretName(name); err != nil {
-			return "", err
-		}
-		if renamed, ok := config.Rename[name]; ok {
-			if err := ValidateSecretName(renamed); err != nil {
-				return "", err
-			}
-		}
+	if err := validateSecretNames(config.Secrets, config.Rename); err != nil {
+		return "", err
 	}
 	for _, dest := range config.Destinations {
 		if !shellLiteralPattern.MatchString(dest.Target) {
