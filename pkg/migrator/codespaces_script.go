@@ -64,11 +64,13 @@ func GenerateCodespacesCopyScript(config CodespacesCopyConfig) (string, error) {
 		return "", err
 	}
 	for _, name := range config.Secrets {
-		if !secretNamePattern.MatchString(name) {
-			return "", fmt.Errorf("invalid secret name %q", name)
+		if err := ValidateSecretName(name); err != nil {
+			return "", err
 		}
-		if renamed, ok := config.Rename[name]; ok && !secretNamePattern.MatchString(renamed) {
-			return "", fmt.Errorf("invalid secret name %q", renamed)
+		if renamed, ok := config.Rename[name]; ok {
+			if err := ValidateSecretName(renamed); err != nil {
+				return "", err
+			}
 		}
 	}
 	for _, dest := range config.Destinations {

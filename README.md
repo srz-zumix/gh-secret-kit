@@ -28,7 +28,7 @@ For details, see [Songmu/skillsmith](https://github.com/Songmu/skillsmith).
 
 ## Commands
 
-### Manage GitHub Actions Secrets
+### Manage Secrets
 
 Copy GitHub Actions and Codespaces secrets to other repositories and review their change history.
 

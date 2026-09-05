@@ -216,11 +216,15 @@ func RunCopy(ctx context.Context, config *CopyConfig) error {
 // secrets are exported. The script carries no secret values.
 func remoteCommand(script string) string {
 	encoded := base64.StdEncoding.EncodeToString([]byte(script))
+	// A trap on EXIT removes both the script and the transferred token file on
+	// every exit path (decode failure, chmod failure, script failure, success)
+	// and preserves the script's exit code via $rc. base64 output never contains
+	// a single quote, so single-quoting the payload stays safe.
 	return fmt.Sprintf(
-		"umask 077; printf %%s '%s' | base64 -d > %s || exit 1; chmod 600 %s; "+
-			"bash -l %s; rc=$?; rm -f %s %s; exit $rc",
-		encoded, remoteScriptFile, remoteTokenFile,
-		remoteScriptFile, remoteScriptFile, remoteTokenFile,
+		"umask 077; trap 'rc=$?; rm -f %s %s; exit $rc' EXIT; "+
+			"printf %%s '%s' | base64 -d > %s || exit 1; chmod 600 %s || exit 1; bash -l %s",
+		remoteScriptFile, remoteTokenFile,
+		encoded, remoteScriptFile, remoteTokenFile, remoteScriptFile,
 	)
 }
 
