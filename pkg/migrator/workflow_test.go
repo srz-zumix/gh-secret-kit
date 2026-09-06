@@ -53,6 +53,39 @@ func TestGenerateWorkflowYAMLDispatchMode(t *testing.T) {
 	}
 }
 
+func TestGenerateWorkflowYAMLValidation(t *testing.T) {
+	// An unsafe secret name must be rejected before any YAML is generated.
+	out, err := GenerateWorkflowYAML(WorkflowConfig{
+		WorkflowName: "my-workflow",
+		Source:       "owner/repo",
+		Destination:  "owner/dest",
+		Scope:        SecretScopeRepo,
+		Secrets:      []string{"FOO; rm -rf /"},
+	})
+	if err == nil || !strings.Contains(err.Error(), "invalid secret name") {
+		t.Errorf("expected an invalid secret name error, got: %v", err)
+	}
+	if out != "" {
+		t.Errorf("unsafe secret name must not reach the generated workflow, got:\n%s", out)
+	}
+
+	// An unsafe renamed destination name must be rejected as well.
+	out, err = GenerateWorkflowYAML(WorkflowConfig{
+		WorkflowName: "my-workflow",
+		Source:       "owner/repo",
+		Destination:  "owner/dest",
+		Scope:        SecretScopeRepo,
+		Secrets:      []string{"FOO"},
+		Rename:       map[string]string{"FOO": "BAR$(id)"},
+	})
+	if err == nil || !strings.Contains(err.Error(), "invalid secret name") {
+		t.Errorf("expected an invalid secret name error, got: %v", err)
+	}
+	if out != "" {
+		t.Errorf("unsafe renamed name must not reach the generated workflow, got:\n%s", out)
+	}
+}
+
 func TestParseRunsOnFromWorkflow(t *testing.T) {
 	yaml := `name: ci
 on:
