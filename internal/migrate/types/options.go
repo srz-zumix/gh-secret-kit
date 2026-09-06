@@ -28,6 +28,20 @@ const (
 	// DefaultCodespacesCopyRetentionPeriod bounds how long a stopped ephemeral
 	// codespace is kept when the cleanup could not delete it.
 	DefaultCodespacesCopyRetentionPeriod = "1h"
+	// DefaultAgentsCopyTokenSecretName is the base name of the temporary Agents
+	// secret holding the destination token inside the Copilot coding agent
+	// environment started by the "secret agents copy" command.
+	DefaultAgentsCopyTokenSecretName = "GH_SECRET_KIT_COPY_TOKEN"
+	// DefaultAgentsCopyBranch is the prefix of the temporary branch that carries
+	// the copilot-setup-steps workflow and is made the default branch while the
+	// "secret agents copy" command runs.
+	DefaultAgentsCopyBranch = "gh-secret-kit-copy"
+	// DefaultAgentsCopyPrompt tells the Copilot coding agent that it has nothing
+	// to do, because the copy runs in the setup steps before the agent starts.
+	DefaultAgentsCopyPrompt = "Do not change anything in this repository. The requested maintenance already ran in the setup steps. Reply that there is nothing to do and stop."
+	// DefaultAgentsCopyTimeout bounds how long the copy waits for the Copilot
+	// coding agent environment to run the setup steps.
+	DefaultAgentsCopyTimeout = "30m"
 )
 
 // CommonOptions holds common options for migrate commands

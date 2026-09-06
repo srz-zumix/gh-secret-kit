@@ -30,7 +30,7 @@ For details, see [Songmu/skillsmith](https://github.com/Songmu/skillsmith).
 
 ### Manage Secrets
 
-Copy GitHub Actions and Codespaces secrets to other repositories and review their change history.
+Copy GitHub Actions, Copilot coding agent, and Codespaces secrets to other repositories and review their change history.
 
 ```sh
 gh secret-kit secret [command]
@@ -76,6 +76,40 @@ The command waits for the generated workflow run to finish, then deletes the tem
 - `--token-secret-name string`: Base name of the temporary source repository secret holding the destination token (default: `GH_SECRET_KIT_COPY_TOKEN`)
 - `--unarchive`: Temporarily unarchive the source repository if it is archived, then re-archive after the copy (default: false)
 - `--workflow-name string`: Workflow file name (without extension) of the generated workflow (default: `gh-secret-kit-copy`)
+
+#### secret agents copy
+
+```sh
+gh secret-kit secret agents copy <dst> [dst...] [flags]
+```
+
+Copy all (or specific) GitHub Copilot coding agent (Agents) secrets from a source repository to one or more destinations. The `--scope` flag selects which secrets are copied and at which level they are written: `repo` for repository Agents secrets of `--repo`, and `org` for organization Agents secrets of the source owner.
+
+Agents secret values are not readable through the GitHub API; they are only exposed as environment variables inside the Copilot coding agent environment, and only Agents secrets are exposed there. Copilot also only runs the setup steps workflow from the default branch. The command therefore creates a temporary branch carrying `.github/workflows/copilot-setup-steps.yml`, makes it the default branch, registers the destination tokens as temporary Agents secrets, starts a Copilot coding agent session, and lets the setup steps perform the copy. The secret values never reach the local machine, and every temporary change is reverted once the copy finishes.
+
+Each destination argument is `[host/]owner/repo`, or `[host/]org` when `--scope` is `org`. Destinations without a host use the source host. Existing secrets at the destination are skipped unless `--overwrite` is set. Use `--dst-app` to write the values to a different destination secret store.
+
+> **Note**: The source must be on github.com because the Copilot coding agent is not available on GitHub Enterprise Server, the Copilot coding agent must be enabled for the source repository and the authenticated user needs a Copilot license, admin permission is required because the default branch is temporarily changed, and the destination host must be reachable from the agent environment. The pull request the agent opens is based on the temporary branch and is closed when that branch is deleted during the cleanup.
+
+**Arguments:**
+
+- `<dst> [dst...]`: One or more destination repositories, or organizations when `--scope` is `org` (required)
+
+**Options:**
+
+- `--branch string`: Temporary branch made the default branch while the copy runs (defaults to a unique name derived from a timestamp)
+- `--dst-app string`: Destination secret store: `actions`, `agents`, `codespaces`, or `dependabot` (default: `agents`)
+- `--dst-token string`: PAT or token for the destination host (defaults to the local `gh` authentication; cannot be used when the destinations span multiple hosts)
+- `--exclude-secrets strings`: Secret names to exclude from the copy (comma-separated or repeated flag)
+- `--keep-workflow`: Keep the temporary branch and Agents secrets after the copy instead of removing them (default: false)
+- `--overwrite`: Overwrite existing secrets at destination (default: false)
+- `--prompt string`: Task description passed to the Copilot coding agent (defaults to a prompt that tells the agent there is nothing to do)
+- `--rename strings`: Rename mapping in `OLD_NAME=NEW_NAME` format (repeatable)
+- `--repo string` / `-R`: Source repository (e.g., `owner/repo`; defaults to current repository)
+- `--scope string`: Secret scope to copy: `repo` or `org` (default: `repo`)
+- `--secrets strings`: Specific secret names to copy (comma-separated or repeated flag; defaults to all)
+- `--timeout string`: How long to wait for the agent environment to run the copy (e.g., `30m`, `1h`) (default: `30m`)
+- `--token-secret-name string`: Base name of the temporary Agents secret holding the destination token (default: `GH_SECRET_KIT_COPY_TOKEN`)
 
 #### secret codespaces copy
 
