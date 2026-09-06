@@ -1,0 +1,43 @@
+name: Copilot Setup Steps
+on:
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  copilot-setup-steps:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Copy Agents secrets
+        run: |
+          set -euo pipefail
+
+          # Agents secrets are exposed to this step as environment variables, so the
+          # values are read directly from the environment.
+          unset GITHUB_TOKEN GH_TOKEN GH_ENTERPRISE_TOKEN GH_HOST GH_REPO
+
+          echo "Copying secrets to srz-zumix/gh-team-kit (github.com)"
+          export GH_HOST='github.com'
+          export GH_TOKEN="${GH_SECRET_KIT_COPY_TOKEN_GITHUB_COM}"
+          unset GH_ENTERPRISE_TOKEN
+          export DESTINATION='srz-zumix/gh-team-kit'
+
+          SECRET_VALUE="${AGENT_SECRET_TEST-}"
+          (
+          if [ -z "${SECRET_VALUE}" ]; then
+            echo "Secret AGENT_SECRET_TEST is empty or does not exist, skipping..."
+            exit 0
+          fi
+
+          # Check if secret already exists at destination
+          if gh secret list -R "${DESTINATION}" --app agents | grep -q "^AGENT_SECRET_TEST"; then
+            echo "Secret AGENT_SECRET_TEST already exists at destination, skipping..."
+            exit 0
+          fi
+
+          # Set secret AGENT_SECRET_TEST at destination
+          echo "${SECRET_VALUE}" | \
+            gh secret set AGENT_SECRET_TEST -R "${DESTINATION}" --app agents
+          echo "Successfully migrated secret: AGENT_SECRET_TEST -> AGENT_SECRET_TEST"
+          )
+
+          echo 'gh-secret-kit: agents secret copy finished'
