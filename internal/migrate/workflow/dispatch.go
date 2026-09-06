@@ -338,20 +338,17 @@ func triggerDispatchWorkflow(ctx context.Context, client *gh.GitHubClient, repo 
 // excludeSecrets removes any secret names present in exclude from secrets,
 // preserving order.
 func excludeSecrets(secrets, exclude []string) []string {
-	if len(exclude) == 0 {
-		return secrets
-	}
-	excludeSet := make(map[string]struct{}, len(exclude))
-	for _, name := range exclude {
-		excludeSet[name] = struct{}{}
-	}
-	filtered := secrets[:0]
-	for _, name := range secrets {
-		if _, excluded := excludeSet[name]; excluded {
-			logger.Debug(fmt.Sprintf("Excluding secret: %s", name))
-			continue
+	filtered := migrator.ExcludeSecrets(secrets, exclude)
+	if len(filtered) != len(secrets) {
+		kept := make(map[string]struct{}, len(filtered))
+		for _, name := range filtered {
+			kept[name] = struct{}{}
 		}
-		filtered = append(filtered, name)
+		for _, name := range secrets {
+			if _, ok := kept[name]; !ok {
+				logger.Debug(fmt.Sprintf("Excluding secret: %s", name))
+			}
+		}
 	}
 	return filtered
 }

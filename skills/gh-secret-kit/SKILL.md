@@ -35,8 +35,10 @@ gh auth login --hostname enterprise.internal
 
 ```
 gh secret-kit                           # Root command
-├── secret                              # GitHub Actions secrets
-│   ├── copy                            # Copy secrets to destinations via workflow_dispatch
+├── secret                              # Secrets
+│   ├── copy                            # Copy Actions secrets to destinations via workflow_dispatch
+│   ├── codespaces                      # Codespaces development environment secrets
+│   │   └── copy                        # Copy Codespaces secrets via an ephemeral codespace
 │   └── history (log)                   # Show secret change history from the audit log
 ├── variable                            # GitHub Actions variables
 │   └── copy                            # Copy variables to destinations
@@ -158,6 +160,63 @@ gh secret-kit secret copy -R owner/source-repo --dst-app agents owner/dest-repo
 
 > Only Actions secrets are readable from a workflow, so the source is always
 > read as Actions secrets and `--dst-app` changes the destination store only.
+
+### Copy Codespaces Secrets
+
+Codespaces development environment secret values are not readable through the
+API either; they are only exposed as environment variables inside a running
+codespace. The copy therefore creates an ephemeral codespace on the source
+repository, copies only the destination tokens into it, runs `gh secret set`
+from within it, and deletes the codespace afterwards. The values never reach the
+local machine.
+
+```bash
+# Copy all repository Codespaces secrets from the current repo to a destination
+gh secret-kit secret codespaces copy owner/dest-repo
+
+# Copy to multiple destinations using a single codespace
+gh secret-kit secret codespaces copy -R owner/source-repo owner/repo1 owner/repo2
+
+# Copy organization Codespaces secrets to another organization
+gh secret-kit secret codespaces copy -R owner/source-repo --scope org dest-org
+
+# Include the Codespaces secrets of the authenticated user
+gh secret-kit secret codespaces copy -R owner/source-repo --include-user-secrets owner/dest-repo
+
+# Copy specific secrets with rename, overwriting existing ones
+gh secret-kit secret codespaces copy -R owner/source-repo \
+  --secrets API_KEY,DB_PASSWORD --rename API_KEY=PROD_API_KEY --overwrite owner/dest-repo
+
+# Copy Codespaces secrets into the destination's Actions secrets
+gh secret-kit secret codespaces copy -R owner/source-repo --dst-app actions owner/dest-repo
+```
+
+| Flag | Description | Default |
+| --- | --- | --- |
+| `--branch string` | Source branch the codespace is created from | default branch |
+| `--devcontainer-path string` | Path to the `devcontainer.json` used for the codespace | repository default |
+| `--dst-app string` | Destination secret store: `actions`, `agents`, `codespaces`, or `dependabot` | `codespaces` |
+| `--dst-token string` | Token for the destination host (single host only) | local `gh` authentication |
+| `--exclude-secrets strings` | Secret names to exclude | |
+| `--idle-timeout string` | Allowed inactivity before the codespace is stopped | `5m` |
+| `--include-user-secrets` | Also copy the Codespaces secrets of the authenticated user | false |
+| `--keep-codespace` | Keep the codespace after the copy | false |
+| `--machine string` | Machine type of the codespace | smallest available |
+| `--overwrite` | Overwrite existing secrets at destination | false |
+| `--rename strings` | Rename mapping in `OLD_NAME=NEW_NAME` format | |
+| `--repo string` / `-R` | Source repository | current repo |
+| `--retention-period string` | Time after shutdown before the codespace is deleted | `1h` |
+| `--scope string` | Secret scope: `repo` or `org` | `repo` |
+| `--secrets strings` | Specific secret names to copy | all |
+| `--token-env-name string` | Base name of the destination token environment variable | `GH_SECRET_KIT_COPY_TOKEN` |
+
+> The source must be on github.com because Codespaces is not available on
+> GitHub Enterprise Server, and the destination host must be reachable from the
+> codespace.
+
+> The `gh` authentication must have the `codespace` scope
+> (`gh auth refresh -s codespace`), and creating a codespace consumes
+> Codespaces compute and storage quota.
 
 ### Secret History
 

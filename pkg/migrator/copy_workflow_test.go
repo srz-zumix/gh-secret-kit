@@ -174,4 +174,29 @@ func TestGenerateCopyWorkflowYAMLValidation(t *testing.T) {
 	if strings.Contains(out, "injected") {
 		t.Errorf("unsupported app value must not reach the generated workflow, got:\n%s", out)
 	}
+
+	// An unsafe secret name must be rejected before any YAML is generated.
+	out, err = GenerateCopyWorkflowYAML(CopyWorkflowConfig{
+		Secrets:      []string{"FOO; rm -rf /"},
+		Destinations: []CopyDestination{{Target: "owner/dest", Host: "github.com", TokenSecret: "COPY_TOKEN"}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "invalid secret name") {
+		t.Errorf("expected an invalid secret name error, got: %v", err)
+	}
+	if out != "" {
+		t.Errorf("unsafe secret name must not reach the generated workflow, got:\n%s", out)
+	}
+
+	// An unsafe renamed destination name must be rejected as well.
+	out, err = GenerateCopyWorkflowYAML(CopyWorkflowConfig{
+		Secrets:      []string{"FOO"},
+		Rename:       map[string]string{"FOO": "BAR$(id)"},
+		Destinations: []CopyDestination{{Target: "owner/dest", Host: "github.com", TokenSecret: "COPY_TOKEN"}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "invalid secret name") {
+		t.Errorf("expected an invalid secret name error, got: %v", err)
+	}
+	if out != "" {
+		t.Errorf("unsafe renamed name must not reach the generated workflow, got:\n%s", out)
+	}
 }

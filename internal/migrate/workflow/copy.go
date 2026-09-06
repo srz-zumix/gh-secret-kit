@@ -3,23 +3,19 @@ package workflow
 import (
 	"context"
 	"fmt"
-	"strings"
 
-	"github.com/cli/go-gh/v2/pkg/auth"
 	"github.com/cli/go-gh/v2/pkg/repository"
+	"github.com/srz-zumix/gh-secret-kit/internal/destination"
 	"github.com/srz-zumix/gh-secret-kit/pkg/migrator"
 	"github.com/srz-zumix/go-gh-extension/pkg/gh"
 	"github.com/srz-zumix/go-gh-extension/pkg/logger"
 	"github.com/srz-zumix/go-gh-extension/pkg/parser"
 )
 
-// copyDestination is a destination resolved from a command line argument,
-// together with the temporary source repository secret that holds its token.
+// copyDestination is a resolved destination together with the temporary source
+// repository secret that holds its token.
 type copyDestination struct {
-	arg         string
-	repo        repository.Repository
-	target      string
-	host        string
+	*destination.Destination
 	tokenSecret string
 }
 
@@ -79,11 +75,11 @@ func RunCopy(ctx context.Context, config *CopyConfig) error {
 	if err != nil {
 		return err
 	}
-	hostTokens, err := resolveDestinationTokens(config, destinations)
+	hostTokens, err := destination.ResolveTokens(config.DestinationToken, toResolvedDestinations(destinations))
 	if err != nil {
 		return err
 	}
-	if err := verifyCopyDestinations(ctx, scope, destinations, hostTokens); err != nil {
+	if err := destination.Verify(ctx, scope == migrator.SecretScopeOrg, toResolvedDestinations(destinations), hostTokens); err != nil {
 		return err
 	}
 	if err := assignTokenSecretNames(ctx, client, sourceRepo, config, destinations, hostTokens); err != nil {
@@ -98,7 +94,7 @@ func RunCopy(ctx context.Context, config *CopyConfig) error {
 
 	logger.Info(fmt.Sprintf("Copying %d secrets to %d destinations", len(secrets), len(destinations)))
 
-	renameMap, err := parseRenameMappings(config.Rename)
+	renameMap, err := migrator.ParseRenameMappings(config.Rename)
 	if err != nil {
 		return err
 	}
@@ -134,12 +130,12 @@ func RunCopy(ctx context.Context, config *CopyConfig) error {
 	// here leaves nothing behind.
 	registered := make(map[string]struct{}, len(hostTokens))
 	for _, dest := range destinations {
-		if _, done := registered[dest.host]; done {
+		if _, done := registered[dest.Host]; done {
 			continue
 		}
-		registered[dest.host] = struct{}{}
-		logger.Info(fmt.Sprintf("Registering temporary token secret %s for host %s...", dest.tokenSecret, dest.host))
-		if err := gh.SetRepoSecret(ctx, client, sourceRepo, dest.tokenSecret, hostTokens[dest.host]); err != nil {
+		registered[dest.Host] = struct{}{}
+		logger.Info(fmt.Sprintf("Registering temporary token secret %s for host %s...", dest.tokenSecret, dest.Host))
+		if err := gh.SetRepoSecret(ctx, client, sourceRepo, dest.tokenSecret, hostTokens[dest.Host]); err != nil {
 			return fmt.Errorf("failed to register temporary token secret %s: %w", dest.tokenSecret, err)
 		}
 		defer deleteTokenSecret(ctx, client, sourceRepo, dest.tokenSecret)
@@ -167,97 +163,27 @@ func RunCopy(ctx context.Context, config *CopyConfig) error {
 	return nil
 }
 
-// resolveCopyDestinations parses each destination argument and resolves its host,
-// falling back to the source host and then github.com.
+// resolveCopyDestinations resolves each destination argument and pairs it with
+// the temporary token secret assigned later.
 func resolveCopyDestinations(config *CopyConfig, scope migrator.SecretScope, sourceRepo repository.Repository) ([]*copyDestination, error) {
-	destinations := make([]*copyDestination, 0, len(config.Destinations))
-	for _, arg := range config.Destinations {
-		var destRepo repository.Repository
-		var err error
-		if scope == migrator.SecretScopeOrg {
-			destRepo, err = parser.Repository(parser.RepositoryOwnerWithHost(arg))
-		} else {
-			destRepo, err = parser.Repository(parser.RepositoryInput(arg))
-		}
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse destination %q: %w", arg, err)
-		}
-
-		host := destRepo.Host
-		if host == "" {
-			host = sourceRepo.Host
-		}
-		if host == "" {
-			host = "github.com"
-		}
-		destRepo.Host = host
-
-		target := destRepo.Owner
-		if scope != migrator.SecretScopeOrg {
-			if destRepo.Name == "" {
-				return nil, fmt.Errorf("destination %q must be in [HOST/]OWNER/REPO format", arg)
-			}
-			target = destRepo.Owner + "/" + destRepo.Name
-		}
-
-		destinations = append(destinations, &copyDestination{
-			arg:    arg,
-			repo:   destRepo,
-			target: target,
-			host:   host,
-		})
+	resolved, err := destination.Resolve(config.Destinations, scope == migrator.SecretScopeOrg, sourceRepo)
+	if err != nil {
+		return nil, err
+	}
+	destinations := make([]*copyDestination, 0, len(resolved))
+	for _, dest := range resolved {
+		destinations = append(destinations, &copyDestination{Destination: dest})
 	}
 	return destinations, nil
 }
 
-// resolveDestinationTokens returns a token per distinct destination host, taken
-// from --dst-token or from the local gh authentication.
-func resolveDestinationTokens(config *CopyConfig, destinations []*copyDestination) (map[string]string, error) {
-	hosts := make(map[string]struct{})
+// toResolvedDestinations unwraps the shared destination of each entry.
+func toResolvedDestinations(destinations []*copyDestination) []*destination.Destination {
+	resolved := make([]*destination.Destination, 0, len(destinations))
 	for _, dest := range destinations {
-		hosts[dest.host] = struct{}{}
+		resolved = append(resolved, dest.Destination)
 	}
-
-	tokens := make(map[string]string, len(hosts))
-	if config.DestinationToken != "" {
-		if len(hosts) > 1 {
-			return nil, fmt.Errorf("--dst-token cannot be used when the destinations span multiple hosts")
-		}
-		for host := range hosts {
-			tokens[host] = config.DestinationToken
-		}
-		return tokens, nil
-	}
-
-	for host := range hosts {
-		token, _ := auth.TokenForHost(host)
-		if token == "" {
-			return nil, fmt.Errorf("no token found for destination host %s; run \"gh auth login --hostname %s\" or pass --dst-token", host, host)
-		}
-		tokens[host] = token
-	}
-	return tokens, nil
-}
-
-// verifyCopyDestinations checks that each destination exists and is reachable
-// with the resolved token, so a typo does not waste a workflow run.
-func verifyCopyDestinations(ctx context.Context, scope migrator.SecretScope, destinations []*copyDestination, hostTokens map[string]string) error {
-	for _, dest := range destinations {
-		destClient, err := gh.NewGitHubClientWithToken(dest.repo, hostTokens[dest.host])
-		if err != nil {
-			return fmt.Errorf("failed to create GitHub client for destination %q: %w", dest.arg, err)
-		}
-		if scope == migrator.SecretScopeOrg {
-			if _, err := destClient.GetOrg(ctx, dest.repo.Owner); err != nil {
-				return fmt.Errorf("destination organization %q not found or inaccessible: %w", dest.target, err)
-			}
-			continue
-		}
-		if _, err := gh.GetRepository(ctx, destClient, dest.repo); err != nil {
-			return fmt.Errorf("destination repository %q not found or inaccessible: %w", dest.target, err)
-		}
-	}
-	return nil
+	return resolved
 }
 
 // assignTokenSecretNames derives one temporary secret name per destination host
@@ -275,7 +201,7 @@ func assignTokenSecretNames(ctx context.Context, client *gh.GitHubClient, source
 		names[host] = name
 	}
 	for _, dest := range destinations {
-		dest.tokenSecret = names[dest.host]
+		dest.tokenSecret = names[dest.Host]
 	}
 	return nil
 }
@@ -283,15 +209,7 @@ func assignTokenSecretNames(ctx context.Context, client *gh.GitHubClient, source
 // tokenSecretNameForHost builds a secret name unique to a destination host by
 // appending the host in the character set allowed for secret names.
 func tokenSecretNameForHost(base, host string) string {
-	var b strings.Builder
-	for _, r := range strings.ToUpper(host) {
-		if (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
-			b.WriteRune(r)
-		} else {
-			b.WriteRune('_')
-		}
-	}
-	return base + "_" + b.String()
+	return destination.NameForHost(base, host)
 }
 
 // collectCopySecrets resolves the secret names to copy for the given scope and
@@ -333,26 +251,13 @@ func buildWorkflowDestinations(config *CopyConfig, scope migrator.SecretScope, a
 	result := make([]migrator.CopyDestination, 0, len(destinations))
 	for _, dest := range destinations {
 		result = append(result, migrator.CopyDestination{
-			Target:      dest.target,
-			Host:        dest.host,
+			Target:      dest.Target,
+			Host:        dest.Host,
 			Env:         destEnv,
 			TokenSecret: dest.tokenSecret,
 		})
 	}
 	return result
-}
-
-// parseRenameMappings converts OLD_NAME=NEW_NAME entries into a lookup map.
-func parseRenameMappings(mappings []string) (map[string]string, error) {
-	renameMap := make(map[string]string, len(mappings))
-	for _, mapping := range mappings {
-		parts := strings.SplitN(mapping, "=", 2)
-		if len(parts) != 2 {
-			return nil, fmt.Errorf("invalid rename mapping format: %s (expected OLD_NAME=NEW_NAME)", mapping)
-		}
-		renameMap[parts[0]] = parts[1]
-	}
-	return renameMap, nil
 }
 
 // defaultBranchSHA returns the head commit SHA of the repository default branch.

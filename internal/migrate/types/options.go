@@ -18,6 +18,16 @@ const (
 	// DefaultCopyTokenSecretName is the base name of the temporary source
 	// repository secret holding the destination token.
 	DefaultCopyTokenSecretName = "GH_SECRET_KIT_COPY_TOKEN"
+	// DefaultCodespacesCopyTokenEnvName is the base name of the environment
+	// variable holding the destination token inside the codespace created by
+	// the "secret codespaces copy" command.
+	DefaultCodespacesCopyTokenEnvName = "GH_SECRET_KIT_COPY_TOKEN"
+	// DefaultCodespacesCopyIdleTimeout keeps the ephemeral codespace short-lived
+	// in case the copy is interrupted before the cleanup runs.
+	DefaultCodespacesCopyIdleTimeout = "5m"
+	// DefaultCodespacesCopyRetentionPeriod bounds how long a stopped ephemeral
+	// codespace is kept when the cleanup could not delete it.
+	DefaultCodespacesCopyRetentionPeriod = "1h"
 )
 
 // CommonOptions holds common options for migrate commands
