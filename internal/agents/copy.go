@@ -339,19 +339,29 @@ func prepareSetupStepsBranch(ctx context.Context, client *gh.GitHubClient, repo 
 		Content: []byte(workflow),
 		Branch:  github.Ptr(branch),
 	}
-	if existing, gerr := gh.GetRepositoryFileContent(ctx, client, repo, path, github.Ptr(branch)); gerr == nil && existing != nil {
+	existing, gerr := gh.GetRepositoryFileContent(ctx, client, repo, path, github.Ptr(branch))
+	if gerr != nil && !gh.IsHTTPNotFound(gerr) {
+		// Use a naked return so the deferred cleanup still sees the installed
+		// cleanup closure; "return nil, err" would clear the named cleanup
+		// result before the defer runs and panic on the nil call.
+		err = fmt.Errorf("failed to check %s on %s: %w", path, branch, gerr)
+		return
+	}
+	if gerr == nil && existing != nil {
 		opts.SHA = github.Ptr(existing.GetSHA())
 		_, err = gh.UpdateRepositoryFile(ctx, client, repo, path, opts)
 	} else {
 		_, err = gh.CreateRepositoryFile(ctx, client, repo, path, opts)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to commit %s to %s: %w", path, branch, err)
+		err = fmt.Errorf("failed to commit %s to %s: %w", path, branch, err)
+		return
 	}
 
 	logger.Info(fmt.Sprintf("Temporarily switching the default branch to %s...", branch))
 	if _, err = gh.EditRepository(ctx, client, repo, &github.Repository{DefaultBranch: github.Ptr(branch)}); err != nil {
-		return nil, fmt.Errorf("failed to switch the default branch to %s: %w", branch, err)
+		err = fmt.Errorf("failed to switch the default branch to %s: %w", branch, err)
+		return
 	}
 	switched = true
 

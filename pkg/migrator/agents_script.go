@@ -46,14 +46,7 @@ type AgentsCopyConfig struct {
 // destination. The values never leave that environment: the script reads them
 // from the environment and writes them with the gh CLI.
 func GenerateAgentsCopyScript(config AgentsCopyConfig) (string, error) {
-	envConfig := envCopyConfig{
-		Scope:          config.Scope,
-		DestinationApp: config.DestinationApp,
-		Secrets:        config.Secrets,
-		Rename:         config.Rename,
-		Overwrite:      config.Overwrite,
-		Destinations:   config.Destinations,
-	}
+	envConfig := envCopyConfig(config)
 	if err := validateEnvCopyConfig(envConfig); err != nil {
 		return "", err
 	}
