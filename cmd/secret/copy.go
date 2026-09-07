@@ -81,7 +81,7 @@ and the workflow run history are deleted.`,
 	f.StringVar(&config.TokenSecretName, "token-secret-name", types.DefaultCopyTokenSecretName, "Base name of the temporary source repository secret holding the destination token")
 	f.StringVar(&config.RunnerLabel, "runner-label", types.DefaultCopyRunnerLabel, "Runner label for runs-on of the generated workflow")
 	f.StringVar(&config.WorkflowName, "workflow-name", types.DefaultCopyWorkflowName, "Workflow file name (without extension) of the generated workflow")
-	f.StringVar(&config.Branch, "branch", "", "Temporary branch name (defaults to a unique name derived from a timestamp)")
+	f.StringVar(&config.Branch, "branch", "", "Temporary branch name (defaults to a unique name derived from the workflow run ID, or a timestamp outside GitHub Actions)")
 	f.StringVar(&config.Timeout, "timeout", "10m", "Timeout duration when waiting for workflow completion (e.g., 5m, 1h)")
 	f.BoolVar(&config.Unarchive, "unarchive", false, "Temporarily unarchive the source repository if it is archived, then re-archive after the copy")
 

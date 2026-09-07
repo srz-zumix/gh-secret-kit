@@ -255,14 +255,26 @@ func registerTokenSecrets(ctx context.Context, client *gh.GitHubClient, repo rep
 		present[secret.GetName()] = struct{}{}
 	}
 
-	for host, name := range tokenSecretNames {
+	// Preflight every name before creating anything, because map iteration order
+	// is nondeterministic and creating a secret only to abort on a later name
+	// clash would leave a live destination token behind.
+	for _, name := range tokenSecretNames {
 		if _, ok := present[name]; ok {
 			return fmt.Errorf("the source repository already has an Agents secret named %q: use --token-secret-name to pick another name", name)
 		}
+	}
+
+	// Track the secrets created so far so they can be removed if a later
+	// registration fails, otherwise a partial failure would leak live
+	// destination tokens.
+	created := make(map[string]string, len(tokenSecretNames))
+	for host, name := range tokenSecretNames {
 		logger.Info(fmt.Sprintf("Registering the temporary Agents secret %s...", name))
 		if err := gh.SetAgentsRepoSecret(ctx, client, repo, name, hostTokens[host]); err != nil {
+			removeTokenSecrets(context.WithoutCancel(ctx), client, repo, created)
 			return fmt.Errorf("failed to register the temporary Agents secret %s: %w", name, err)
 		}
+		created[host] = name
 	}
 	return nil
 }

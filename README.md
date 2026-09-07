@@ -36,47 +36,6 @@ Copy GitHub Actions, Copilot coding agent, and Codespaces secrets to other repos
 gh secret-kit secret [command]
 ```
 
-#### secret copy
-
-```sh
-gh secret-kit secret copy <dst> [dst...] [flags]
-```
-
-Copy all (or specific) GitHub Actions secrets from a source repository to one or more destinations. The `--scope` flag selects which secrets are copied: `repo` for repository secrets of `--repo`, `org` for organization secrets visible to `--repo`, and `env` for environment secrets of `--src-env`.
-
-Since the GitHub API does not expose secret values, the copy is performed by a workflow generated in the source repository and triggered via `workflow_dispatch`. The token for each destination host is taken from the local `gh` authentication (or from `--dst-token`) and registered as a temporary source repository secret, so a GitHub-hosted runner can reach the destination and no self-hosted runner is required.
-
-> **Note**: The destination host must be reachable from the runner. When the destination is a GitHub Enterprise Server instance that is not reachable from GitHub-hosted runners, use `gh secret-kit migrate` with a self-hosted runner instead.
-
-Each destination argument is `[host/]owner/repo`, or `[host/]org` when `--scope` is `org`. Destinations without a host use the source host. Existing secrets at the destination are skipped unless `--overwrite` is set.
-
-The `--dst-app` flag selects which secret store the destination secrets are written to: `actions` for GitHub Actions secrets, `agents` for Copilot cloud agent (Agents) secrets, `codespaces` for Codespaces secrets, and `dependabot` for Dependabot secrets. Since only Actions secrets are readable from a workflow, `--dst-app` changes the destination store only; the source is always read as Actions secrets. `--dst-env` cannot be combined with a `--dst-app` other than `actions` because those stores have no environment level.
-
-The command waits for the generated workflow run to finish, then deletes the temporary branch, the temporary token secrets, and the workflow run history.
-
-**Arguments:**
-
-- `<dst> [dst...]`: One or more destination repositories, or organizations when `--scope` is `org` (required)
-
-**Options:**
-
-- `--branch string`: Temporary branch name (defaults to a unique name derived from a timestamp)
-- `--dst-app string`: Destination secret store: `actions`, `agents`, `codespaces`, or `dependabot` (default: `actions`)
-- `--dst-env string`: Destination environment name (defaults to `--src-env` when `--scope` is `env`; cannot be used with a non-`actions` `--dst-app`)
-- `--dst-token string`: PAT or token for the destination host (defaults to the local `gh` authentication; cannot be used when the destinations span multiple hosts)
-- `--exclude-secrets strings`: Secret names to exclude from the copy (comma-separated or repeated flag)
-- `--overwrite`: Overwrite existing secrets at destination (default: false)
-- `--rename strings`: Rename mapping in `OLD_NAME=NEW_NAME` format (repeatable)
-- `--repo string` / `-R`: Source repository (e.g., `owner/repo`; defaults to current repository)
-- `--runner-label string`: Runner label for `runs-on` of the generated workflow (default: `ubuntu-latest`)
-- `--scope string`: Secret scope to copy: `repo`, `org`, or `env` (default: `repo`)
-- `--secrets strings`: Specific secret names to copy (comma-separated or repeated flag; defaults to all)
-- `--src-env string`: Source environment name (required with `--scope env`)
-- `--timeout string`: Timeout duration when waiting for workflow completion (e.g., `5m`, `1h`) (default: `10m`)
-- `--token-secret-name string`: Base name of the temporary source repository secret holding the destination token (default: `GH_SECRET_KIT_COPY_TOKEN`)
-- `--unarchive`: Temporarily unarchive the source repository if it is archived, then re-archive after the copy (default: false)
-- `--workflow-name string`: Workflow file name (without extension) of the generated workflow (default: `gh-secret-kit-copy`)
-
 #### secret agents copy
 
 ```sh
@@ -97,7 +56,7 @@ Each destination argument is `[host/]owner/repo`, or `[host/]org` when `--scope`
 
 **Options:**
 
-- `--branch string`: Temporary branch made the default branch while the copy runs (defaults to a unique name derived from a timestamp)
+- `--branch string`: Temporary branch made the default branch while the copy runs (defaults to a unique name derived from the workflow run ID, or a timestamp outside GitHub Actions)
 - `--dst-app string`: Destination secret store: `actions`, `agents`, `codespaces`, or `dependabot` (default: `agents`)
 - `--dst-token string`: PAT or token for the destination host (defaults to the local `gh` authentication; cannot be used when the destinations span multiple hosts)
 - `--exclude-secrets strings`: Secret names to exclude from the copy (comma-separated or repeated flag)
@@ -147,6 +106,47 @@ Each destination argument is `[host/]owner/repo`, or `[host/]org` when `--scope`
 - `--scope string`: Secret scope to copy: `repo` or `org` (default: `repo`)
 - `--secrets strings`: Specific secret names to copy (comma-separated or repeated flag; defaults to all)
 - `--token-env-name string`: Base name of the environment variable holding the destination token inside the codespace (default: `GH_SECRET_KIT_COPY_TOKEN`)
+
+#### secret copy
+
+```sh
+gh secret-kit secret copy <dst> [dst...] [flags]
+```
+
+Copy all (or specific) GitHub Actions secrets from a source repository to one or more destinations. The `--scope` flag selects which secrets are copied: `repo` for repository secrets of `--repo`, `org` for organization secrets visible to `--repo`, and `env` for environment secrets of `--src-env`.
+
+Since the GitHub API does not expose secret values, the copy is performed by a workflow generated in the source repository and triggered via `workflow_dispatch`. The token for each destination host is taken from the local `gh` authentication (or from `--dst-token`) and registered as a temporary source repository secret, so a GitHub-hosted runner can reach the destination and no self-hosted runner is required.
+
+> **Note**: The destination host must be reachable from the runner. When the destination is a GitHub Enterprise Server instance that is not reachable from GitHub-hosted runners, use `gh secret-kit migrate` with a self-hosted runner instead.
+
+Each destination argument is `[host/]owner/repo`, or `[host/]org` when `--scope` is `org`. Destinations without a host use the source host. Existing secrets at the destination are skipped unless `--overwrite` is set.
+
+The `--dst-app` flag selects which secret store the destination secrets are written to: `actions` for GitHub Actions secrets, `agents` for Copilot cloud agent (Agents) secrets, `codespaces` for Codespaces secrets, and `dependabot` for Dependabot secrets. Since only Actions secrets are readable from a workflow, `--dst-app` changes the destination store only; the source is always read as Actions secrets. `--dst-env` cannot be combined with a `--dst-app` other than `actions` because those stores have no environment level.
+
+The command waits for the generated workflow run to finish, then deletes the temporary branch, the temporary token secrets, and the workflow run history.
+
+**Arguments:**
+
+- `<dst> [dst...]`: One or more destination repositories, or organizations when `--scope` is `org` (required)
+
+**Options:**
+
+- `--branch string`: Temporary branch name (defaults to a unique name derived from the workflow run ID, or a timestamp outside GitHub Actions)
+- `--dst-app string`: Destination secret store: `actions`, `agents`, `codespaces`, or `dependabot` (default: `actions`)
+- `--dst-env string`: Destination environment name (defaults to `--src-env` when `--scope` is `env`; cannot be used with a non-`actions` `--dst-app`)
+- `--dst-token string`: PAT or token for the destination host (defaults to the local `gh` authentication; cannot be used when the destinations span multiple hosts)
+- `--exclude-secrets strings`: Secret names to exclude from the copy (comma-separated or repeated flag)
+- `--overwrite`: Overwrite existing secrets at destination (default: false)
+- `--rename strings`: Rename mapping in `OLD_NAME=NEW_NAME` format (repeatable)
+- `--repo string` / `-R`: Source repository (e.g., `owner/repo`; defaults to current repository)
+- `--runner-label string`: Runner label for `runs-on` of the generated workflow (default: `ubuntu-latest`)
+- `--scope string`: Secret scope to copy: `repo`, `org`, or `env` (default: `repo`)
+- `--secrets strings`: Specific secret names to copy (comma-separated or repeated flag; defaults to all)
+- `--src-env string`: Source environment name (required with `--scope env`)
+- `--timeout string`: Timeout duration when waiting for workflow completion (e.g., `5m`, `1h`) (default: `10m`)
+- `--token-secret-name string`: Base name of the temporary source repository secret holding the destination token (default: `GH_SECRET_KIT_COPY_TOKEN`)
+- `--unarchive`: Temporarily unarchive the source repository if it is archived, then re-archive after the copy (default: false)
+- `--workflow-name string`: Workflow file name (without extension) of the generated workflow (default: `gh-secret-kit-copy`)
 
 #### secret history
 

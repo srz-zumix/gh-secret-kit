@@ -139,7 +139,7 @@ gh secret-kit secret copy -R owner/source-repo --dst-app agents owner/dest-repo
 
 | Flag | Description | Default |
 | --- | --- | --- |
-| `--branch string` | Temporary branch name | unique timestamp-based name |
+| `--branch string` | Temporary branch name | unique name from run ID, or timestamp outside GitHub Actions |
 | `--dst-app string` | Destination secret store: `actions`, `agents`, `codespaces`, or `dependabot` | `actions` |
 | `--dst-env string` | Destination environment name (not allowed with a non-`actions` `--dst-app`) | `--src-env` when `--scope env` |
 | `--dst-token string` | Token for the destination host (single host only) | local `gh` authentication |
