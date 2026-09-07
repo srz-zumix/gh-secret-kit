@@ -7,8 +7,14 @@ description: GitHub CLI extension (gh secret-kit) for managing GitHub Actions se
 
 Comprehensive reference for gh-secret-kit — a GitHub CLI extension for
 secret-related operations: managing deploy keys, environment configurations,
-variables, and migrating GitHub Actions secrets between repositories,
-organizations, and environments.
+variables, and copying or migrating secrets between repositories, organizations,
+environments, and GitHub hosts. Copy from Actions, Copilot coding agent, or
+Codespaces secrets to supported destination stores.
+
+The [README](https://github.com/srz-zumix/gh-secret-kit/blob/main/README.md)
+provides the overview and quick start. Use the
+[Command Reference](https://github.com/srz-zumix/gh-secret-kit/blob/main/docs/commands.md)
+for detailed usage, arguments, options, defaults, and examples.
 
 Version: 0.8.0
 
@@ -1126,6 +1132,8 @@ gh secret-kit env export --help
 
 ## References
 
-- Repository: https://github.com/srz-zumix/gh-secret-kit
-- Shell Completion Guide: https://github.com/srz-zumix/go-gh-extension/blob/main/docs/shell-completion.md
-- Migration Documentation: https://github.com/srz-zumix/gh-secret-kit/blob/main/docs/migrate.md
+- [Repository](https://github.com/srz-zumix/gh-secret-kit)
+- [Overview and Quick Start](https://github.com/srz-zumix/gh-secret-kit/blob/main/README.md)
+- [Command Reference](https://github.com/srz-zumix/gh-secret-kit/blob/main/docs/commands.md)
+- [Shell Completion Guide](https://github.com/srz-zumix/go-gh-extension/blob/main/docs/shell-completion.md)
+- [Migration Guide](https://github.com/srz-zumix/gh-secret-kit/blob/main/docs/migrate.md)
