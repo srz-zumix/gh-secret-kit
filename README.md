@@ -1,6 +1,6 @@
 # gh-secret-kit
 
-A gh extension for the GitHub Actions secrets API.
+A gh extension for GitHub secrets, variables, environments, and deploy keys.
 
 GitHub does not let you read secret values back, which makes copying, migrating, and auditing them painful.
 gh-secret-kit does it for you without ever exposing the values to your machine.
