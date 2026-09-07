@@ -1127,5 +1127,7 @@ gh secret-kit env export --help
 ## References
 
 - Repository: https://github.com/srz-zumix/gh-secret-kit
+- Command Reference: https://github.com/srz-zumix/gh-secret-kit/blob/main/docs/commands/README.md
+- Examples: https://github.com/srz-zumix/gh-secret-kit/blob/main/docs/examples.md
 - Shell Completion Guide: https://github.com/srz-zumix/go-gh-extension/blob/main/docs/shell-completion.md
 - Migration Documentation: https://github.com/srz-zumix/gh-secret-kit/blob/main/docs/migrate.md

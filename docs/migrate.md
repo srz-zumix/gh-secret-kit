@@ -446,3 +446,8 @@ gh secret-kit migrate repo dispatch \
 - The migration workflow reads secrets via the `secrets` context and calls the GitHub API directly.
 - The generated workflow and topic branch are cleaned up by `delete`.
 - `--dst-token-secret` is **rarely needed**. It specifies the name of a secret variable (e.g., `DST_PAT`) registered on the source repository, whose value is used as a PAT for the destination. The token value is never embedded in the workflow YAML; it is read at runtime via `${{ secrets.DST_PAT }}`. Use this only when the scaleset runner does not have `gh` authenticated for the destination host (e.g., cross-host migration to GHES).
+
+## See Also
+
+- [Command Reference](commands/README.md) — usage, arguments, and options for every command
+- [`migrate` command reference](commands/migrate.md)
