@@ -37,6 +37,8 @@ gh auth login --hostname enterprise.internal
 gh secret-kit                           # Root command
 ├── secret                              # Secrets
 │   ├── copy                            # Copy Actions secrets to destinations via workflow_dispatch
+│   ├── agents                          # Copilot coding agent secrets
+│   │   └── copy                        # Copy Agents secrets via a Copilot coding agent session
 │   ├── codespaces                      # Codespaces development environment secrets
 │   │   └── copy                        # Copy Codespaces secrets via an ephemeral codespace
 │   └── history (log)                   # Show secret change history from the audit log
@@ -137,7 +139,7 @@ gh secret-kit secret copy -R owner/source-repo --dst-app agents owner/dest-repo
 
 | Flag | Description | Default |
 | --- | --- | --- |
-| `--branch string` | Temporary branch name | unique timestamp-based name |
+| `--branch string` | Temporary branch name | unique name from run ID, or timestamp outside GitHub Actions |
 | `--dst-app string` | Destination secret store: `actions`, `agents`, `codespaces`, or `dependabot` | `actions` |
 | `--dst-env string` | Destination environment name (not allowed with a non-`actions` `--dst-app`) | `--src-env` when `--scope env` |
 | `--dst-token string` | Token for the destination host (single host only) | local `gh` authentication |
@@ -160,6 +162,63 @@ gh secret-kit secret copy -R owner/source-repo --dst-app agents owner/dest-repo
 
 > Only Actions secrets are readable from a workflow, so the source is always
 > read as Actions secrets and `--dst-app` changes the destination store only.
+
+### Copy Agents Secrets
+
+Copilot coding agent (Agents) secret values are not readable through the API
+either; they are only exposed as environment variables inside the Copilot coding
+agent environment, and only Agents secrets are exposed there. Copilot also only
+runs the setup steps workflow from the default branch. The copy therefore creates
+a temporary branch carrying `.github/workflows/copilot-setup-steps.yml`, makes it
+the default branch, registers the destination tokens as temporary Agents secrets,
+starts a Copilot coding agent session, and lets the setup steps run
+`gh secret set`. The values never reach the local machine, and every temporary
+change is reverted once the copy finishes.
+
+```bash
+# Copy all repository Agents secrets from the current repo to a destination
+gh secret-kit secret agents copy owner/dest-repo
+
+# Copy to multiple destinations using a single agent session
+gh secret-kit secret agents copy -R owner/source-repo owner/repo1 owner/repo2
+
+# Copy organization Agents secrets to another organization
+gh secret-kit secret agents copy -R owner/source-repo --scope org dest-org
+
+# Copy specific secrets with rename, overwriting existing ones
+gh secret-kit secret agents copy -R owner/source-repo \
+  --secrets API_KEY,DB_PASSWORD --rename API_KEY=PROD_API_KEY --overwrite owner/dest-repo
+
+# Copy Agents secrets into the destination's Actions secrets
+gh secret-kit secret agents copy -R owner/source-repo --dst-app actions owner/dest-repo
+```
+
+| Flag | Description | Default |
+| --- | --- | --- |
+| `--branch string` | Temporary branch made the default branch while the copy runs | unique generated name |
+| `--dst-app string` | Destination secret store: `actions`, `agents`, `codespaces`, or `dependabot` | `agents` |
+| `--dst-token string` | Token for the destination host (single host only) | local `gh` authentication |
+| `--exclude-secrets strings` | Secret names to exclude | |
+| `--keep-workflow` | Keep the temporary branch and Agents secrets after the copy | false |
+| `--overwrite` | Overwrite existing secrets at destination | false |
+| `--prompt string` | Task description passed to the Copilot coding agent | a prompt that tells the agent there is nothing to do |
+| `--rename strings` | Rename mapping in `OLD_NAME=NEW_NAME` format | |
+| `--repo string` / `-R` | Source repository | current repo |
+| `--scope string` | Secret scope: `repo` or `org` | `repo` |
+| `--secrets strings` | Specific secret names to copy | all |
+| `--timeout string` | How long to wait for the agent environment to run the copy | `30m` |
+| `--token-secret-name string` | Base name of the temporary destination token Agents secret | `GH_SECRET_KIT_COPY_TOKEN` |
+
+> The source must be on github.com because the Copilot coding agent is not
+> available on GitHub Enterprise Server, and the destination host must be
+> reachable from the agent environment.
+
+> The Copilot coding agent must be enabled for the source repository, the
+> authenticated user needs a Copilot license, and admin permission is required
+> because the default branch is temporarily changed.
+
+> The pull request the agent opens is based on the temporary branch and is closed
+> when that branch is deleted during the cleanup.
 
 ### Copy Codespaces Secrets
 

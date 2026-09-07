@@ -13,6 +13,7 @@ func NewSecretCmd() *cobra.Command {
 		Long:  "Manage GitHub secrets for repositories, organizations, and environments.",
 	}
 
+	cmd.AddCommand(secret.NewAgentsCmd())
 	cmd.AddCommand(secret.NewCodespacesCmd())
 	cmd.AddCommand(secret.NewCopyCmd())
 	cmd.AddCommand(secret.NewHistoryCmd())

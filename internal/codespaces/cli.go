@@ -1,15 +1,12 @@
 package codespaces
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"os"
-	"os/exec"
 	"strings"
 
-	ghcli "github.com/cli/go-gh/v2"
 	"github.com/cli/go-gh/v2/pkg/repository"
+	"github.com/srz-zumix/go-gh-extension/pkg/ghexec"
 	"github.com/srz-zumix/go-gh-extension/pkg/logger"
 )
 
@@ -24,40 +21,9 @@ type createOptions struct {
 	DisplayName      string
 }
 
-// runGH executes the gh CLI and returns its standard output. GH_HOST and
-// GH_REPO are dropped from the environment because Codespaces only exists on
-// github.com and an inherited override would target the wrong host.
+// runGH executes the gh CLI and returns its standard output.
 func runGH(ctx context.Context, args ...string) (string, error) {
-	path, err := ghcli.Path()
-	if err != nil {
-		return "", fmt.Errorf("failed to locate the gh CLI: %w", err)
-	}
-	cmd := exec.CommandContext(ctx, path, args...)
-	cmd.Env = ghEnv()
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		if msg := strings.TrimSpace(stderr.String()); msg != "" {
-			return stdout.String(), fmt.Errorf("%w: %s", err, msg)
-		}
-		return stdout.String(), err
-	}
-	return stdout.String(), nil
-}
-
-// ghEnv returns the current environment without the host overrides.
-func ghEnv() []string {
-	env := os.Environ()
-	filtered := make([]string, 0, len(env))
-	for _, kv := range env {
-		key, _, _ := strings.Cut(kv, "=")
-		if key == "GH_HOST" || key == "GH_REPO" {
-			continue
-		}
-		filtered = append(filtered, kv)
-	}
-	return filtered
+	return ghexec.Run(ctx, args...)
 }
 
 // createCodespace creates a codespace for the source repository and returns its
