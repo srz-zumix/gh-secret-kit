@@ -34,6 +34,10 @@ const pushEvent = "push"
 // logMaxRedirects bounds the redirects followed when downloading a job log.
 const logMaxRedirects = 3
 
+// clockSkewMargin widens the window in which a workflow run is accepted as
+// belonging to this copy, so a clock difference with GitHub cannot hide it.
+const clockSkewMargin = 5 * time.Minute
+
 // copyWorkflowPath is the generated workflow that copies the secrets.
 const copyWorkflowPath = ".github/workflows/gh-secret-kit-dependabot-copy.yml"
 
@@ -185,6 +189,10 @@ func RunCopy(ctx context.Context, config *CopyConfig) error {
 
 	logger.Info(fmt.Sprintf("Copying %d Dependabot secrets to %d destinations", len(secrets), len(destinations)))
 
+	// Runs created before the copy started belong to an earlier one. The margin
+	// absorbs the clock difference between this machine and GitHub.
+	since := time.Now().Add(-clockSkewMargin)
+
 	// The destination tokens have to be Dependabot secrets: a
 	// Dependabot-triggered run is not given Actions, Codespaces, or Agents
 	// secrets.
@@ -210,18 +218,17 @@ func RunCopy(ctx context.Context, config *CopyConfig) error {
 	}
 	defer restore(context.WithoutCancel(ctx))
 
-	// The branches Dependabot pushes are deleted last, which also closes the
-	// pull requests it opened for them.
+	// The branches Dependabot pushes are deleted before the temporary branch, so
+	// that the pull requests it opened can still be found through it.
 	observed := &observedBranches{}
 	if config.KeepWorkflow {
 		logger.Warn("Keeping the branches Dependabot pushed")
 	} else {
-		defer observed.cleanup(context.WithoutCancel(ctx), client, sourceRepo)
+		defer observed.cleanup(context.WithoutCancel(ctx), client, sourceRepo, branch)
 	}
 
 	// Committing the Dependabot configuration to the default branch is what
 	// makes Dependabot check for updates right away.
-	since := time.Now()
 	if err := commitFile(ctx, client, sourceRepo, branch, migrator.DependabotConfigPath, dependabotConfig,
 		"chore: add temporary dependabot config for gh-secret-kit secret copy"); err != nil {
 		return err
@@ -427,9 +434,10 @@ type observedBranches struct {
 	names []string
 }
 
-// add records a branch once.
+// add records a branch once, ignoring branches that are not Dependabot ones so
+// that the cleanup can never delete an unrelated branch.
 func (o *observedBranches) add(branch string) {
-	if branch == "" {
+	if !strings.HasPrefix(branch, migrator.DependabotBranchPrefix) {
 		return
 	}
 	for _, name := range o.names {
@@ -441,8 +449,17 @@ func (o *observedBranches) add(branch string) {
 }
 
 // cleanup deletes the recorded branches, logging instead of failing so that the
-// remaining cleanup still runs.
-func (o *observedBranches) cleanup(ctx context.Context, client *gh.GitHubClient, repo repository.Repository) {
+// remaining cleanup still runs. The pull requests Dependabot opened against the
+// temporary branch are inspected as well, because a pull request may have been
+// opened without the copy workflow ever being observed.
+func (o *observedBranches) cleanup(ctx context.Context, client *gh.GitHubClient, repo repository.Repository, baseBranch string) {
+	prs, err := gh.ListPullRequests(ctx, client, repo, &gh.ListPullRequestsOptionBase{Base: baseBranch}, gh.ListPullRequestsOptionStateAll())
+	if err != nil {
+		logger.Warn(fmt.Sprintf("failed to list the pull requests opened against %s: %v", baseBranch, err))
+	}
+	for _, pr := range prs {
+		o.add(pr.GetHead().GetRef())
+	}
 	for _, name := range o.names {
 		logger.Info(fmt.Sprintf("Deleting the branch %s Dependabot pushed...", name))
 		if err := gh.DeleteBranchIfExists(ctx, client, repo, name); err != nil {
@@ -514,8 +531,8 @@ func copyWorkflowRuns(ctx context.Context, client *gh.GitHubClient, repo reposit
 		if !strings.HasPrefix(run.GetHeadBranch(), migrator.DependabotBranchPrefix) {
 			continue
 		}
-		// Runs older than the Dependabot configuration commit belong to an
-		// earlier copy and must not be mistaken for this one.
+		// Runs older than the start of this copy belong to an earlier one and
+		// must not be mistaken for this one.
 		if run.GetCreatedAt().Before(since) {
 			continue
 		}

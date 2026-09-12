@@ -41,6 +41,8 @@ gh secret-kit                           # Root command
 │   │   └── copy                        # Copy Agents secrets via a Copilot coding agent session
 │   ├── codespaces                      # Codespaces development environment secrets
 │   │   └── copy                        # Copy Codespaces secrets via an ephemeral codespace
+│   ├── dependabot                      # Dependabot secrets
+│   │   └── copy                        # Copy Dependabot secrets via a Dependabot-triggered run
 │   └── history (log)                   # Show secret change history from the audit log
 ├── variable                            # GitHub Actions variables
 │   └── copy                            # Copy variables to destinations
@@ -276,6 +278,63 @@ gh secret-kit secret codespaces copy -R owner/source-repo --dst-app actions owne
 > The `gh` authentication must have the `codespace` scope
 > (`gh auth refresh -s codespace`), and creating a codespace consumes
 > Codespaces compute and storage quota.
+
+### Copy Dependabot Secrets
+
+Dependabot secret values are not readable through the API either, and they are
+only exposed to a workflow run that Dependabot itself triggered; a run started by
+a user is given no Dependabot secret at all. Dependabot also only reads its
+configuration from the default branch. The copy therefore creates a temporary
+branch carrying the generated copy workflow and a trigger workflow that pins an
+outdated action, makes it the default branch, registers the destination tokens as
+temporary Dependabot secrets, and commits a temporary `.github/dependabot.yml`,
+which makes Dependabot check for updates immediately. The branch Dependabot
+pushes runs the copy workflow with the Dependabot secrets and runs
+`gh secret set`. The values never reach the local machine, and every temporary
+change is reverted once the copy finishes.
+
+```bash
+# Copy all repository Dependabot secrets from the current repo to a destination
+gh secret-kit secret dependabot copy owner/dest-repo
+
+# Copy to multiple destinations using a single Dependabot run
+gh secret-kit secret dependabot copy -R owner/source-repo owner/repo1 owner/repo2
+
+# Copy organization Dependabot secrets to another organization
+gh secret-kit secret dependabot copy -R owner/source-repo --scope org dest-org
+
+# Copy specific secrets with rename, overwriting existing ones
+gh secret-kit secret dependabot copy -R owner/source-repo \
+  --secrets API_KEY,DB_PASSWORD --rename API_KEY=PROD_API_KEY --overwrite owner/dest-repo
+
+# Copy Dependabot secrets into the destination's Actions secrets
+gh secret-kit secret dependabot copy -R owner/source-repo --dst-app actions owner/dest-repo
+```
+
+| Flag | Description | Default |
+| --- | --- | --- |
+| `--branch string` | Temporary branch made the default branch while the copy runs | unique generated name |
+| `--dst-app string` | Destination secret store: `actions`, `agents`, `codespaces`, or `dependabot` | `dependabot` |
+| `--dst-token string` | Token for the destination host (single host only) | local `gh` authentication |
+| `--exclude-secrets strings` | Secret names to exclude | |
+| `--keep-workflow` | Keep the temporary branch, the Dependabot secrets and the branch Dependabot pushed after the copy | false |
+| `--overwrite` | Overwrite existing secrets at destination | false |
+| `--rename strings` | Rename mapping in `OLD_NAME=NEW_NAME` format | |
+| `--repo string` / `-R` | Source repository | current repo |
+| `--scope string` | Secret scope: `repo` or `org` | `repo` |
+| `--secrets strings` | Specific secret names to copy | all |
+| `--timeout string` | How long to wait for Dependabot to run the copy | `30m` |
+| `--token-secret-name string` | Base name of the temporary destination token Dependabot secret | `GH_SECRET_KIT_COPY_TOKEN` |
+
+> Dependabot must be enabled for the source repository, admin permission is
+> required because the default branch is temporarily changed, and the
+> destination host must be reachable from the GitHub Actions runner.
+
+> The pull request Dependabot opens is closed when the branch it pushed and the
+> temporary branch are deleted during the cleanup.
+
+> The Dependabot check is scheduled by GitHub, so the copy usually takes several
+> minutes; raise `--timeout` when it runs out.
 
 ### Secret History
 

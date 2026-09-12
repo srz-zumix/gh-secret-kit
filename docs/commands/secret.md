@@ -1,6 +1,6 @@
 # Manage Secrets
 
-Copy GitHub Actions, Copilot coding agent, and Codespaces secrets to other repositories and review their change history.
+Copy GitHub Actions, Copilot coding agent, Codespaces, and Dependabot secrets to other repositories and review their change history.
 
 ```sh
 gh secret-kit secret [command]
@@ -117,6 +117,39 @@ The command waits for the generated workflow run to finish, then deletes the tem
 - `--token-secret-name string`: Base name of the temporary source repository secret holding the destination token (default: `GH_SECRET_KIT_COPY_TOKEN`)
 - `--unarchive`: Temporarily unarchive the source repository if it is archived, then re-archive after the copy (default: false)
 - `--workflow-name string`: Workflow file name (without extension) of the generated workflow (default: `gh-secret-kit-copy`)
+
+## secret dependabot copy
+
+```sh
+gh secret-kit secret dependabot copy <dst> [dst...] [flags]
+```
+
+Copy all (or specific) Dependabot secrets from a source repository to one or more destinations. The `--scope` flag selects which secrets are copied and at which level they are written: `repo` for repository Dependabot secrets of `--repo`, and `org` for organization Dependabot secrets of the source owner.
+
+Dependabot secret values are not readable through the GitHub API, and they are only exposed to a workflow run that Dependabot itself triggered; a run started by a user is given no Dependabot secret at all. Dependabot also only reads its configuration from the default branch. The command therefore creates a temporary branch carrying the generated copy workflow and a trigger workflow that pins an outdated action, makes it the default branch, registers the destination tokens as temporary Dependabot secrets, and commits a temporary `.github/dependabot.yml`, which makes Dependabot check for updates immediately. The branch Dependabot pushes runs the copy workflow with the Dependabot secrets. The secret values never reach the local machine, and every temporary change is reverted once the copy finishes.
+
+Each destination argument is `[host/]owner/repo`, or `[host/]org` when `--scope` is `org`. Destinations without a host use the source host. Existing secrets at the destination are skipped unless `--overwrite` is set. Use `--dst-app` to write the values to a different destination secret store.
+
+> **Note**: Dependabot must be enabled for the source repository, admin permission is required because the default branch is temporarily changed, and the destination host must be reachable from the GitHub Actions runner. The pull request Dependabot opens is closed when the branch it pushed and the temporary branch are deleted during the cleanup. The Dependabot check is scheduled by GitHub, so the copy usually takes several minutes; raise `--timeout` when it runs out.
+
+**Arguments:**
+
+- `<dst> [dst...]`: One or more destination repositories, or organizations when `--scope` is `org` (required)
+
+**Options:**
+
+- `--branch string`: Temporary branch made the default branch while the copy runs (defaults to a unique name derived from the workflow run ID, or a timestamp outside GitHub Actions)
+- `--dst-app string`: Destination secret store: `actions`, `agents`, `codespaces`, or `dependabot` (default: `dependabot`)
+- `--dst-token string`: PAT or token for the destination host (defaults to the local `gh` authentication; cannot be used when the destinations span multiple hosts)
+- `--exclude-secrets strings`: Secret names to exclude from the copy (comma-separated or repeated flag)
+- `--keep-workflow`: Keep the temporary branch, the Dependabot secrets and the branch Dependabot pushed after the copy instead of removing them (default: false)
+- `--overwrite`: Overwrite existing secrets at destination (default: false)
+- `--rename strings`: Rename mapping in `OLD_NAME=NEW_NAME` format (repeatable)
+- `--repo string` / `-R`: Source repository (e.g., `owner/repo`; defaults to current repository)
+- `--scope string`: Secret scope to copy: `repo` or `org` (default: `repo`)
+- `--secrets strings`: Specific secret names to copy (comma-separated or repeated flag; defaults to all)
+- `--timeout string`: How long to wait for Dependabot to run the copy (e.g., `30m`, `1h`) (default: `30m`)
+- `--token-secret-name string`: Base name of the temporary Dependabot secret holding the destination token (default: `GH_SECRET_KIT_COPY_TOKEN`)
 
 ## secret history
 

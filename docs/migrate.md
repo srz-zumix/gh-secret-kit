@@ -20,7 +20,7 @@ The overall flow is:
 
 The `scope` is one of `repo`, `org`, or `env`.
 
-> **Note**: Dependabot secrets are **not** supported. Dependabot secrets can only be accessed by workflows triggered by Dependabot.
+> **Note**: Dependabot secrets are **not** supported. Dependabot secrets can only be accessed by workflows triggered by Dependabot. Use [`gh secret-kit secret dependabot copy`](commands/secret.md#secret-dependabot-copy) to copy them instead.
 
 ## Prerequisites
 

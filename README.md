@@ -50,7 +50,7 @@ More recipes are in [Examples](docs/examples.md).
 
 | Command | What it does | Reference |
 | --- | --- | --- |
-| `gh secret-kit secret` | Copy Actions, Agents, and Codespaces secrets to other repositories or organizations, and show secret change history | [secret](docs/commands/secret.md) |
+| `gh secret-kit secret` | Copy Actions, Agents, Codespaces, and Dependabot secrets to other repositories or organizations, and show secret change history | [secret](docs/commands/secret.md) |
 | `gh secret-kit variable` | Copy GitHub Actions variables between repositories and organizations | [variable](docs/commands/variable.md) |
 | `gh secret-kit deploy-key` | Add, delete, list, and migrate repository deploy keys, and manage the organization deploy key setting | [deploy-key](docs/commands/deploy-key.md) |
 | `gh secret-kit env` | Copy, export, and import GitHub Actions environments and their variables | [env](docs/commands/env.md) |

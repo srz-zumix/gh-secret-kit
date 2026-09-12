@@ -10,7 +10,7 @@ Since the GitHub API does not expose secret values, this command uses a self-hos
 
 The secret scope is determined by the subcommand: `org` for organization secrets, `repo` for repository secrets, and `env` for environment secrets.
 
-> **Note**: Dependabot secrets are NOT supported. Dependabot secrets can only be accessed by workflows triggered by Dependabot, so user-triggered migration is not possible.
+> **Note**: Dependabot secrets are NOT supported. Dependabot secrets can only be accessed by workflows triggered by Dependabot, so user-triggered migration is not possible. Use [`secret dependabot copy`](secret.md#secret-dependabot-copy) to copy them instead.
 
 ## migrate env
 

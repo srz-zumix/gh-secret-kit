@@ -20,7 +20,7 @@ GitHub API はシークレットの値を返さないため、`gh secret-kit mig
 
 `scope` は `repo`、`org`、`env` のいずれかです。
 
-> **注意**: Dependabot シークレットはサポートされていません。Dependabot シークレットは Dependabot によってトリガーされたワークフローからしかアクセスできません。
+> **注意**: Dependabot シークレットはサポートされていません。Dependabot シークレットは Dependabot によってトリガーされたワークフローからしかアクセスできません。コピーする場合は [`gh secret-kit secret dependabot copy`](commands/secret.md#secret-dependabot-copy) を使用してください。
 
 ## 前提条件
 
