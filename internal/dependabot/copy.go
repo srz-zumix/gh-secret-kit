@@ -592,8 +592,8 @@ func (o *observedCopy) ownsBranch(ctx context.Context, client *gh.GitHubClient, 
 	return o.runName != "" && metadata.RunName == o.runName, nil
 }
 
-// cleanup only deletes owned run histories and same-repository Dependabot heads
-// carrying this invocation's workflow, including already-closed pull requests.
+// cleanup closes owned open pull requests before deleting their heads. Closed
+// pull requests are also inspected, but only this invocation's heads are removed.
 func (o *observedCopy) cleanup(ctx context.Context, client *gh.GitHubClient, repo repository.Repository, base string, keep bool) (bool, error) {
 	_, listErr := o.workflowRuns(ctx, client, repo)
 	stopErr := o.stopRuns(ctx, client, repo)
@@ -613,26 +613,38 @@ func (o *observedCopy) cleanup(ctx context.Context, client *gh.GitHubClient, rep
 	prs, err := gh.ListPullRequests(ctx, client, repo, &gh.ListPullRequestsOptionBase{Base: base}, gh.ListPullRequestsOptionStateAll())
 	if err != nil {
 		result = errors.Join(result, fmt.Errorf("failed to list Dependabot pull requests against %s: %w", base, err))
+		return true, result
 	}
+	blockedHeads := make(map[string]bool)
 	for _, pr := range prs {
 		if !isDependabotPullRequest(pr, repo, base) {
 			continue
 		}
 		head := pr.GetHead().GetRef()
-		if o.branches[head] {
+		owned := o.branches[head]
+		if !owned {
+			var err error
+			owned, err = o.ownsBranch(ctx, client, repo, head)
+			if err != nil {
+				result = errors.Join(result, fmt.Errorf("failed to verify Dependabot branch %s belongs to this copy: %w", head, err))
+				continue
+			}
+		}
+		if !owned {
 			continue
 		}
-		owned, err := o.ownsBranch(ctx, client, repo, head)
-		if err != nil {
-			result = errors.Join(result, fmt.Errorf("failed to verify Dependabot branch %s belongs to this copy: %w", head, err))
-			continue
+		if pr.GetState() == "open" {
+			logger.Info(fmt.Sprintf("Closing Dependabot pull request #%d...", pr.GetNumber()))
+			if _, err := gh.ClosePullRequest(ctx, client, repo, pr.GetNumber()); err != nil {
+				blockedHeads[head] = true
+				result = errors.Join(result, fmt.Errorf("failed to close Dependabot pull request #%d; preserving branch %s: %w", pr.GetNumber(), head, err))
+				continue
+			}
 		}
-		if owned {
-			o.addBranch(head)
-		}
+		o.addBranch(head)
 	}
 	for _, branch := range sortedKeys(o.branches) {
-		if branch == base {
+		if branch == base || blockedHeads[branch] {
 			continue
 		}
 		if err := gh.DeleteBranchIfExists(ctx, client, repo, branch); err != nil {
