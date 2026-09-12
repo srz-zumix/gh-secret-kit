@@ -3,6 +3,7 @@ package migrator
 import (
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -130,6 +131,26 @@ func validateEnvCopyConfig(config envCopyConfig) error {
 		}
 	}
 	return nil
+}
+
+// envCopySecretEnv maps every environment variable the copy script reads to the
+// matching secret. GitHub Actions does not expose secrets as environment
+// variables on its own, so the mapping has to be explicit.
+func envCopySecretEnv(secrets []string, destinations []EnvCopyDestination) map[string]string {
+	env := make(map[string]string, len(secrets)+len(destinations))
+	names := make([]string, 0, len(secrets)+len(destinations))
+	names = append(names, secrets...)
+	for _, dest := range destinations {
+		names = append(names, dest.TokenEnv)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		if name == "" {
+			continue
+		}
+		env[name] = fmt.Sprintf("${{ secrets.%s }}", name)
+	}
+	return env
 }
 
 // writeEnvCopyBlocks writes the per-destination and per-secret blocks that read

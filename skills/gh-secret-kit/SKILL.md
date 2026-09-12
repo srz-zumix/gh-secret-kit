@@ -1,14 +1,14 @@
 ---
 name: gh-secret-kit
-description: GitHub CLI extension (gh secret-kit) for managing GitHub Actions secrets, variables, deploy keys, and environments — including secret change history from the organization audit log and cross-host migration of secrets using self-hosted runners.
+description: GitHub CLI extension (gh secret-kit) for managing Actions, Agents, Codespaces, and Dependabot secrets, variables, deploy keys, and environments — including secret change history and cross-host migration.
 ---
 
 # gh-secret-kit
 
 Comprehensive reference for gh-secret-kit — a GitHub CLI extension for
 secret-related operations: managing deploy keys, environment configurations,
-variables, and migrating GitHub Actions secrets between repositories,
-organizations, and environments.
+variables, and copying Actions, Agents, Codespaces, and Dependabot secrets between
+repositories and organizations, plus Actions environment secret migration.
 
 Version: 0.8.0
 
@@ -41,6 +41,8 @@ gh secret-kit                           # Root command
 │   │   └── copy                        # Copy Agents secrets via a Copilot coding agent session
 │   ├── codespaces                      # Codespaces development environment secrets
 │   │   └── copy                        # Copy Codespaces secrets via an ephemeral codespace
+│   ├── dependabot                      # Dependabot secrets
+│   │   └── copy                        # Copy Dependabot secrets via a Dependabot push workflow
 │   └── history (log)                   # Show secret change history from the audit log
 ├── variable                            # GitHub Actions variables
 │   └── copy                            # Copy variables to destinations
@@ -276,6 +278,83 @@ gh secret-kit secret codespaces copy -R owner/source-repo --dst-app actions owne
 > The `gh` authentication must have the `codespace` scope
 > (`gh auth refresh -s codespace`), and creating a codespace consumes
 > Codespaces compute and storage quota.
+
+### Copy Dependabot Secrets
+
+Dependabot secrets cannot be read through the API. The command creates a temporary
+branch with a copy workflow and a separate outdated `actions/checkout@v1` reference
+as update bait, temporarily makes that branch the default, registers destination
+tokens as Dependabot secrets, and commits a temporary Dependabot configuration.
+Dependabot's push triggers the copy workflow; a user-triggered or pull request
+workflow is not used. The bait action is not executed by the copy job.
+
+The copy job contains one self-contained Bash script step that uses `gh secret set`
+to encrypt and write secrets through the GitHub API, without a checkout or a
+separate setup step. Source secret values never reach the local machine. Local
+source-name listing and temporary token registration/deletion use the GitHub API
+directly; destination tokens are encrypted in memory, not written to plaintext
+temporary token files. Success requires a
+completed workflow with conclusion `success` and an actual completion marker in
+the job output, not an echo of the script. Absent or empty source values and
+existing destination secrets are skipped; use `--overwrite` to replace existing
+values. Success does not mean every requested secret was written.
+
+```bash
+# Copy repository Dependabot secrets to a destination
+gh secret-kit secret dependabot copy owner/dest-repo
+
+# Copy to multiple destinations using one workflow run
+gh secret-kit secret dependabot copy -R owner/source-repo owner/repo1 owner/repo2
+
+# Copy organization secrets shared with the source repository
+gh secret-kit secret dependabot copy -R source-org/source-repo --scope org dest-org
+
+# Select and rename secrets, overwriting existing destination values
+gh secret-kit secret dependabot copy -R owner/source-repo \
+  --secrets API_KEY,DB_PASSWORD --rename API_KEY=PROD_API_KEY --overwrite owner/dest-repo
+
+# Copy into Actions secrets using a custom workflow and runner
+gh secret-kit secret dependabot copy -R owner/source-repo --dst-app actions \
+  --workflow-name dependabot-copy --runner-label self-hosted --timeout 1h owner/dest-repo
+```
+
+At least one positional destination is required: `[host/]owner/repo`, or
+`[host/]org` with `--scope org`. Additional destinations are optional. An omitted
+host uses the source host. All flags below are optional.
+
+| Flag | Description | Default |
+| --- | --- | --- |
+| `--branch string` | Temporary branch made the default while copying | unique name prefixed with `gh-secret-kit-dependabot-copy` |
+| `--dst-app string` | Destination store: `actions`, `agents`, `codespaces`, or `dependabot` | `dependabot` |
+| `--dst-token string` | Destination token override; single destination host only | local `gh` authentication |
+| `--exclude-secrets strings` | Names to exclude, comma-separated or repeatable | none |
+| `--keep-workflow` | Keep temporary branches, secrets, pull requests, and run history; still restore the default branch | false |
+| `--overwrite` | Overwrite existing destination secrets | false |
+| `--rename strings` | Repeatable `OLD_NAME=NEW_NAME` mapping | no renaming |
+| `--repo string` / `-R` | Source repository | current repo |
+| `--runner-label string` | Runner label for `runs-on` | `ubuntu-latest` |
+| `--scope string` | Secret scope: `repo` or `org` | `repo` |
+| `--secrets strings` | Names to copy, comma-separated or repeatable | all visible secrets in the selected scope |
+| `--timeout string` | Positive duration to wait for Dependabot and the completed workflow | `30m` |
+| `--token-secret-name string` | Base name of temporary token secrets; host suffix appended | `GH_SECRET_KIT_COPY_TOKEN` |
+| `--workflow-name string` | Generated copy workflow file name without extension | `gh-secret-kit-dependabot-copy` |
+
+The source requires admin permission, Dependabot version updates, and GitHub
+Actions. The destination must be reachable from the runner and the destination
+token needs write permission for the selected store. Custom runners need Bash and
+GitHub CLI installed. Organization scope is
+limited to organization secrets shared with the source repository and requires
+organization admin access. GitHub schedules Dependabot checks without a guaranteed
+delay; they usually take several minutes, so raise `--timeout` when needed.
+
+Cleanup restores the original default branch, closes associated pull requests, and
+removes temporary token secrets, branches, and run history belonging to this invocation.
+Unrelated runs using the same workflow name are not deleted. `--keep-workflow`
+retains those resources, including token secrets and runs, but still restores the
+original default branch.
+
+Ctrl-C and SIGTERM request cancellation and cleanup. Process crashes and forced
+termination such as SIGKILL cannot perform cleanup automatically.
 
 ### Secret History
 
@@ -603,7 +682,8 @@ Since the GitHub API does not expose secret values, migration uses a self-hosted
 
 Secret scopes: `repo` (repository), `org` (organization), `env` (environment).
 
-> **Note**: Dependabot secrets are NOT supported.
+> **Note**: `migrate` does not support Dependabot secrets. Use
+> [`secret dependabot copy`](#copy-dependabot-secrets) instead.
 
 ### Migration Flow
 

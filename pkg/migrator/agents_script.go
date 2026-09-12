@@ -2,7 +2,6 @@ package migrator
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 )
 
@@ -65,20 +64,7 @@ func GenerateAgentsCopyScript(config AgentsCopyConfig) (string, error) {
 // matching Agents secret. GitHub Actions does not expose secrets as environment
 // variables on its own, so the mapping has to be explicit.
 func agentsCopyStepEnv(config AgentsCopyConfig) map[string]string {
-	env := make(map[string]string, len(config.Secrets)+len(config.Destinations))
-	names := make([]string, 0, len(config.Secrets)+len(config.Destinations))
-	names = append(names, config.Secrets...)
-	for _, dest := range config.Destinations {
-		names = append(names, dest.TokenEnv)
-	}
-	sort.Strings(names)
-	for _, name := range names {
-		if name == "" {
-			continue
-		}
-		env[name] = fmt.Sprintf("${{ secrets.%s }}", name)
-	}
-	return env
+	return envCopySecretEnv(config.Secrets, config.Destinations)
 }
 
 // GenerateAgentsSetupStepsYAML generates the copilot-setup-steps workflow that

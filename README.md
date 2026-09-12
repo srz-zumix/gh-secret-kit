@@ -7,7 +7,7 @@ gh-secret-kit does it for you without ever exposing the values to your machine.
 
 ## Why gh-secret-kit?
 
-- **Copy secrets that cannot be read.** Values are moved inside a temporary GitHub Actions workflow, Codespace, or Copilot coding agent session, so they never reach your terminal or shell history.
+- **Copy secrets that cannot be read.** Values are moved inside a temporary GitHub Actions workflow, Codespace, Copilot coding agent session, or Dependabot-triggered workflow run, so they never reach your terminal or shell history.
 - **No self-hosted runner required.** `secret copy` runs on a GitHub-hosted runner; a self-hosted runner is only needed with `migrate` when the destination is not reachable from GitHub.
 - **Every secret store.** GitHub Actions, Copilot coding agent (Agents), Codespaces, and Dependabot secrets, at repository, organization, and environment scope.
 - **Cross-host ready.** Migrate between github.com and GitHub Enterprise Server, and let `migrate plan` generate the full command list for a whole organization.
@@ -50,7 +50,7 @@ More recipes are in [Examples](docs/examples.md).
 
 | Command | What it does | Reference |
 | --- | --- | --- |
-| `gh secret-kit secret` | Copy Actions, Agents, and Codespaces secrets to other repositories or organizations, and show secret change history | [secret](docs/commands/secret.md) |
+| `gh secret-kit secret` | Copy Actions, Agents, Codespaces, and Dependabot secrets to other repositories or organizations, and show secret change history | [secret](docs/commands/secret.md) |
 | `gh secret-kit variable` | Copy GitHub Actions variables between repositories and organizations | [variable](docs/commands/variable.md) |
 | `gh secret-kit deploy-key` | Add, delete, list, and migrate repository deploy keys, and manage the organization deploy key setting | [deploy-key](docs/commands/deploy-key.md) |
 | `gh secret-kit env` | Copy, export, and import GitHub Actions environments and their variables | [env](docs/commands/env.md) |
