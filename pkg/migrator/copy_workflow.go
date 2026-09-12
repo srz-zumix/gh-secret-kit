@@ -32,34 +32,25 @@ type CopyWorkflowConfig struct {
 	Destinations   []CopyDestination
 }
 
-// GenerateCopyWorkflowYAML generates a workflow_dispatch-triggered GitHub
-// Actions workflow that copies every configured secret to every destination.
-// Each destination gets its own token and host, so both are set per step
-// instead of at job level. The temporary branch, token secrets, and run history
-// are cleaned up by the CLI, so the workflow needs no write permission.
-func GenerateCopyWorkflowYAML(config CopyWorkflowConfig) (string, error) {
+// validateCopyWorkflowConfig rejects a configuration that the copy workflow
+// generators cannot handle.
+func validateCopyWorkflowConfig(config CopyWorkflowConfig) error {
 	if len(config.Destinations) == 0 {
-		return "", fmt.Errorf("no destination specified")
+		return fmt.Errorf("no destination specified")
 	}
 	if len(config.Secrets) == 0 {
-		return "", fmt.Errorf("no secret specified")
+		return fmt.Errorf("no secret specified")
 	}
 	if err := ValidateSecretApp(config.DestinationApp); err != nil {
-		return "", err
+		return err
 	}
-	if err := validateSecretNames(config.Secrets, config.Rename); err != nil {
-		return "", err
-	}
+	return validateSecretNames(config.Secrets, config.Rename)
+}
 
-	workflow := WorkflowYAML{
-		Name: config.WorkflowName,
-		On: map[string]any{
-			"workflow_dispatch": map[string]any{},
-		},
-		Permissions: map[string]string{"contents": "read"},
-		Jobs:        make(map[string]Job),
-	}
-
+// buildCopySteps builds the per-destination, per-secret copy steps shared by
+// the copy workflow generators. Each destination gets its own token and host,
+// so both are set per step instead of at job level.
+func buildCopySteps(config CopyWorkflowConfig) []Step {
 	var steps []Step
 	for _, dest := range config.Destinations {
 		host := dest.Host
@@ -102,12 +93,32 @@ func GenerateCopyWorkflowYAML(config CopyWorkflowConfig) (string, error) {
 			})
 		}
 	}
+	return steps
+}
+
+// GenerateCopyWorkflowYAML generates a workflow_dispatch-triggered GitHub
+// Actions workflow that copies every configured secret to every destination.
+// The temporary branch, token secrets, and run history are cleaned up by the
+// CLI, so the workflow needs no write permission.
+func GenerateCopyWorkflowYAML(config CopyWorkflowConfig) (string, error) {
+	if err := validateCopyWorkflowConfig(config); err != nil {
+		return "", err
+	}
+
+	workflow := WorkflowYAML{
+		Name: config.WorkflowName,
+		On: map[string]any{
+			"workflow_dispatch": map[string]any{},
+		},
+		Permissions: map[string]string{"contents": "read"},
+		Jobs:        make(map[string]Job),
+	}
 
 	workflow.Jobs["copy-secrets"] = Job{
 		RunsOn: config.RunsOn,
 		// Environment secrets are only exposed to a job bound to that environment.
 		Environment: config.SourceEnv,
-		Steps:       steps,
+		Steps:       buildCopySteps(config),
 	}
 
 	return marshalWorkflow(&workflow)
