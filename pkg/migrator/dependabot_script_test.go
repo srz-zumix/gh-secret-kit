@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func testGenerateDependabotCopyScript(t *testing.T) {
+func TestGenerateDependabotCopyScript(t *testing.T) {
 	script, err := GenerateDependabotCopyScript(DependabotCopyConfig{
 		Scope:          SecretScopeRepo,
 		DestinationApp: SecretAppDependabot,
@@ -37,7 +37,7 @@ func testGenerateDependabotCopyScript(t *testing.T) {
 	}
 }
 
-func testGenerateDependabotCopyScriptValidation(t *testing.T) {
+func TestGenerateDependabotCopyScriptValidation(t *testing.T) {
 	base := DependabotCopyConfig{
 		Scope:          SecretScopeRepo,
 		DestinationApp: SecretAppDependabot,
@@ -70,7 +70,7 @@ func testGenerateDependabotCopyScriptValidation(t *testing.T) {
 	}
 }
 
-func testGenerateDependabotCopyWorkflowYAML(t *testing.T) {
+func TestGenerateDependabotCopyWorkflowYAML(t *testing.T) {
 	config := DependabotCopyConfig{
 		Scope:          SecretScopeRepo,
 		DestinationApp: SecretAppDependabot,
@@ -103,7 +103,7 @@ func testGenerateDependabotCopyWorkflowYAML(t *testing.T) {
 	}
 }
 
-func testGenerateDependabotBaitWorkflowYAML(t *testing.T) {
+func TestGenerateDependabotBaitWorkflowYAML(t *testing.T) {
 	yaml, err := GenerateDependabotBaitWorkflowYAML()
 	if err != nil {
 		t.Fatalf("GenerateDependabotBaitWorkflowYAML() error = %v", err)
@@ -122,7 +122,7 @@ func testGenerateDependabotBaitWorkflowYAML(t *testing.T) {
 	}
 }
 
-func testGenerateDependabotConfigYAML(t *testing.T) {
+func TestGenerateDependabotConfigYAML(t *testing.T) {
 	config, err := GenerateDependabotConfigYAML("gh-secret-kit-dependabot-copy")
 	if err != nil {
 		t.Fatalf("GenerateDependabotConfigYAML() error = %v", err)

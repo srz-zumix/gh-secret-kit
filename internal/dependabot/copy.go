@@ -492,7 +492,7 @@ func waitForCopy(ctx context.Context, client *gh.GitHubClient, repo repository.R
 				continue
 			}
 			lastLog = log
-			if strings.Contains(log, migrator.DependabotCopyDoneMarker) {
+			if runlog.Contains(log, migrator.DependabotCopyDoneMarker) {
 				runlog.ReportCopyResults(log)
 				return nil
 			}

@@ -9,6 +9,19 @@ import (
 	"github.com/srz-zumix/go-gh-extension/pkg/logger"
 )
 
+// Contains reports whether the marker was printed by the copy script. The
+// marker is matched against the filtered lines, because GitHub Actions echoes
+// the whole step script into the log before running it and the echo of the
+// marker would otherwise be mistaken for the marker itself.
+func Contains(log, marker string) bool {
+	for _, line := range Lines(log) {
+		if strings.Contains(line, marker) {
+			return true
+		}
+	}
+	return false
+}
+
 // ReportCopyResults reports the progress lines the copy script printed.
 func ReportCopyResults(log string) {
 	for _, line := range Lines(log) {

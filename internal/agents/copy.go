@@ -432,7 +432,7 @@ func waitForCopy(ctx context.Context, client *gh.GitHubClient, repo repository.R
 			if lerr != nil {
 				// The log is not served until the Actions run has started.
 				logger.Debug(fmt.Sprintf("the setup steps log is not available yet: %v", lerr))
-			} else if strings.Contains(log, migrator.AgentsCopyDoneMarker) {
+			} else if runlog.Contains(log, migrator.AgentsCopyDoneMarker) {
 				runlog.ReportCopyResults(log)
 				return nil
 			}
