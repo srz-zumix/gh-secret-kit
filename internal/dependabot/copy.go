@@ -69,7 +69,7 @@ type CopyConfig struct {
 // workflows, and triggers an update check by committing Dependabot configuration.
 func RunCopy(ctx context.Context, config *CopyConfig) (result error) {
 	if config == nil {
-		return fmt.Errorf("Dependabot copy configuration is required")
+		return fmt.Errorf("dependabot copy configuration is required")
 	}
 	options := *config
 	if err := applyDefaults(&options); err != nil {
@@ -227,7 +227,7 @@ func applyDefaults(config *CopyConfig) error {
 		}
 	}
 	if config.Timeout < 0 {
-		return fmt.Errorf("Dependabot copy timeout must be positive")
+		return fmt.Errorf("dependabot copy timeout must be positive")
 	}
 	return nil
 }
@@ -566,9 +566,14 @@ func (o *observedCopy) stopRuns(ctx context.Context, client *gh.GitHubClient, re
 }
 
 func isDependabotPullRequest(pr *github.PullRequest, repo repository.Repository, base string) bool {
+	return isOwnableDependabotPullRequest(pr, repo) && pr.GetBase().GetRef() == base
+}
+
+// isOwnableDependabotPullRequest reports whether pr could belong to a copy run,
+// without requiring a specific base so retargeted pull requests still match.
+func isOwnableDependabotPullRequest(pr *github.PullRequest, repo repository.Repository) bool {
 	return pr != nil &&
 		strings.EqualFold(pr.GetUser().GetLogin(), migrator.DependabotActor) &&
-		pr.GetBase().GetRef() == base &&
 		strings.EqualFold(pr.GetHead().GetRepo().GetFullName(), repo.Owner+"/"+repo.Name) &&
 		strings.HasPrefix(pr.GetHead().GetRef(), migrator.DependabotBranchPrefix)
 }
@@ -594,6 +599,8 @@ func (o *observedCopy) ownsBranch(ctx context.Context, client *gh.GitHubClient, 
 
 // cleanup closes owned open pull requests before deleting their heads. Closed
 // pull requests are also inspected, but only this invocation's heads are removed.
+// The returned bool reports whether removing the temporary base branch is safe;
+// it is false whenever an owned pull request cannot be enumerated or closed.
 func (o *observedCopy) cleanup(ctx context.Context, client *gh.GitHubClient, repo repository.Repository, base string, keep bool) (bool, error) {
 	_, listErr := o.workflowRuns(ctx, client, repo)
 	stopErr := o.stopRuns(ctx, client, repo)
@@ -605,21 +612,24 @@ func (o *observedCopy) cleanup(ctx context.Context, client *gh.GitHubClient, rep
 		return true, nil
 	}
 	var result error
-	for id := range o.runs {
-		if err := gh.DeleteWorkflowRun(ctx, client, repo, id); err != nil && !gh.IsHTTPNotFound(err) {
-			result = errors.Join(result, fmt.Errorf("failed to delete copy workflow run %d: %w", id, err))
-		}
-	}
+	// A pull request still based on the temporary branch would be orphaned once
+	// the base is deleted, so a listing failure means the base cannot be removed
+	// safely and history must be preserved for a later retry.
 	prs, err := gh.ListPullRequests(ctx, client, repo, &gh.ListPullRequestsOptionBase{Base: base}, gh.ListPullRequestsOptionStateAll())
 	if err != nil {
-		result = errors.Join(result, fmt.Errorf("failed to list Dependabot pull requests against %s: %w", base, err))
-		return true, result
+		return false, errors.Join(result, fmt.Errorf("failed to list Dependabot pull requests against %s: %w", base, err))
 	}
+	// A pull request retargeted away from the temporary base no longer matches
+	// the base filter above, so enumerate every open pull request as well to
+	// avoid deleting the head of a still-open owned pull request.
+	openPRs, err := gh.ListPullRequests(ctx, client, repo, gh.ListPullRequestsOptionStateOpen())
+	if err != nil {
+		return false, errors.Join(result, fmt.Errorf("failed to list open Dependabot pull requests: %w", err))
+	}
+
+	safe := true
 	blockedHeads := make(map[string]bool)
-	for _, pr := range prs {
-		if !isDependabotPullRequest(pr, repo, base) {
-			continue
-		}
+	handle := func(pr *github.PullRequest) {
 		head := pr.GetHead().GetRef()
 		owned := o.branches[head]
 		if !owned {
@@ -627,21 +637,34 @@ func (o *observedCopy) cleanup(ctx context.Context, client *gh.GitHubClient, rep
 			owned, err = o.ownsBranch(ctx, client, repo, head)
 			if err != nil {
 				result = errors.Join(result, fmt.Errorf("failed to verify Dependabot branch %s belongs to this copy: %w", head, err))
-				continue
+				return
 			}
 		}
 		if !owned {
-			continue
+			return
 		}
 		if pr.GetState() == "open" {
 			logger.Info(fmt.Sprintf("Closing Dependabot pull request #%d...", pr.GetNumber()))
 			if _, err := gh.ClosePullRequest(ctx, client, repo, pr.GetNumber()); err != nil {
 				blockedHeads[head] = true
+				safe = false
 				result = errors.Join(result, fmt.Errorf("failed to close Dependabot pull request #%d; preserving branch %s: %w", pr.GetNumber(), head, err))
-				continue
+				return
 			}
 		}
 		o.addBranch(head)
+	}
+	for _, pr := range prs {
+		if isDependabotPullRequest(pr, repo, base) {
+			handle(pr)
+		}
+	}
+	for _, pr := range openPRs {
+		// Pull requests still based on the temporary branch were handled above.
+		if pr.GetBase().GetRef() == base || !isOwnableDependabotPullRequest(pr, repo) {
+			continue
+		}
+		handle(pr)
 	}
 	for _, branch := range sortedKeys(o.branches) {
 		if branch == base || blockedHeads[branch] {
@@ -651,5 +674,12 @@ func (o *observedCopy) cleanup(ctx context.Context, client *gh.GitHubClient, rep
 			result = errors.Join(result, fmt.Errorf("failed to delete Dependabot branch %s: %w", branch, err))
 		}
 	}
-	return true, result
+	// Delete run history only after every ownership check; ownsBranch reads the
+	// generated workflow file from the live head branches.
+	for id := range o.runs {
+		if err := gh.DeleteWorkflowRun(ctx, client, repo, id); err != nil && !gh.IsHTTPNotFound(err) {
+			result = errors.Join(result, fmt.Errorf("failed to delete copy workflow run %d: %w", id, err))
+		}
+	}
+	return safe, result
 }

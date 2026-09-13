@@ -325,6 +325,7 @@ host uses the source host. All flags below are optional.
 | Flag | Description | Default |
 | --- | --- | --- |
 | `--branch string` | Temporary branch made the default while copying | unique name prefixed with `gh-secret-kit-dependabot-copy` |
+| `--dryrun` / `-n` | Print the generated copy workflow YAML to stdout without making changes | false |
 | `--dst-app string` | Destination store: `actions`, `agents`, `codespaces`, or `dependabot` | `dependabot` |
 | `--dst-token string` | Destination token override; single destination host only | local `gh` authentication |
 | `--exclude-secrets strings` | Names to exclude, comma-separated or repeatable | none |

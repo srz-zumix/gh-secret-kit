@@ -1,6 +1,7 @@
 package dependabot
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/cli/go-gh/v2/pkg/repository"
 	"github.com/google/go-github/v90/github"
+	"github.com/srz-zumix/gh-secret-kit/internal/destination"
 	"github.com/srz-zumix/gh-secret-kit/internal/migrate/types"
 	"github.com/srz-zumix/gh-secret-kit/pkg/migrator"
 	"github.com/srz-zumix/go-gh-extension/pkg/gh"
@@ -182,7 +184,15 @@ func TestCleanupOnlyOwnedRunsAndDependabotBranches(t *check.T) {
 					}
 					w.WriteHeader(http.StatusNoContent)
 				case r.Method == "GET" && r.URL.Path == "/repos/owner/repo/pulls":
-					if keep || r.URL.Query().Get("state") != "all" || r.URL.Query().Get("base") != "copy-base" {
+					if keep {
+						t.Error("listed pull requests despite keep")
+					}
+					if r.URL.Query().Get("state") == "open" && r.URL.Query().Get("base") == "" {
+						// Retargeted-PR discovery finds nothing in this scenario.
+						_, _ = fmt.Fprint(w, `[]`)
+						return
+					}
+					if r.URL.Query().Get("state") != "all" || r.URL.Query().Get("base") != "copy-base" {
 						t.Error("incorrect pull request cleanup query")
 					}
 					closed := pullRequest(migrator.DependabotActor, "owner/repo", "dependabot/closed", "copy-base")
@@ -230,7 +240,7 @@ func TestCleanupOnlyOwnedRunsAndDependabotBranches(t *check.T) {
 						t.Errorf("invalid close payload: %v, state=%q", err, body.GetState())
 					}
 					closedPRs[r.URL.Path] = true
-					fmt.Fprint(w, `{"state":"closed"}`)
+					_, _ = fmt.Fprint(w, `{"state":"closed"}`)
 				case r.Method == "DELETE" && strings.HasPrefix(r.URL.Path, "/repos/owner/repo/git/refs/heads/"):
 					if !stopped || keep {
 						t.Error("deleted a branch before cancellation or despite keep")
@@ -309,7 +319,7 @@ func TestCleanupPreservesHeadWhenClosingPullRequestFails(t *check.T) {
 			http.Error(w, `{"message":"close denied"}`, http.StatusForbidden)
 		case r.Method == "PATCH" && r.URL.Path == "/repos/owner/repo/pulls/11":
 			closedOther = true
-			fmt.Fprint(w, `{"state":"closed"}`)
+			_, _ = fmt.Fprint(w, `{"state":"closed"}`)
 		case r.Method == "DELETE" && strings.HasPrefix(r.URL.Path, "/repos/owner/repo/git/refs/heads/"):
 			if !closedOther {
 				t.Error("deleted the other head before its pull request was closed")
@@ -322,7 +332,7 @@ func TestCleanupPreservesHeadWhenClosingPullRequestFails(t *check.T) {
 		}
 	})
 	safe, err := observed.cleanup(context.Background(), client, sourceRepo, "copy-base", false)
-	if !safe || err == nil || !strings.Contains(err.Error(), "failed to close Dependabot pull request #10") {
+	if safe || err == nil || !strings.Contains(err.Error(), "failed to close Dependabot pull request #10") {
 		t.Fatalf("safe=%v error=%v", safe, err)
 	}
 	if !strings.Contains(err.Error(), failedRun.GetHeadBranch()) {
@@ -330,6 +340,53 @@ func TestCleanupPreservesHeadWhenClosingPullRequestFails(t *check.T) {
 	}
 	if !slices.Equal(deleted, []string{successfulRun.GetHeadBranch()}) {
 		t.Fatalf("deleted heads %v, want only %s", deleted, successfulRun.GetHeadBranch())
+	}
+}
+
+func TestCleanupClosesRetargetedOwnedPullRequest(t *check.T) {
+	observed := newObservedCopy()
+	run := ownedRun(1)
+	observed.observe(run)
+	closed := false
+	var deleted []string
+	client := newAPIClient(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/repos/owner/repo/actions/runs":
+			_ = json.NewEncoder(w).Encode(github.WorkflowRuns{WorkflowRuns: []*github.WorkflowRun{run}})
+		case r.Method == "DELETE" && strings.HasPrefix(r.URL.Path, "/repos/owner/repo/actions/runs/"):
+			w.WriteHeader(http.StatusNoContent)
+		case r.Method == "GET" && r.URL.Path == "/repos/owner/repo/pulls":
+			if r.URL.Query().Get("base") == "copy-base" {
+				_, _ = fmt.Fprint(w, `[]`)
+				return
+			}
+			// The owned pull request was retargeted away from the temporary base.
+			retargeted := pullRequest(migrator.DependabotActor, "owner/repo", run.GetHeadBranch(), "main")
+			retargeted.Number = github.Ptr(21)
+			_ = json.NewEncoder(w).Encode([]*github.PullRequest{retargeted})
+		case r.Method == "PATCH" && r.URL.Path == "/repos/owner/repo/pulls/21":
+			closed = true
+			_, _ = fmt.Fprint(w, `{"state":"closed"}`)
+		case r.Method == "DELETE" && strings.HasPrefix(r.URL.Path, "/repos/owner/repo/git/refs/heads/"):
+			if !closed {
+				t.Error("deleted the retargeted head before closing its pull request")
+			}
+			deleted = append(deleted, strings.TrimPrefix(r.URL.Path, "/repos/owner/repo/git/refs/heads/"))
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			http.Error(w, "unexpected", http.StatusInternalServerError)
+		}
+	})
+	safe, err := observed.cleanup(context.Background(), client, sourceRepo, "copy-base", false)
+	if !safe || err != nil {
+		t.Fatalf("safe=%v error=%v", safe, err)
+	}
+	if !closed {
+		t.Fatal("retargeted pull request was not closed")
+	}
+	if !slices.Equal(deleted, []string{run.GetHeadBranch()}) {
+		t.Fatalf("deleted heads %v, want only %s", deleted, run.GetHeadBranch())
 	}
 }
 
@@ -351,7 +408,7 @@ func TestCleanupPreservesHeadsWhenPullRequestListingFails(t *check.T) {
 		}
 	})
 	safe, err := observed.cleanup(context.Background(), client, sourceRepo, "copy-base", false)
-	if !safe || err == nil || !strings.Contains(err.Error(), "failed to list Dependabot pull requests") {
+	if safe || err == nil || !strings.Contains(err.Error(), "failed to list Dependabot pull requests") {
 		t.Fatalf("safe=%v error=%v", safe, err)
 	}
 }
@@ -574,21 +631,21 @@ func TestPrepareBranchRestoresDefaultWithKeep(t *check.T) {
 			client := newAPIClient(t, func(w http.ResponseWriter, r *http.Request) {
 				switch r.Method + " " + r.URL.Path {
 				case "GET /repos/owner/repo":
-					fmt.Fprint(w, `{"default_branch":"main"}`)
+					_, _ = fmt.Fprint(w, `{"default_branch":"main"}`)
 				case "GET /repos/owner/repo/branches/main":
-					fmt.Fprint(w, `{"name":"main","commit":{"sha":"base-sha"}}`)
+					_, _ = fmt.Fprint(w, `{"name":"main","commit":{"sha":"base-sha"}}`)
 				case "GET /repos/owner/repo/branches/copy-base":
 					http.Error(w, `{"message":"Not Found"}`, http.StatusNotFound)
 				case "POST /repos/owner/repo/git/refs":
 					events = append(events, "create")
-					fmt.Fprint(w, `{"ref":"refs/heads/copy-base"}`)
+					_, _ = fmt.Fprint(w, `{"ref":"refs/heads/copy-base"}`)
 				case "PATCH /repos/owner/repo":
 					var body github.Repository
 					if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 						t.Error(err)
 					}
 					events = append(events, body.GetDefaultBranch())
-					fmt.Fprint(w, `{}`)
+					_, _ = fmt.Fprint(w, `{}`)
 				case "DELETE /repos/owner/repo/git/refs/heads/copy-base":
 					events = append(events, "delete")
 					w.WriteHeader(http.StatusNoContent)
@@ -615,5 +672,75 @@ func TestPrepareBranchRestoresDefaultWithKeep(t *check.T) {
 				t.Fatalf("events %v, want %v", events, want)
 			}
 		})
+	}
+}
+
+func TestRunCopyDryRun(t *check.T) {
+	origNewClient := newClient
+	origVerify := verifyDestinations
+	t.Cleanup(func() {
+		newClient = origNewClient
+		verifyDestinations = origVerify
+	})
+
+	mutations := 0
+	client := newAPIClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			mutations++
+			t.Errorf("unexpected mutation request in dryrun: %s %s", r.Method, r.URL.Path)
+			http.Error(w, "unexpected mutation", http.StatusInternalServerError)
+			return
+		}
+		switch r.URL.Path {
+		case "/repos/owner/repo/dependabot/secrets":
+			_ = json.NewEncoder(w).Encode(github.Secrets{
+				TotalCount: 2,
+				Secrets: []*github.Secret{
+					{Name: "FOO_SECRET"},
+					{Name: "BAR_SECRET"},
+				},
+			})
+		default:
+			t.Errorf("unexpected GET request: %s", r.URL.Path)
+			http.Error(w, "not found", http.StatusNotFound)
+		}
+	})
+
+	newClient = func(repo repository.Repository) (*gh.GitHubClient, error) {
+		return client, nil
+	}
+	verifyDestinations = func(ctx context.Context, orgLevel bool, destinations []*destination.Destination, hostTokens map[string]string) error {
+		return nil
+	}
+
+	var buf bytes.Buffer
+	config := &CopyConfig{
+		Source:           "owner/repo",
+		Destinations:     []string{"destowner/destrepo"},
+		DestinationToken: "gho_dummy_token",
+		DryRun:           true,
+		Out:              &buf,
+	}
+
+	if err := RunCopy(context.Background(), config); err != nil {
+		t.Fatalf("RunCopy failed in dryrun: %v", err)
+	}
+
+	if mutations > 0 {
+		t.Fatalf("dryrun performed %d mutations", mutations)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, "name: gh-secret-kit-dependabot-copy") {
+		t.Errorf("output missing workflow name: %s", output)
+	}
+	if !strings.Contains(output, "FOO_SECRET") || !strings.Contains(output, "BAR_SECRET") {
+		t.Errorf("output missing secrets: %s", output)
+	}
+	if !strings.Contains(output, "destowner/destrepo") {
+		t.Errorf("output missing destination: %s", output)
+	}
+	if !strings.Contains(output, "runs-on: ubuntu-latest") {
+		t.Errorf("output missing runs-on: %s", output)
 	}
 }

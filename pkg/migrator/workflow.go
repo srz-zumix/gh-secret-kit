@@ -309,7 +309,9 @@ func generateSecretMigrationScript(config secretScriptConfig, srcName, destName 
 
 	// Set the secret at destination
 	fmt.Fprintf(&script, "# Set secret %s at destination\n", destName)
-	script.WriteString("echo \"${SECRET_VALUE}\" | \\\n")
+	// Use printf so values such as "-n" or those containing backslashes are
+	// written verbatim; the bash "echo" builtin would interpret them.
+	script.WriteString("printf '%s\\n' \"${SECRET_VALUE}\" | \\\n")
 	if config.DestinationEnv != "" {
 		fmt.Fprintf(&script, "  gh secret set %s --env \"${DEST_ENV}\" -R \"${DESTINATION}\"\n", destName)
 	} else {

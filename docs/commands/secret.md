@@ -161,6 +161,7 @@ gh secret-kit secret dependabot copy -R owner/source-repo \
 **Options (all optional):**
 
 - `--branch string`: Temporary branch made the default branch while copying (defaults to a unique generated name prefixed with `gh-secret-kit-dependabot-copy`)
+- `--dryrun` / `-n`: Print the generated copy workflow YAML to stdout without making changes (default: false)
 - `--dst-app string`: Destination secret store: `actions`, `agents`, `codespaces`, or `dependabot` (default: `dependabot`)
 - `--dst-token string`: PAT or token for the destination host (defaults to local `gh` authentication; cannot be used when destinations span multiple hosts)
 - `--exclude-secrets strings`: Secret names to exclude (comma-separated or repeated flag; default: none)
