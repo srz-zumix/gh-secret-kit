@@ -36,6 +36,11 @@ const (
 	baitWorkflowPath    = ".github/workflows/gh-secret-kit-dependabot-trigger.yml"
 )
 
+var (
+	newClient          = gh.NewGitHubClientWithRepo
+	verifyDestinations = destination.Verify
+)
+
 // CopyConfig configures the temporary default branch and Dependabot-triggered
 // workflow used to copy secrets. The original default branch is always restored.
 type CopyConfig struct {
@@ -95,7 +100,7 @@ func RunCopy(ctx context.Context, config *CopyConfig) (result error) {
 	if sourceRepo.Name == "" {
 		return fmt.Errorf("source must be in [HOST/]OWNER/REPO format")
 	}
-	client, err := gh.NewGitHubClientWithRepo(sourceRepo)
+	client, err := newClient(sourceRepo)
 	if err != nil {
 		return fmt.Errorf("failed to create GitHub client: %w", err)
 	}
@@ -117,7 +122,7 @@ func RunCopy(ctx context.Context, config *CopyConfig) (result error) {
 	if err != nil {
 		return err
 	}
-	if err := destination.Verify(ctx, orgLevel, destinations, hostTokens); err != nil {
+	if err := verifyDestinations(ctx, orgLevel, destinations, hostTokens); err != nil {
 		return err
 	}
 	renameMap, err := migrator.ParseRenameMappings(config.Rename)
