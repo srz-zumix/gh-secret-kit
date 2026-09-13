@@ -306,6 +306,7 @@ func TestCleanupPreservesHeadWhenClosingPullRequestFails(t *check.T) {
 		case r.Method == "GET" && r.URL.Path == "/repos/owner/repo/actions/runs":
 			_ = json.NewEncoder(w).Encode(github.WorkflowRuns{WorkflowRuns: []*github.WorkflowRun{failedRun, successfulRun}})
 		case r.Method == "DELETE" && strings.HasPrefix(r.URL.Path, "/repos/owner/repo/actions/runs/"):
+			t.Error("deleted run history despite an unsafe cleanup")
 			w.WriteHeader(http.StatusNoContent)
 		case r.Method == "GET" && r.URL.Path == "/repos/owner/repo/pulls":
 			failing := pullRequest(migrator.DependabotActor, "owner/repo", failedRun.GetHeadBranch(), "copy-base")
@@ -387,6 +388,46 @@ func TestCleanupClosesRetargetedOwnedPullRequest(t *check.T) {
 	}
 	if !slices.Equal(deleted, []string{run.GetHeadBranch()}) {
 		t.Fatalf("deleted heads %v, want only %s", deleted, run.GetHeadBranch())
+	}
+}
+
+func TestCleanupUnsafeWhenOwnershipCheckFailsForOpenBasePullRequest(t *check.T) {
+	observed := newObservedCopy()
+	run := ownedRun(1)
+	observed.observe(run)
+	var deletedBranches []string
+	client := newAPIClient(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/repos/owner/repo/actions/runs":
+			_ = json.NewEncoder(w).Encode(github.WorkflowRuns{WorkflowRuns: []*github.WorkflowRun{run}})
+		case r.Method == "DELETE" && strings.HasPrefix(r.URL.Path, "/repos/owner/repo/actions/runs/"):
+			t.Error("deleted run history despite an unverifiable ownership check")
+			w.WriteHeader(http.StatusNoContent)
+		case r.Method == "GET" && r.URL.Path == "/repos/owner/repo/pulls":
+			if r.URL.Query().Get("state") == "open" && r.URL.Query().Get("base") == "" {
+				_, _ = fmt.Fprint(w, `[]`)
+				return
+			}
+			unverified := pullRequest(migrator.DependabotActor, "owner/repo", "dependabot/unverified", "copy-base")
+			unverified.Number = github.Ptr(30)
+			_ = json.NewEncoder(w).Encode([]*github.PullRequest{unverified})
+		case r.Method == "GET" && r.URL.Path == "/repos/owner/repo/contents/.github/workflows/copy.yml":
+			http.Error(w, `{"message":"boom"}`, http.StatusInternalServerError)
+		case r.Method == "DELETE" && strings.HasPrefix(r.URL.Path, "/repos/owner/repo/git/refs/heads/"):
+			deletedBranches = append(deletedBranches, strings.TrimPrefix(r.URL.Path, "/repos/owner/repo/git/refs/heads/"))
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			http.Error(w, "unexpected", http.StatusInternalServerError)
+		}
+	})
+	safe, err := observed.cleanup(context.Background(), client, sourceRepo, "copy-base", false)
+	if safe || err == nil || !strings.Contains(err.Error(), "failed to verify Dependabot branch dependabot/unverified") {
+		t.Fatalf("safe=%v error=%v", safe, err)
+	}
+	// The unverified head is never deleted, but proven observed heads still are.
+	if !slices.Equal(deletedBranches, []string{run.GetHeadBranch()}) {
+		t.Fatalf("deleted branches %v, want only %s", deletedBranches, run.GetHeadBranch())
 	}
 }
 

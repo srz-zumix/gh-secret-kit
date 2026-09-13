@@ -658,6 +658,14 @@ func (o *observedCopy) cleanup(ctx context.Context, client *gh.GitHubClient, rep
 			owned, err = o.ownsBranch(ctx, client, repo, head)
 			if err != nil {
 				result = errors.Join(result, fmt.Errorf("failed to verify Dependabot branch %s belongs to this copy: %w", head, err))
+				// Ownership is unproven, so never delete this head. Only an open
+				// pull request still based on the temporary branch would be
+				// orphaned by removing that base, so restrict the unsafe result
+				// to that case.
+				blockedHeads[head] = true
+				if pr.GetState() == "open" && pr.GetBase().GetRef() == base {
+					safe = false
+				}
 				return
 			}
 		}
@@ -695,11 +703,15 @@ func (o *observedCopy) cleanup(ctx context.Context, client *gh.GitHubClient, rep
 			result = errors.Join(result, fmt.Errorf("failed to delete Dependabot branch %s: %w", branch, err))
 		}
 	}
-	// Delete run history only after every ownership check; ownsBranch reads the
-	// generated workflow file from the live head branches.
-	for id := range o.runs {
-		if err := gh.DeleteWorkflowRun(ctx, client, repo, id); err != nil && !gh.IsHTTPNotFound(err) {
-			result = errors.Join(result, fmt.Errorf("failed to delete copy workflow run %d: %w", id, err))
+	// Delete run history only after every ownership check and only when the
+	// cleanup is safe; an unsafe result preserves the branches and the run
+	// metadata a later retry needs. ownsBranch also reads the generated
+	// workflow file from the live head branches.
+	if safe {
+		for id := range o.runs {
+			if err := gh.DeleteWorkflowRun(ctx, client, repo, id); err != nil && !gh.IsHTTPNotFound(err) {
+				result = errors.Join(result, fmt.Errorf("failed to delete copy workflow run %d: %w", id, err))
+			}
 		}
 	}
 	return safe, result

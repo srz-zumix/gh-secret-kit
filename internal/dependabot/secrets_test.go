@@ -33,13 +33,13 @@ func TestDependabotSecretPagination(t *check.T) {
 				}
 				if pages == 1 {
 					w.Header().Set("Link", fmt.Sprintf(`<http://%s/api/v3%s?page=2>; rel="next"`, r.Host, path))
-					fmt.Fprint(w, `{"total_count":2,"secrets":[{"name":"FIRST"}]}`)
+					_, _ = fmt.Fprint(w, `{"total_count":2,"secrets":[{"name":"FIRST"}]}`)
 					return
 				}
 				if r.URL.Query().Get("page") != "2" {
 					t.Error("next page not requested")
 				}
-				fmt.Fprint(w, `{"total_count":2,"secrets":[{"name":"SECOND"}]}`)
+				_, _ = fmt.Fprint(w, `{"total_count":2,"secrets":[{"name":"SECOND"}]}`)
 			})
 			var secrets []*github.Secret
 			var err error
@@ -105,7 +105,7 @@ func TestDependabotSecretRejectsInvalidPublicKey(t *check.T) {
 		if r.Method != "GET" || !strings.HasSuffix(r.URL.Path, "/public-key") {
 			t.Error("invalid public key must not reach a write endpoint")
 		}
-		fmt.Fprint(w, `{"key_id":"id","key":"c2hvcnQ="}`)
+		_, _ = fmt.Fprint(w, `{"key_id":"id","key":"c2hvcnQ="}`)
 	})
 	err := setDependabotRepoSecret(context.Background(), client, sourceRepo, "TOKEN", "value")
 	if err == nil || !strings.Contains(err.Error(), "public key length") {
@@ -121,9 +121,9 @@ func TestTokenRegistrationPreflightsAllNames(t *check.T) {
 					t.Error("preflight failure must not create or delete secrets")
 				}
 				if existing {
-					fmt.Fprint(w, `{"secrets":[{"name":"token"}]}`)
+					_, _ = fmt.Fprint(w, `{"secrets":[{"name":"token"}]}`)
 				} else {
-					fmt.Fprint(w, `{"secrets":[]}`)
+					_, _ = fmt.Fprint(w, `{"secrets":[]}`)
 				}
 			})
 			names := map[string]string{"a.example": "TOKEN", "b.example": "TOKEN"}
@@ -148,7 +148,7 @@ func TestTokenRegistrationRollsBackAfterCancellation(t *check.T) {
 		case r.Method == "GET" && strings.HasSuffix(r.URL.Path, "/public-key"):
 			_ = json.NewEncoder(w).Encode(github.PublicKey{KeyID: github.Ptr("id"), Key: github.Ptr(base64.StdEncoding.EncodeToString(public[:]))})
 		case r.Method == "GET":
-			fmt.Fprint(w, `{"secrets":[]}`)
+			_, _ = fmt.Fprint(w, `{"secrets":[]}`)
 		case r.Method == "PUT":
 			name := r.URL.Path[strings.LastIndex(r.URL.Path, "/")+1:]
 			created = append(created, name)
@@ -201,7 +201,7 @@ func TestCollectSecretFilters(t *check.T) {
 				if r.URL.Path != path {
 					t.Errorf("incorrect secret scope: %s", r.URL.Path)
 				}
-				fmt.Fprint(w, `{"secrets":[{"name":"FIRST"},{"name":"SECOND"}]}`)
+				_, _ = fmt.Fprint(w, `{"secrets":[{"name":"FIRST"},{"name":"SECOND"}]}`)
 			})
 			names, err := collectSecrets(context.Background(), client, sourceRepo, &CopyConfig{Scope: scope, ExcludeSecrets: []string{"FIRST"}})
 			if err != nil || !slices.Equal(names, []string{"SECOND"}) {
