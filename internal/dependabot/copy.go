@@ -36,6 +36,7 @@ const (
 	logMaxRedirects     = 3
 	pushEvent           = "push"
 	baitWorkflowPath    = ".github/workflows/gh-secret-kit-dependabot-trigger.yml"
+	copyLockBranch      = "gh-secret-kit-dependabot-copy-lock"
 )
 
 var (
@@ -97,7 +98,8 @@ func RunCopy(ctx context.Context, config *CopyConfig) (result error) {
 	}
 	// Unlike a timestamp window or branch, this remains unique when a caller
 	// reuses --branch or runs several copies with the same workflow filename.
-	runName := "gh-secret-kit-dependabot-copy-" + strconv.FormatInt(time.Now().UnixNano(), 10)
+	invocationID := strconv.FormatInt(time.Now().UnixNano(), 10)
+	runName := "gh-secret-kit-dependabot-copy-" + invocationID
 
 	sourceRepo, err := parser.Repository(parser.RepositoryInput(config.Source))
 	if err != nil {
@@ -137,7 +139,7 @@ func RunCopy(ctx context.Context, config *CopyConfig) (result error) {
 	}
 	tokenSecretNames := make(map[string]string, len(hostTokens))
 	for host := range hostTokens {
-		tokenSecretNames[host] = destination.NameForHost(config.TokenSecretName, host)
+		tokenSecretNames[host] = destination.NameForHost(config.TokenSecretName+"_"+invocationID, host)
 	}
 	scriptConfig := migrator.DependabotCopyConfig{
 		Scope:          config.Scope,
@@ -175,6 +177,15 @@ func RunCopy(ctx context.Context, config *CopyConfig) (result error) {
 	}
 
 	logger.Info(fmt.Sprintf("Copying %d Dependabot secrets to %d destinations", len(secrets), len(destinations)))
+	releaseLock, err := acquireCopyLock(ctx, client, sourceRepo)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cleanupTimeout)
+		defer cancel()
+		result = errors.Join(result, releaseLock(cleanupCtx))
+	}()
 	if err := registerTokenSecrets(ctx, client, sourceRepo, tokenSecretNames, hostTokens); err != nil {
 		return err
 	}
@@ -240,6 +251,9 @@ func applyDefaults(config *CopyConfig) error {
 	if config.TokenSecretName == "" {
 		config.TokenSecretName = types.DefaultDependabotCopyTokenSecretName
 	}
+	if err := parser.ValidateTokenSecretName(config.TokenSecretName); err != nil {
+		return fmt.Errorf("invalid --token-secret-name: %w", err)
+	}
 	if config.Timeout == 0 {
 		var err error
 		config.Timeout, err = time.ParseDuration(types.DefaultDependabotCopyTimeout)
@@ -297,6 +311,35 @@ func collectSecrets(ctx context.Context, client *gh.GitHubClient, sourceRepo rep
 	return migrator.ExcludeSecrets(names, config.ExcludeSecrets), nil
 }
 
+// acquireCopyLock serializes operations that temporarily change the source
+// repository's default branch. GitHub ref creation is atomic, so only one
+// invocation can create the fixed lock branch.
+func acquireCopyLock(ctx context.Context, client *gh.GitHubClient, repo repository.Repository) (func(context.Context) error, error) {
+	repoInfo, err := gh.GetRepository(ctx, client, repo)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get the source repository for locking: %w", err)
+	}
+	defaultBranch := repoInfo.GetDefaultBranch()
+	baseBranch, err := gh.GetBranch(ctx, client, repo, defaultBranch)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get the default branch %s for locking: %w", defaultBranch, err)
+	}
+	if _, err := gh.GetBranch(ctx, client, repo, copyLockBranch); err == nil {
+		return nil, fmt.Errorf("another Dependabot secret copy may be running: lock branch %s already exists; if no copy is active, delete that branch and retry", copyLockBranch)
+	} else if !gh.IsHTTPNotFound(err) {
+		return nil, fmt.Errorf("failed to check Dependabot copy lock branch %s: %w", copyLockBranch, err)
+	}
+	if _, err := gh.CreateBranch(ctx, client, repo, copyLockBranch, baseBranch.GetCommit().GetSHA()); err != nil {
+		return nil, fmt.Errorf("failed to acquire the Dependabot copy lock branch %s; another copy may have started: %w", copyLockBranch, err)
+	}
+	return func(cleanupCtx context.Context) error {
+		if err := gh.DeleteBranchIfExists(cleanupCtx, client, repo, copyLockBranch); err != nil {
+			return fmt.Errorf("failed to release Dependabot copy lock branch %s: %w", copyLockBranch, err)
+		}
+		return nil
+	}, nil
+}
+
 // prepareCopyBranch installs workflows before switching the default branch.
 // Its cleanup always restores the default, even when artifacts are preserved.
 func prepareCopyBranch(ctx context.Context, client *gh.GitHubClient, repo repository.Repository, branch string, files map[string]string, keep bool) (cleanup func(context.Context, bool) error, err error) {
@@ -314,23 +357,31 @@ func prepareCopyBranch(ctx context.Context, client *gh.GitHubClient, repo reposi
 	} else if !gh.IsHTTPNotFound(err) {
 		return nil, fmt.Errorf("failed to check branch %s: %w", branch, err)
 	}
-	if _, err := gh.CreateBranch(ctx, client, repo, branch, baseBranch.GetCommit().GetSHA()); err != nil {
-		return nil, fmt.Errorf("failed to create temporary branch %s: %w", branch, err)
-	}
 	switched := false
+	creationAttempted := false
 	cleanup = func(cleanupCtx context.Context, preserve bool) error {
 		if switched {
-			logger.Info(fmt.Sprintf("Restoring the default branch to %s...", originalDefault))
-			if _, err := gh.EditRepository(cleanupCtx, client, repo, &github.Repository{DefaultBranch: github.Ptr(originalDefault)}); err != nil {
-				return fmt.Errorf("failed to restore the default branch to %s; preserving branch %s: %w", originalDefault, branch, err)
+			current, err := gh.GetRepository(cleanupCtx, client, repo)
+			if err != nil {
+				return fmt.Errorf("failed to verify the current default branch before restoring %s; preserving branch %s: %w", originalDefault, branch, err)
+			}
+			if current.GetDefaultBranch() == branch {
+				logger.Info(fmt.Sprintf("Restoring the default branch to %s...", originalDefault))
+				if _, err := gh.EditRepository(cleanupCtx, client, repo, &github.Repository{DefaultBranch: github.Ptr(originalDefault)}); err != nil {
+					return fmt.Errorf("failed to restore the default branch to %s; preserving branch %s: %w", originalDefault, branch, err)
+				}
+			} else {
+				logger.Warn(fmt.Sprintf("Not restoring the default branch because it changed from %s to %s", branch, current.GetDefaultBranch()))
 			}
 		}
 		if preserve {
 			logger.Warn(fmt.Sprintf("Keeping temporary branch %s", branch))
 			return nil
 		}
-		if err := gh.DeleteBranchIfExists(cleanupCtx, client, repo, branch); err != nil {
-			return fmt.Errorf("failed to delete temporary branch %s: %w", branch, err)
+		if creationAttempted {
+			if err := gh.DeleteBranchIfExists(cleanupCtx, client, repo, branch); err != nil {
+				return fmt.Errorf("failed to delete temporary branch %s: %w", branch, err)
+			}
 		}
 		return nil
 	}
@@ -342,6 +393,13 @@ func prepareCopyBranch(ctx context.Context, client *gh.GitHubClient, repo reposi
 			cleanup = nil
 		}
 	}()
+	// Include an ambiguous create response in cleanup: the server may have
+	// created the ref even when the client received an error.
+	creationAttempted = true
+	if _, err = gh.CreateBranch(ctx, client, repo, branch, baseBranch.GetCommit().GetSHA()); err != nil {
+		err = fmt.Errorf("failed to create temporary branch %s: %w", branch, err)
+		return
+	}
 	for _, path := range sortedKeys(files) {
 		if err = commitFile(ctx, client, repo, branch, path, files[path],
 			"chore: add temporary workflow for gh-secret-kit secret copy"); err != nil {
@@ -700,6 +758,7 @@ func (o *observedCopy) cleanup(ctx context.Context, client *gh.GitHubClient, rep
 			continue
 		}
 		if err := gh.DeleteBranchIfExists(ctx, client, repo, branch); err != nil {
+			safe = false
 			result = errors.Join(result, fmt.Errorf("failed to delete Dependabot branch %s: %w", branch, err))
 		}
 	}

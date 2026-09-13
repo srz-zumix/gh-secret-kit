@@ -10,6 +10,7 @@ import (
 	"net/http"
 	fixture "net/http/httptest"
 	"reflect"
+	"regexp"
 	"slices"
 	"strings"
 	check "testing"
@@ -454,6 +455,32 @@ func TestCleanupPreservesHeadsWhenPullRequestListingFails(t *check.T) {
 	}
 }
 
+func TestCleanupPreservesArtifactsWhenBranchDeletionFails(t *check.T) {
+	observed := newObservedCopy()
+	run := ownedRun(1)
+	observed.observe(run)
+	client := newAPIClient(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/repos/owner/repo/actions/runs":
+			_ = json.NewEncoder(w).Encode(github.WorkflowRuns{WorkflowRuns: []*github.WorkflowRun{run}})
+		case r.Method == "GET" && r.URL.Path == "/repos/owner/repo/pulls":
+			_, _ = fmt.Fprint(w, `[]`)
+		case r.Method == "DELETE" && strings.HasPrefix(r.URL.Path, "/repos/owner/repo/git/refs/heads/"):
+			http.Error(w, `{"message":"unavailable"}`, http.StatusServiceUnavailable)
+		case r.Method == "DELETE" && strings.HasPrefix(r.URL.Path, "/repos/owner/repo/actions/runs/"):
+			t.Error("deleted run history after branch deletion failed")
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			http.Error(w, "unexpected", http.StatusInternalServerError)
+		}
+	})
+	safe, err := observed.cleanup(context.Background(), client, sourceRepo, "copy-base", false)
+	if safe || err == nil || !strings.Contains(err.Error(), "failed to delete Dependabot branch") {
+		t.Fatalf("safe=%v error=%v", safe, err)
+	}
+}
+
 func TestCleanupPreservesArtifactsWhenRunDiscoveryFails(t *check.T) {
 	observed := newObservedCopy()
 	run := ownedRun(1)
@@ -658,6 +685,7 @@ func TestCopyDefaultsAndEarlyValidation(t *check.T) {
 		{Timeout: -time.Second},
 		{Scope: migrator.SecretScopeEnv},
 		{Branch: "../bad"},
+		{TokenSecretName: "ghp_not_a_secret_name"},
 	} {
 		if err := RunCopy(context.Background(), invalid); err == nil {
 			t.Fatalf("expected early validation failure for %+v", invalid)
@@ -665,14 +693,66 @@ func TestCopyDefaultsAndEarlyValidation(t *check.T) {
 	}
 }
 
+func TestAcquireCopyLock(t *check.T) {
+	created := false
+	deleted := false
+	client := newAPIClient(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method + " " + r.URL.Path {
+		case "GET /repos/owner/repo":
+			_, _ = fmt.Fprint(w, `{"default_branch":"main"}`)
+		case "GET /repos/owner/repo/branches/main":
+			_, _ = fmt.Fprint(w, `{"name":"main","commit":{"sha":"base-sha"}}`)
+		case "GET /repos/owner/repo/branches/" + copyLockBranch:
+			http.Error(w, `{"message":"Not Found"}`, http.StatusNotFound)
+		case "POST /repos/owner/repo/git/refs":
+			created = true
+			_, _ = fmt.Fprintf(w, `{"ref":"refs/heads/%s"}`, copyLockBranch)
+		case "DELETE /repos/owner/repo/git/refs/heads/" + copyLockBranch:
+			deleted = true
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+			http.Error(w, "unexpected", http.StatusInternalServerError)
+		}
+	})
+	release, err := acquireCopyLock(context.Background(), client, sourceRepo)
+	if err != nil || !created {
+		t.Fatalf("created=%v error=%v", created, err)
+	}
+	if err := release(context.Background()); err != nil || !deleted {
+		t.Fatalf("deleted=%v error=%v", deleted, err)
+	}
+}
+
+func TestAcquireCopyLockRejectsExistingLock(t *check.T) {
+	client := newAPIClient(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method + " " + r.URL.Path {
+		case "GET /repos/owner/repo":
+			_, _ = fmt.Fprint(w, `{"default_branch":"main"}`)
+		case "GET /repos/owner/repo/branches/main":
+			_, _ = fmt.Fprint(w, `{"name":"main","commit":{"sha":"base-sha"}}`)
+		case "GET /repos/owner/repo/branches/" + copyLockBranch:
+			_, _ = fmt.Fprintf(w, `{"name":%q}`, copyLockBranch)
+		default:
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+			http.Error(w, "unexpected", http.StatusInternalServerError)
+		}
+	})
+	release, err := acquireCopyLock(context.Background(), client, sourceRepo)
+	if release != nil || err == nil || !strings.Contains(err.Error(), "another Dependabot secret copy may be running") {
+		t.Fatalf("release is nil=%v error=%v", release == nil, err)
+	}
+}
+
 func TestPrepareBranchRestoresDefaultWithKeep(t *check.T) {
 	for _, keep := range []bool{false, true} {
 		t.Run(fmt.Sprintf("keep=%v", keep), func(t *check.T) {
 			var events []string
+			currentDefault := "main"
 			client := newAPIClient(t, func(w http.ResponseWriter, r *http.Request) {
 				switch r.Method + " " + r.URL.Path {
 				case "GET /repos/owner/repo":
-					_, _ = fmt.Fprint(w, `{"default_branch":"main"}`)
+					_, _ = fmt.Fprintf(w, `{"default_branch":%q}`, currentDefault)
 				case "GET /repos/owner/repo/branches/main":
 					_, _ = fmt.Fprint(w, `{"name":"main","commit":{"sha":"base-sha"}}`)
 				case "GET /repos/owner/repo/branches/copy-base":
@@ -685,6 +765,7 @@ func TestPrepareBranchRestoresDefaultWithKeep(t *check.T) {
 					if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 						t.Error(err)
 					}
+					currentDefault = body.GetDefaultBranch()
 					events = append(events, body.GetDefaultBranch())
 					_, _ = fmt.Fprint(w, `{}`)
 				case "DELETE /repos/owner/repo/git/refs/heads/copy-base":
@@ -713,6 +794,75 @@ func TestPrepareBranchRestoresDefaultWithKeep(t *check.T) {
 				t.Fatalf("events %v, want %v", events, want)
 			}
 		})
+	}
+}
+
+func TestPrepareBranchCleansUpAmbiguousCreateFailure(t *check.T) {
+	deleted := false
+	client := newAPIClient(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method + " " + r.URL.Path {
+		case "GET /repos/owner/repo":
+			_, _ = fmt.Fprint(w, `{"default_branch":"main"}`)
+		case "GET /repos/owner/repo/branches/main":
+			_, _ = fmt.Fprint(w, `{"name":"main","commit":{"sha":"base-sha"}}`)
+		case "GET /repos/owner/repo/branches/copy-base":
+			http.Error(w, `{"message":"Not Found"}`, http.StatusNotFound)
+		case "POST /repos/owner/repo/git/refs":
+			http.Error(w, `{"message":"ambiguous"}`, http.StatusServiceUnavailable)
+		case "DELETE /repos/owner/repo/git/refs/heads/copy-base":
+			deleted = true
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+			http.Error(w, "unexpected", http.StatusInternalServerError)
+		}
+	})
+	restore, err := prepareCopyBranch(context.Background(), client, sourceRepo, "copy-base", nil, false)
+	if restore != nil || err == nil || !deleted {
+		t.Fatalf("restore is nil=%v deleted=%v error=%v", restore == nil, deleted, err)
+	}
+}
+
+func TestPrepareBranchDoesNotOverwriteChangedDefault(t *check.T) {
+	currentDefault := "main"
+	restorePatches := 0
+	client := newAPIClient(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method + " " + r.URL.Path {
+		case "GET /repos/owner/repo":
+			_, _ = fmt.Fprintf(w, `{"default_branch":%q}`, currentDefault)
+		case "GET /repos/owner/repo/branches/main":
+			_, _ = fmt.Fprint(w, `{"name":"main","commit":{"sha":"base-sha"}}`)
+		case "GET /repos/owner/repo/branches/copy-base":
+			http.Error(w, `{"message":"Not Found"}`, http.StatusNotFound)
+		case "POST /repos/owner/repo/git/refs":
+			_, _ = fmt.Fprint(w, `{"ref":"refs/heads/copy-base"}`)
+		case "PATCH /repos/owner/repo":
+			var body github.Repository
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Error(err)
+			}
+			if currentDefault != "main" {
+				restorePatches++
+			}
+			currentDefault = body.GetDefaultBranch()
+			_, _ = fmt.Fprint(w, `{}`)
+		case "DELETE /repos/owner/repo/git/refs/heads/copy-base":
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+			http.Error(w, "unexpected", http.StatusInternalServerError)
+		}
+	})
+	restore, err := prepareCopyBranch(context.Background(), client, sourceRepo, "copy-base", nil, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	currentDefault = "release"
+	if err := restore(context.Background(), false); err != nil {
+		t.Fatal(err)
+	}
+	if restorePatches != 0 || currentDefault != "release" {
+		t.Fatalf("restore patches=%d default=%s", restorePatches, currentDefault)
 	}
 }
 
@@ -774,6 +924,9 @@ func TestRunCopyDryRun(t *check.T) {
 	output := buf.String()
 	if !strings.Contains(output, "name: gh-secret-kit-dependabot-copy") {
 		t.Errorf("output missing workflow name: %s", output)
+	}
+	if !regexp.MustCompile(`GH_SECRET_KIT_COPY_TOKEN_[0-9]+_GITHUB_COM`).MatchString(output) {
+		t.Fatalf("dryrun output does not use an invocation-unique token secret name:\n%s", output)
 	}
 	if !strings.Contains(output, "FOO_SECRET") || !strings.Contains(output, "BAR_SECRET") {
 		t.Errorf("output missing secrets: %s", output)

@@ -12,7 +12,6 @@ import (
 	dependabotcopy "github.com/srz-zumix/gh-secret-kit/internal/dependabot"
 	"github.com/srz-zumix/gh-secret-kit/internal/migrate/types"
 	"github.com/srz-zumix/gh-secret-kit/pkg/migrator"
-	"github.com/srz-zumix/go-gh-extension/pkg/parser"
 )
 
 // NewCopyCmd creates the secret dependabot copy command.
@@ -44,16 +43,8 @@ The source default branch is temporarily changed and always restored.
 --keep-workflow preserves temporary resources for inspection. Dependabot update
 checks may take several minutes; adjust --timeout if needed.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			switch migrator.SecretScope(scope) {
-			case migrator.SecretScopeRepo, migrator.SecretScopeOrg:
-				config.Scope = migrator.SecretScope(scope)
-			default:
-				return fmt.Errorf("invalid --scope %q: expected repo or org", scope)
-			}
+			config.Scope = migrator.SecretScope(scope)
 			config.DestinationApp = migrator.SecretApp(dstApp)
-			if err := parser.ValidateTokenSecretName(config.TokenSecretName); err != nil {
-				return fmt.Errorf("invalid --token-secret-name: %w", err)
-			}
 			duration, err := time.ParseDuration(timeout)
 			if err != nil {
 				return fmt.Errorf("invalid --timeout %q: %w", timeout, err)

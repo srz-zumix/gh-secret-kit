@@ -9,7 +9,7 @@ gh-secret-kit does it for you without ever exposing the values to your machine.
 
 - **Copy secrets that cannot be read.** Values are moved inside a temporary GitHub Actions workflow, Codespace, Copilot coding agent session, or Dependabot-triggered workflow run, so they never reach your terminal or shell history.
 - **No self-hosted runner required.** `secret copy` runs on a GitHub-hosted runner; a self-hosted runner is only needed with `migrate` when the destination is not reachable from GitHub.
-- **Every secret store.** GitHub Actions, Copilot coding agent (Agents), Codespaces, and Dependabot secrets, at repository, organization, and environment scope.
+- **Every secret store.** GitHub Actions, Copilot coding agent (Agents), Codespaces, and Dependabot secrets are supported; available repository, organization, and environment scopes vary by store.
 - **Cross-host ready.** Migrate between github.com and GitHub Enterprise Server, and let `migrate plan` generate the full command list for a whole organization.
 - **More than secrets.** Variables, environments (settings, deployment branch policies, variables, export/import), and deploy keys move along with them.
 - **Know who changed what.** `secret history` reconstructs the create/update/remove history of secrets from the organization audit log.

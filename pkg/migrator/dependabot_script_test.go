@@ -42,6 +42,7 @@ func TestGenerateDependabotCopyScript(t *testing.T) {
 		"export DESTINATION='other/repo'",
 		"SECRET_VALUE=\"${FOO-}\"",
 		"SECRET_VALUE=\"${BAR-}\"",
+		"printf '%s\\n' \"${SECRET_VALUE}\"",
 		"gh secret set BAZ -R \"${DESTINATION}\" --app dependabot",
 	} {
 		if !strings.Contains(script, want) {

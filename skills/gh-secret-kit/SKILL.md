@@ -285,6 +285,7 @@ Dependabot secrets cannot be read through the API. The command creates a tempora
 branch with a copy workflow and a separate outdated `actions/checkout@v1` reference
 as update bait, temporarily makes that branch the default, registers destination
 tokens as Dependabot secrets, and commits a temporary Dependabot configuration.
+Repository and organization scopes are supported; environment scope is not.
 Dependabot's push triggers the copy workflow; a user-triggered or pull request
 workflow is not used. The bait action is not executed by the copy job.
 
