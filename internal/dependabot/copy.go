@@ -6,6 +6,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -50,6 +52,10 @@ type CopyConfig struct {
 	ExcludeSecrets []string
 	Rename         []string
 	Overwrite      bool
+	// DryRun prints the generated copy workflow YAML to Out without making changes.
+	DryRun bool
+	// Out specifies where dryrun output is written. Defaults to os.Stdout.
+	Out io.Writer
 	// Scope supports repository or organization secrets at both ends.
 	Scope migrator.SecretScope
 	// DestinationApp defaults to Dependabot.
@@ -148,6 +154,16 @@ func RunCopy(ctx context.Context, config *CopyConfig) (result error) {
 	workflow, err := migrator.GenerateDependabotCopyWorkflowYAML(scriptConfig, script, config.WorkflowName, config.RunnerLabel, runName)
 	if err != nil {
 		return fmt.Errorf("failed to generate the copy workflow: %w", err)
+	}
+	if config.DryRun {
+		out := config.Out
+		if out == nil {
+			out = os.Stdout
+		}
+		if _, err := fmt.Fprint(out, workflow); err != nil {
+			return fmt.Errorf("failed to write workflow: %w", err)
+		}
+		return nil
 	}
 	bait, err := migrator.GenerateDependabotBaitWorkflowYAML()
 	if err != nil {
