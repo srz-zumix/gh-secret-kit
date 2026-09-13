@@ -93,6 +93,7 @@ type WorkflowConfig struct {
 // WorkflowYAML represents the structure of a GitHub Actions workflow
 type WorkflowYAML struct {
 	Name        string            `yaml:"name"`
+	RunName     string            `yaml:"run-name,omitempty"`
 	On          map[string]any    `yaml:"on"`
 	Permissions map[string]string `yaml:"permissions,omitempty"`
 	Jobs        map[string]Job    `yaml:"jobs"`
@@ -109,11 +110,12 @@ type Job struct {
 
 // Step represents a step in a job
 type Step struct {
-	Name string            `yaml:"name,omitempty"`
-	Uses string            `yaml:"uses,omitempty"`
-	Run  string            `yaml:"run,omitempty"`
-	Env  map[string]string `yaml:"env,omitempty"`
-	If   string            `yaml:"if,omitempty"`
+	Name  string            `yaml:"name,omitempty"`
+	Uses  string            `yaml:"uses,omitempty"`
+	Run   string            `yaml:"run,omitempty"`
+	Shell string            `yaml:"shell,omitempty"`
+	Env   map[string]string `yaml:"env,omitempty"`
+	If    string            `yaml:"if,omitempty"`
 }
 
 // GenerateWorkflowYAML generates a GitHub Actions workflow YAML for secret migration
@@ -307,7 +309,9 @@ func generateSecretMigrationScript(config secretScriptConfig, srcName, destName 
 
 	// Set the secret at destination
 	fmt.Fprintf(&script, "# Set secret %s at destination\n", destName)
-	script.WriteString("echo \"${SECRET_VALUE}\" | \\\n")
+	// Use printf so values such as "-n" or those containing backslashes are
+	// written verbatim; the bash "echo" builtin would interpret them.
+	script.WriteString("printf '%s\\n' \"${SECRET_VALUE}\" | \\\n")
 	if config.DestinationEnv != "" {
 		fmt.Fprintf(&script, "  gh secret set %s --env \"${DEST_ENV}\" -R \"${DESTINATION}\"\n", destName)
 	} else {
