@@ -27,6 +27,8 @@ import (
 
 var sourceRepo = repository.Repository{Host: "github.com", Owner: "owner", Name: "repo"}
 
+const workflowRunsPath = "/repos/owner/repo/actions/workflows/copy.yml/runs"
+
 func newAPIClient(t *check.T, handler http.HandlerFunc) *gh.GitHubClient {
 	t.Helper()
 	server := fixture.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -166,7 +168,7 @@ func TestCleanupOnlyOwnedRunsAndDependabotBranches(t *check.T) {
 			client := newAPIClient(t, func(w http.ResponseWriter, r *http.Request) {
 				requests = append(requests, r.Method+" "+r.URL.Path)
 				switch {
-				case r.Method == "GET" && r.URL.Path == "/repos/owner/repo/actions/runs":
+				case r.Method == "GET" && r.URL.Path == workflowRunsPath:
 					if r.URL.Query().Get("actor") != migrator.DependabotActor || r.URL.Query().Get("event") != pushEvent {
 						t.Error("missing server-side actor/event filters")
 					}
@@ -304,7 +306,7 @@ func TestCleanupPreservesHeadWhenClosingPullRequestFails(t *check.T) {
 	closedOther := false
 	client := newAPIClient(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case r.Method == "GET" && r.URL.Path == "/repos/owner/repo/actions/runs":
+		case r.Method == "GET" && r.URL.Path == workflowRunsPath:
 			_ = json.NewEncoder(w).Encode(github.WorkflowRuns{WorkflowRuns: []*github.WorkflowRun{failedRun, successfulRun}})
 		case r.Method == "DELETE" && strings.HasPrefix(r.URL.Path, "/repos/owner/repo/actions/runs/"):
 			t.Error("deleted run history despite an unsafe cleanup")
@@ -353,7 +355,7 @@ func TestCleanupClosesRetargetedOwnedPullRequest(t *check.T) {
 	var deleted []string
 	client := newAPIClient(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case r.Method == "GET" && r.URL.Path == "/repos/owner/repo/actions/runs":
+		case r.Method == "GET" && r.URL.Path == workflowRunsPath:
 			_ = json.NewEncoder(w).Encode(github.WorkflowRuns{WorkflowRuns: []*github.WorkflowRun{run}})
 		case r.Method == "DELETE" && strings.HasPrefix(r.URL.Path, "/repos/owner/repo/actions/runs/"):
 			w.WriteHeader(http.StatusNoContent)
@@ -399,7 +401,7 @@ func TestCleanupUnsafeWhenOwnershipCheckFailsForOpenBasePullRequest(t *check.T) 
 	var deletedBranches []string
 	client := newAPIClient(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case r.Method == "GET" && r.URL.Path == "/repos/owner/repo/actions/runs":
+		case r.Method == "GET" && r.URL.Path == workflowRunsPath:
 			_ = json.NewEncoder(w).Encode(github.WorkflowRuns{WorkflowRuns: []*github.WorkflowRun{run}})
 		case r.Method == "DELETE" && strings.HasPrefix(r.URL.Path, "/repos/owner/repo/actions/runs/"):
 			t.Error("deleted run history despite an unverifiable ownership check")
@@ -438,7 +440,7 @@ func TestCleanupPreservesHeadsWhenPullRequestListingFails(t *check.T) {
 	observed.observe(run)
 	client := newAPIClient(t, func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method + " " + r.URL.Path {
-		case "GET /repos/owner/repo/actions/runs":
+		case "GET " + workflowRunsPath:
 			_ = json.NewEncoder(w).Encode(github.WorkflowRuns{WorkflowRuns: []*github.WorkflowRun{run}})
 		case "DELETE /repos/owner/repo/actions/runs/1":
 			w.WriteHeader(http.StatusNoContent)
@@ -461,7 +463,7 @@ func TestCleanupPreservesArtifactsWhenBranchDeletionFails(t *check.T) {
 	observed.observe(run)
 	client := newAPIClient(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case r.Method == "GET" && r.URL.Path == "/repos/owner/repo/actions/runs":
+		case r.Method == "GET" && r.URL.Path == workflowRunsPath:
 			_ = json.NewEncoder(w).Encode(github.WorkflowRuns{WorkflowRuns: []*github.WorkflowRun{run}})
 		case r.Method == "GET" && r.URL.Path == "/repos/owner/repo/pulls":
 			_, _ = fmt.Fprint(w, `[]`)
@@ -489,7 +491,7 @@ func TestCleanupPreservesArtifactsWhenRunDiscoveryFails(t *check.T) {
 	cancelled := false
 	client := newAPIClient(t, func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method + " " + r.URL.Path {
-		case "GET /repos/owner/repo/actions/runs":
+		case "GET " + workflowRunsPath:
 			http.Error(w, `{"message":"unavailable"}`, http.StatusServiceUnavailable)
 		case "POST /repos/owner/repo/actions/runs/1/cancel":
 			cancelled = true
@@ -517,7 +519,7 @@ func TestTokenCleanupStillRunsAfterArtifactCleanupFailure(t *check.T) {
 				deleted := false
 				client := newAPIClient(t, func(w http.ResponseWriter, r *http.Request) {
 					switch r.Method + " " + r.URL.Path {
-					case "GET /repos/owner/repo/actions/runs":
+					case "GET " + workflowRunsPath:
 						if failure == "list" {
 							http.Error(w, `{"message":"unavailable"}`, http.StatusServiceUnavailable)
 							return
@@ -609,7 +611,7 @@ func TestCleanupDoesNotDeleteArtifactsWhileRunIsActive(t *check.T) {
 	active.Status = github.Ptr("in_progress")
 	client := newAPIClient(t, func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method + " " + r.URL.Path {
-		case "GET /repos/owner/repo/actions/runs":
+		case "GET " + workflowRunsPath:
 			_ = json.NewEncoder(w).Encode(github.WorkflowRuns{WorkflowRuns: []*github.WorkflowRun{active}})
 		case "GET /repos/owner/repo/actions/runs/1":
 			_ = json.NewEncoder(w).Encode(active)
@@ -635,7 +637,7 @@ func TestWorkflowRunDiscoveryPaginatesAndIgnoresOtherInvocations(t *check.T) {
 		run := ownedRun(int64(pages))
 		if pages == 1 {
 			run.DisplayTitle = github.Ptr("previous-copy")
-			w.Header().Set("Link", fmt.Sprintf(`<http://%s/api/v3/repos/owner/repo/actions/runs?page=2>; rel="next"`, r.Host))
+			w.Header().Set("Link", fmt.Sprintf(`<http://%s/api/v3%s?page=2>; rel="next"`, r.Host, workflowRunsPath))
 		} else if r.URL.Query().Get("page") != "2" {
 			t.Error("missing second page")
 		}
@@ -659,6 +661,18 @@ func TestWaitForCopyHonorsShortTimeout(t *check.T) {
 	}
 	if time.Since(start) > time.Second {
 		t.Fatal("timeout waited for the poll interval")
+	}
+}
+
+func TestParseTimeout(t *check.T) {
+	duration, err := ParseTimeout("1h")
+	if err != nil || duration != time.Hour {
+		t.Fatalf("duration=%v error=%v", duration, err)
+	}
+	for _, value := range []string{"later", "0s", "-1m"} {
+		if _, err := ParseTimeout(value); err == nil {
+			t.Errorf("ParseTimeout(%q) succeeded", value)
+		}
 	}
 }
 
@@ -936,5 +950,148 @@ func TestRunCopyDryRun(t *check.T) {
 	}
 	if !strings.Contains(output, "runs-on: ubuntu-latest") {
 		t.Errorf("output missing runs-on: %s", output)
+	}
+}
+
+func TestRunCopyCleanupOrder(t *check.T) {
+	origNewClient := newClient
+	origVerify := verifyDestinations
+	t.Cleanup(func() {
+		newClient = origNewClient
+		verifyDestinations = origVerify
+	})
+
+	var events []string
+	defaultBranch := "main"
+	secretLists := 0
+	runName := ""
+	runLists := 0
+	jobLists := 0
+	logReads := 0
+	publicKey := base64.StdEncoding.EncodeToString(make([]byte, 32))
+	client := newAPIClient(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/repos/owner/repo/dependabot/secrets":
+			secretLists++
+			if secretLists == 1 {
+				_, _ = fmt.Fprint(w, `{"secrets":[{"name":"FOO"}]}`)
+			} else {
+				_, _ = fmt.Fprint(w, `{"secrets":[]}`)
+			}
+		case r.Method == "GET" && r.URL.Path == "/repos/owner/repo/dependabot/secrets/public-key":
+			_, _ = fmt.Fprintf(w, `{"key_id":"key","key":%q}`, publicKey)
+		case r.Method == "PUT" && strings.HasPrefix(r.URL.Path, "/repos/owner/repo/dependabot/secrets/"):
+			name := r.URL.Path[strings.LastIndex(r.URL.Path, "/")+1:]
+			invocationID := strings.TrimSuffix(
+				strings.TrimPrefix(name, types.DefaultDependabotCopyTokenSecretName+"_"),
+				"_GITHUB_COM",
+			)
+			runName = "gh-secret-kit-dependabot-copy-" + invocationID
+			events = append(events, "token-create")
+			w.WriteHeader(http.StatusCreated)
+		case r.Method == "DELETE" && strings.HasPrefix(r.URL.Path, "/repos/owner/repo/dependabot/secrets/"):
+			events = append(events, "token-delete")
+			w.WriteHeader(http.StatusNoContent)
+		case r.Method == "GET" && r.URL.Path == "/repos/owner/repo":
+			_, _ = fmt.Fprintf(w, `{"default_branch":%q}`, defaultBranch)
+		case r.Method == "GET" && r.URL.Path == "/repos/owner/repo/branches/main":
+			_, _ = fmt.Fprint(w, `{"name":"main","commit":{"sha":"base-sha"}}`)
+		case r.Method == "GET" && (r.URL.Path == "/repos/owner/repo/branches/"+copyLockBranch ||
+			r.URL.Path == "/repos/owner/repo/branches/copy-base"):
+			http.Error(w, `{"message":"Not Found"}`, http.StatusNotFound)
+		case r.Method == "POST" && r.URL.Path == "/repos/owner/repo/git/refs":
+			var body github.Reference
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Error(err)
+			}
+			ref := body.GetRef()
+			if strings.HasSuffix(ref, copyLockBranch) {
+				events = append(events, "lock-create")
+			} else {
+				events = append(events, "branch-create")
+			}
+			_ = json.NewEncoder(w).Encode(body)
+		case r.Method == "GET" && strings.HasPrefix(r.URL.Path, "/repos/owner/repo/contents/"):
+			http.Error(w, `{"message":"Not Found"}`, http.StatusNotFound)
+		case r.Method == "PUT" && strings.HasPrefix(r.URL.Path, "/repos/owner/repo/contents/"):
+			_, _ = fmt.Fprint(w, `{}`)
+		case r.Method == "PATCH" && r.URL.Path == "/repos/owner/repo":
+			var body github.Repository
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Error(err)
+			}
+			defaultBranch = body.GetDefaultBranch()
+			events = append(events, "default-"+defaultBranch)
+			_, _ = fmt.Fprint(w, `{}`)
+		case r.Method == "GET" && r.URL.Path == "/repos/owner/repo/actions/workflows/gh-secret-kit-dependabot-copy.yml/runs":
+			runLists++
+			if runName == "" {
+				t.Error("run name was not captured from the temporary token secret")
+			}
+			run := ownedRun(1)
+			run.DisplayTitle = github.Ptr(runName)
+			run.Path = github.Ptr(".github/workflows/gh-secret-kit-dependabot-copy.yml")
+			_ = json.NewEncoder(w).Encode(github.WorkflowRuns{WorkflowRuns: []*github.WorkflowRun{run}})
+		case r.Method == "GET" && r.URL.Path == "/repos/owner/repo/actions/runs/1/jobs":
+			jobLists++
+			_ = json.NewEncoder(w).Encode(github.Jobs{Jobs: []*github.WorkflowJob{{ID: github.Ptr(int64(10))}}})
+		case r.Method == "GET" && r.URL.Path == "/repos/owner/repo/actions/jobs/10/logs":
+			logReads++
+			http.Redirect(w, r, "http://"+r.Host+"/job-log-content", http.StatusFound)
+		case r.Method == "GET" && r.URL.Path == "/job-log-content":
+			logReads++
+			w.Header().Set("Content-Type", "text/plain")
+			_, _ = fmt.Fprintf(w, "2026-01-01T00:00:00Z %s\n", migrator.DependabotCopyDoneMarker)
+		case r.Method == "GET" && r.URL.Path == "/repos/owner/repo/pulls":
+			_, _ = fmt.Fprint(w, `[]`)
+		case r.Method == "DELETE" && strings.Contains(r.URL.Path, "/git/refs/heads/dependabot/"):
+			events = append(events, "dependabot-branch-delete")
+			w.WriteHeader(http.StatusNoContent)
+		case r.Method == "DELETE" && r.URL.Path == "/repos/owner/repo/actions/runs/1":
+			events = append(events, "run-delete")
+			w.WriteHeader(http.StatusNoContent)
+		case r.Method == "DELETE" && r.URL.Path == "/repos/owner/repo/git/refs/heads/copy-base":
+			events = append(events, "branch-delete")
+			w.WriteHeader(http.StatusNoContent)
+		case r.Method == "DELETE" && r.URL.Path == "/repos/owner/repo/git/refs/heads/"+copyLockBranch:
+			events = append(events, "lock-delete")
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			http.Error(w, "unexpected", http.StatusInternalServerError)
+		}
+	})
+	newClient = func(repository.Repository) (*gh.GitHubClient, error) {
+		return client, nil
+	}
+	verifyDestinations = func(context.Context, bool, []*destination.Destination, map[string]string) error {
+		return nil
+	}
+
+	err := RunCopy(context.Background(), &CopyConfig{
+		Source:           "owner/repo",
+		Destinations:     []string{"destowner/destrepo"},
+		Secrets:          []string{"FOO"},
+		DestinationToken: "gho_dummy_token",
+		Branch:           "copy-base",
+		Timeout:          time.Second,
+	})
+	if err != nil {
+		t.Fatalf("%v (run lists=%d job lists=%d log reads=%d run name=%q)", err, runLists, jobLists, logReads, runName)
+	}
+	wantOrder := []string{
+		"lock-create",
+		"token-create",
+		"branch-create",
+		"default-copy-base",
+		"dependabot-branch-delete",
+		"run-delete",
+		"default-main",
+		"branch-delete",
+		"token-delete",
+		"lock-delete",
+	}
+	if !reflect.DeepEqual(events, wantOrder) {
+		t.Fatalf("events=%v, want %v", events, wantOrder)
 	}
 }

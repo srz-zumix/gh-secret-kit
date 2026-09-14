@@ -134,7 +134,18 @@ Each required destination argument is `[host/]owner/repo`, or `[host/]org` when 
 
 After the copy, the command restores the original default branch, closes associated pull requests, and removes temporary Dependabot token secrets, temporary branches, and workflow run history belonging to this invocation. It does not delete unrelated runs merely because they use the same workflow name. `--keep-workflow` retains those temporary resources for inspection, including secrets and run history, but still restores the original default branch.
 
-Ctrl-C and SIGTERM request cancellation and allow cleanup to run. A process crash or forced termination such as SIGKILL cannot perform cleanup automatically.
+Copies are serialized per source repository with the temporary lock branch
+`gh-secret-kit-dependabot-copy-lock`. Ctrl-C and SIGTERM request cancellation and
+allow cleanup to remove the lock. A process crash or forced termination such as
+SIGKILL cannot perform cleanup automatically. If no copy operation is active,
+remove a stale lock with:
+
+```sh
+gh api -X DELETE repos/OWNER/REPO/git/refs/heads/gh-secret-kit-dependabot-copy-lock
+```
+
+`--dryrun` performs read-only source and destination validation before printing
+the workflow, so it still requires network access and valid authentication.
 
 > **Requirements**: The source repository needs admin permission, Dependabot version updates, and GitHub Actions. The destination host must be reachable from the configured runner, and the destination token must be allowed to write the selected secret store. Custom runners need Bash and GitHub CLI installed. Dependabot has no API for triggering an update check; GitHub schedules the check after the configuration change, usually within several minutes but without a guaranteed delay. Increase `--timeout` if needed.
 
@@ -173,7 +184,7 @@ gh secret-kit secret dependabot copy -R owner/source-repo \
 - `--scope string`: Secret scope to copy: `repo` or `org` (default: `repo`)
 - `--secrets strings`: Specific secret names to copy (comma-separated or repeated flag; defaults to all visible secrets in the selected scope)
 - `--timeout string`: Positive duration to wait for Dependabot and the copy workflow to finish (e.g., `30m`, `1h`; default: `30m`)
-- `--token-secret-name string`: Base name of temporary Dependabot secrets holding destination tokens; a host suffix is appended (default: `GH_SECRET_KIT_COPY_TOKEN`)
+- `--token-secret-name string`: Base name of temporary Dependabot secrets holding destination tokens; invocation and host suffixes are appended (default: `GH_SECRET_KIT_COPY_TOKEN`)
 - `--workflow-name string`: Workflow file name without extension for the generated copy workflow (default: `gh-secret-kit-dependabot-copy`)
 
 ## secret history

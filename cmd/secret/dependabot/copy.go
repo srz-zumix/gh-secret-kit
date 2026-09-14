@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/cli/cli/v2/pkg/cmdutil"
 	"github.com/spf13/cobra"
@@ -45,12 +44,9 @@ checks may take several minutes; adjust --timeout if needed.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			config.Scope = migrator.SecretScope(scope)
 			config.DestinationApp = migrator.SecretApp(dstApp)
-			duration, err := time.ParseDuration(timeout)
+			duration, err := dependabotcopy.ParseTimeout(timeout)
 			if err != nil {
-				return fmt.Errorf("invalid --timeout %q: %w", timeout, err)
-			}
-			if duration <= 0 {
-				return fmt.Errorf("invalid --timeout %q: expected a positive duration", timeout)
+				return err
 			}
 			config.Timeout = duration
 			config.Destinations = args

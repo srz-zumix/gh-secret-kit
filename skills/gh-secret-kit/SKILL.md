@@ -300,6 +300,19 @@ the job output, not an echo of the script. Absent or empty source values and
 existing destination secrets are skipped; use `--overwrite` to replace existing
 values. Success does not mean every requested secret was written.
 
+The command serializes copies per source repository with the temporary branch
+`gh-secret-kit-dependabot-copy-lock`. If a process crash leaves this branch
+behind, verify that no copy is active, then remove it with:
+
+```bash
+gh api -X DELETE repos/OWNER/REPO/git/refs/heads/gh-secret-kit-dependabot-copy-lock
+```
+
+Temporary destination-token secret names include invocation-specific and host
+suffixes. `--dryrun` makes no mutations, but it still performs read-only source
+and destination validation and therefore requires network access and valid
+authentication.
+
 ```bash
 # Copy repository Dependabot secrets to a destination
 gh secret-kit secret dependabot copy owner/dest-repo
@@ -338,7 +351,7 @@ host uses the source host. All flags below are optional.
 | `--scope string` | Secret scope: `repo` or `org` | `repo` |
 | `--secrets strings` | Names to copy, comma-separated or repeatable | all visible secrets in the selected scope |
 | `--timeout string` | Positive duration to wait for Dependabot and the completed workflow | `30m` |
-| `--token-secret-name string` | Base name of temporary token secrets; host suffix appended | `GH_SECRET_KIT_COPY_TOKEN` |
+| `--token-secret-name string` | Base name of temporary token secrets; invocation and host suffixes appended | `GH_SECRET_KIT_COPY_TOKEN` |
 | `--workflow-name string` | Generated copy workflow file name without extension | `gh-secret-kit-dependabot-copy` |
 
 The source requires admin permission, Dependabot version updates, and GitHub

@@ -298,9 +298,9 @@ func generateSecretMigrationScript(config secretScriptConfig, srcName, destName 
 		// Check if destination secret already exists
 		script.WriteString("# Check if secret already exists at destination\n")
 		if config.DestinationEnv != "" {
-			fmt.Fprintf(&script, "if gh secret list --env \"${DEST_ENV}\" -R \"${DESTINATION}\" | grep -q \"^%s\"; then\n", destName)
+			fmt.Fprintf(&script, "if gh secret list --env \"${DEST_ENV}\" -R \"${DESTINATION}\" | grep -qE \"^%s([[:space:]]|$)\"; then\n", destName)
 		} else {
-			fmt.Fprintf(&script, "if gh secret list %s%s | grep -q \"^%s\"; then\n", listScopeFlag, appFlag, destName)
+			fmt.Fprintf(&script, "if gh secret list %s%s | grep -qE \"^%s([[:space:]]|$)\"; then\n", listScopeFlag, appFlag, destName)
 		}
 		fmt.Fprintf(&script, "  echo \"Secret %s already exists at destination, skipping...\"\n", destName)
 		script.WriteString("  exit 0\n")

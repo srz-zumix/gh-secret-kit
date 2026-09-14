@@ -3,6 +3,7 @@ package migrator
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -49,6 +50,7 @@ func TestGenerateDependabotCopyScript(t *testing.T) {
 			t.Errorf("script missing %q", want)
 		}
 	}
+
 	if strings.Count(script, DependabotCopyDoneMarker) != 1 {
 		t.Error("script must contain exactly one completion marker")
 	}
@@ -59,6 +61,46 @@ func TestGenerateDependabotCopyScript(t *testing.T) {
 	command.Stdin = strings.NewReader(script)
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("invalid Bash syntax: %v\n%s", err, output)
+	}
+}
+
+func TestDependabotCopyScriptUsesExactDestinationSecretName(t *testing.T) {
+	config := dependabotCopyFixture()
+	config.Secrets = []string{"FOO"}
+	script, err := GenerateDependabotCopyScript(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	called := filepath.Join(dir, "set-called")
+	fakeGH := filepath.Join(dir, "gh")
+	fake := `#!/bin/sh
+if [ "$1 $2" = "secret list" ]; then
+  printf 'FOO_BACKUP\t2026-01-01T00:00:00Z\n'
+  exit 0
+fi
+if [ "$1 $2" = "secret set" ]; then
+  cat >/dev/null
+  : >"$SET_CALLED"
+  exit 0
+fi
+exit 1
+`
+	if err := os.WriteFile(fakeGH, []byte(fake), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	command := exec.Command("bash", "-c", script)
+	command.Env = append(os.Environ(),
+		"PATH="+dir+string(os.PathListSeparator)+os.Getenv("PATH"),
+		"FOO=value",
+		"COPY_TOKEN_GITHUB_COM=token",
+		"SET_CALLED="+called,
+	)
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("script failed: %v\n%s", err, output)
+	}
+	if _, err := os.Stat(called); err != nil {
+		t.Fatalf("FOO was skipped because FOO_BACKUP matched its prefix: %v", err)
 	}
 }
 

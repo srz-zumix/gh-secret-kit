@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"sort"
 	"strconv"
 	"strings"
@@ -267,6 +268,19 @@ func applyDefaults(config *CopyConfig) error {
 	return nil
 }
 
+// ParseTimeout parses and validates the copy timeout used by CLI and other
+// callers that accept duration strings.
+func ParseTimeout(value string) (time.Duration, error) {
+	duration, err := time.ParseDuration(value)
+	if err != nil {
+		return 0, fmt.Errorf("invalid --timeout %q: %w", value, err)
+	}
+	if duration <= 0 {
+		return 0, fmt.Errorf("invalid --timeout %q: expected a positive duration", value)
+	}
+	return duration, nil
+}
+
 func resolveBranch(branch string) (string, error) {
 	if branch != "" {
 		if err := gitutil.ValidateBranchName(branch); err != nil {
@@ -482,7 +496,7 @@ func (o *observedCopy) addBranch(branch string) {
 }
 
 func (o *observedCopy) workflowRuns(ctx context.Context, client *gh.GitHubClient, repo repository.Repository) ([]*github.WorkflowRun, error) {
-	runs, err := gh.ListRepositoryWorkflowRuns(ctx, client, repo, &gh.ListWorkflowRunsOptions{
+	runs, err := gh.ListWorkflowRunsByFileName(ctx, client, repo, path.Base(o.workflowPath), &gh.ListWorkflowRunsOptions{
 		Actor: migrator.DependabotActor, Event: pushEvent,
 	})
 	if err != nil {
