@@ -301,8 +301,10 @@ existing destination secrets are skipped; use `--overwrite` to replace existing
 values. Success does not mean every requested secret was written.
 
 The command serializes copies per source repository with the temporary branch
-`gh-secret-kit-dependabot-copy-lock`. If a process crash leaves this branch
-behind, verify that no copy is active, then remove it with:
+`gh-secret-kit-dependabot-copy-lock`. Unsafe cleanup retains this lock so another
+copy cannot modify preserved state. After recovering preserved resources, or if
+a process crash leaves the branch behind, verify that no copy is active and then
+remove it with:
 
 ```bash
 gh api -X DELETE repos/OWNER/REPO/git/refs/heads/gh-secret-kit-dependabot-copy-lock

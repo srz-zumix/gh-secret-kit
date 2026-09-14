@@ -206,17 +206,27 @@ func TestCleanupOnlyOwnedRunsAndDependabotBranches(t *check.T) {
 					openObserved.Number = github.Ptr(10)
 					openExtra := pullRequest(migrator.DependabotActor, "owner/repo", "dependabot/open", "copy-base")
 					openExtra.Number = github.Ptr(11)
+					unrelated := []*github.PullRequest{
+						pullRequest(migrator.DependabotActor, "owner/repo", "dependabot/historical-open", "copy-base"),
+						pullRequest(migrator.DependabotActor, "owner/repo", "dependabot/deleted", "copy-base"),
+						pullRequest("human", "owner/repo", "dependabot/human", "copy-base"),
+						pullRequest(migrator.DependabotActor, "fork/repo", "dependabot/fork", "copy-base"),
+						pullRequest(migrator.DependabotActor, "owner/repo", "human/branch", "copy-base"),
+					}
+					for _, pr := range unrelated {
+						pr.State = github.Ptr("closed")
+					}
 					_ = json.NewEncoder(w).Encode([]*github.PullRequest{
 						closed,
 						historical,
 						openObserved,
 						openExtra,
-						pullRequest(migrator.DependabotActor, "owner/repo", "dependabot/historical-open", "copy-base"),
-						pullRequest(migrator.DependabotActor, "owner/repo", "dependabot/deleted", "copy-base"),
-						pullRequest("human", "owner/repo", "dependabot/human", "copy-base"),
-						pullRequest(migrator.DependabotActor, "fork/repo", "dependabot/fork", "copy-base"),
+						unrelated[0],
+						unrelated[1],
+						unrelated[2],
+						unrelated[3],
 						pullRequest(migrator.DependabotActor, "owner/repo", "dependabot/other", "other-base"),
-						pullRequest(migrator.DependabotActor, "owner/repo", "human/branch", "copy-base"),
+						unrelated[4],
 					})
 				case r.Method == "GET" && r.URL.Path == "/repos/owner/repo/contents/.github/workflows/copy.yml":
 					runName := "unique-invocation"
@@ -457,6 +467,31 @@ func TestCleanupPreservesHeadsWhenPullRequestListingFails(t *check.T) {
 	}
 }
 
+func TestCleanupPreservesBaseForUnrelatedOpenPullRequest(t *check.T) {
+	observed := newObservedCopy()
+	client := newAPIClient(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "GET" && r.URL.Path == workflowRunsPath:
+			_ = json.NewEncoder(w).Encode(github.WorkflowRuns{})
+		case r.Method == "GET" && r.URL.Path == "/repos/owner/repo/pulls":
+			if r.URL.Query().Get("base") == "copy-base" {
+				pr := pullRequest("human", "owner/repo", "human/branch", "copy-base")
+				pr.Number = github.Ptr(42)
+				_ = json.NewEncoder(w).Encode([]*github.PullRequest{pr})
+				return
+			}
+			_, _ = fmt.Fprint(w, `[]`)
+		default:
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			http.Error(w, "unexpected", http.StatusInternalServerError)
+		}
+	})
+	safe, err := observed.cleanup(context.Background(), client, sourceRepo, "copy-base", false)
+	if safe || err == nil || !strings.Contains(err.Error(), "open pull request #42") {
+		t.Fatalf("safe=%v error=%v", safe, err)
+	}
+}
+
 func TestCleanupPreservesArtifactsWhenBranchDeletionFails(t *check.T) {
 	observed := newObservedCopy()
 	run := ownedRun(1)
@@ -650,6 +685,16 @@ func TestWorkflowRunDiscoveryPaginatesAndIgnoresOtherInvocations(t *check.T) {
 	}
 }
 
+func TestWorkflowRunDiscoveryTreatsMissingWorkflowAsEmpty(t *check.T) {
+	client := newAPIClient(t, func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, `{"message":"Not Found"}`, http.StatusNotFound)
+	})
+	runs, err := newObservedCopy().workflowRuns(context.Background(), client, sourceRepo)
+	if err != nil || len(runs) != 0 {
+		t.Fatalf("runs=%v error=%v", runs, err)
+	}
+}
+
 func TestWaitForCopyHonorsShortTimeout(t *check.T) {
 	client := newAPIClient(t, func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(github.WorkflowRuns{})
@@ -710,6 +755,7 @@ func TestCopyDefaultsAndEarlyValidation(t *check.T) {
 func TestAcquireCopyLock(t *check.T) {
 	created := false
 	deleted := false
+	markerCreated := false
 	client := newAPIClient(t, func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method + " " + r.URL.Path {
 		case "GET /repos/owner/repo":
@@ -721,6 +767,16 @@ func TestAcquireCopyLock(t *check.T) {
 		case "POST /repos/owner/repo/git/refs":
 			created = true
 			_, _ = fmt.Fprintf(w, `{"ref":"refs/heads/%s"}`, copyLockBranch)
+		case "GET /repos/owner/repo/contents/" + copyLockMarkerPath:
+			if !markerCreated {
+				http.Error(w, `{"message":"Not Found"}`, http.StatusNotFound)
+				return
+			}
+			encoded := base64.StdEncoding.EncodeToString([]byte("invocation"))
+			_, _ = fmt.Fprintf(w, `{"type":"file","encoding":"base64","content":%q}`, encoded)
+		case "PUT /repos/owner/repo/contents/" + copyLockMarkerPath:
+			markerCreated = true
+			_, _ = fmt.Fprint(w, `{}`)
 		case "DELETE /repos/owner/repo/git/refs/heads/" + copyLockBranch:
 			deleted = true
 			w.WriteHeader(http.StatusNoContent)
@@ -729,7 +785,7 @@ func TestAcquireCopyLock(t *check.T) {
 			http.Error(w, "unexpected", http.StatusInternalServerError)
 		}
 	})
-	release, err := acquireCopyLock(context.Background(), client, sourceRepo)
+	release, err := acquireCopyLock(context.Background(), client, sourceRepo, "invocation")
 	if err != nil || !created {
 		t.Fatalf("created=%v error=%v", created, err)
 	}
@@ -752,9 +808,71 @@ func TestAcquireCopyLockRejectsExistingLock(t *check.T) {
 			http.Error(w, "unexpected", http.StatusInternalServerError)
 		}
 	})
-	release, err := acquireCopyLock(context.Background(), client, sourceRepo)
+	release, err := acquireCopyLock(context.Background(), client, sourceRepo, "invocation")
 	if release != nil || err == nil || !strings.Contains(err.Error(), "another Dependabot secret copy may be running") {
 		t.Fatalf("release is nil=%v error=%v", release == nil, err)
+	}
+}
+
+func TestAcquireCopyLockPreservesAmbiguousCreation(t *check.T) {
+	deleted := false
+	client := newAPIClient(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method + " " + r.URL.Path {
+		case "GET /repos/owner/repo":
+			_, _ = fmt.Fprint(w, `{"default_branch":"main"}`)
+		case "GET /repos/owner/repo/branches/main":
+			_, _ = fmt.Fprint(w, `{"name":"main","commit":{"sha":"base-sha"}}`)
+		case "GET /repos/owner/repo/branches/" + copyLockBranch:
+			http.Error(w, `{"message":"Not Found"}`, http.StatusNotFound)
+		case "POST /repos/owner/repo/git/refs":
+			http.Error(w, `{"message":"ambiguous"}`, http.StatusServiceUnavailable)
+		case "DELETE /repos/owner/repo/git/refs/heads/" + copyLockBranch:
+			deleted = true
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+			http.Error(w, "unexpected", http.StatusInternalServerError)
+		}
+	})
+	release, err := acquireCopyLock(context.Background(), client, sourceRepo, "invocation")
+	if release != nil || err == nil || deleted {
+		t.Fatalf("release is nil=%v deleted=%v error=%v", release == nil, deleted, err)
+	}
+}
+
+func TestReleaseCopyLockPreservesReplacementOwner(t *check.T) {
+	marker := "invocation"
+	deleted := false
+	client := newAPIClient(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method + " " + r.URL.Path {
+		case "GET /repos/owner/repo":
+			_, _ = fmt.Fprint(w, `{"default_branch":"main"}`)
+		case "GET /repos/owner/repo/branches/main":
+			_, _ = fmt.Fprint(w, `{"name":"main","commit":{"sha":"base-sha"}}`)
+		case "GET /repos/owner/repo/branches/" + copyLockBranch:
+			http.Error(w, `{"message":"Not Found"}`, http.StatusNotFound)
+		case "POST /repos/owner/repo/git/refs":
+			_, _ = fmt.Fprintf(w, `{"ref":"refs/heads/%s"}`, copyLockBranch)
+		case "GET /repos/owner/repo/contents/" + copyLockMarkerPath:
+			encoded := base64.StdEncoding.EncodeToString([]byte(marker))
+			_, _ = fmt.Fprintf(w, `{"type":"file","encoding":"base64","content":%q}`, encoded)
+		case "PUT /repos/owner/repo/contents/" + copyLockMarkerPath:
+			_, _ = fmt.Fprint(w, `{}`)
+		case "DELETE /repos/owner/repo/git/refs/heads/" + copyLockBranch:
+			deleted = true
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+			http.Error(w, "unexpected", http.StatusInternalServerError)
+		}
+	})
+	release, err := acquireCopyLock(context.Background(), client, sourceRepo, "invocation")
+	if err != nil {
+		t.Fatal(err)
+	}
+	marker = "replacement"
+	if err := release(context.Background()); err == nil || deleted {
+		t.Fatalf("deleted=%v error=%v", deleted, err)
 	}
 }
 
@@ -811,7 +929,7 @@ func TestPrepareBranchRestoresDefaultWithKeep(t *check.T) {
 	}
 }
 
-func TestPrepareBranchCleansUpAmbiguousCreateFailure(t *check.T) {
+func TestPrepareBranchPreservesAmbiguousCreateFailure(t *check.T) {
 	deleted := false
 	client := newAPIClient(t, func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method + " " + r.URL.Path {
@@ -832,7 +950,7 @@ func TestPrepareBranchCleansUpAmbiguousCreateFailure(t *check.T) {
 		}
 	})
 	restore, err := prepareCopyBranch(context.Background(), client, sourceRepo, "copy-base", nil, false)
-	if restore != nil || err == nil || !deleted {
+	if restore != nil || err == nil || deleted {
 		t.Fatalf("restore is nil=%v deleted=%v error=%v", restore == nil, deleted, err)
 	}
 }
@@ -968,6 +1086,7 @@ func TestRunCopyCleanupOrder(t *check.T) {
 	runLists := 0
 	jobLists := 0
 	logReads := 0
+	lockMarker := ""
 	publicKey := base64.StdEncoding.EncodeToString(make([]byte, 32))
 	client := newAPIClient(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
@@ -1012,8 +1131,26 @@ func TestRunCopyCleanupOrder(t *check.T) {
 			}
 			_ = json.NewEncoder(w).Encode(body)
 		case r.Method == "GET" && strings.HasPrefix(r.URL.Path, "/repos/owner/repo/contents/"):
+			if r.URL.Path == "/repos/owner/repo/contents/"+copyLockMarkerPath && lockMarker != "" {
+				encoded := base64.StdEncoding.EncodeToString([]byte(lockMarker))
+				_, _ = fmt.Fprintf(w, `{"type":"file","encoding":"base64","content":%q}`, encoded)
+				return
+			}
 			http.Error(w, `{"message":"Not Found"}`, http.StatusNotFound)
 		case r.Method == "PUT" && strings.HasPrefix(r.URL.Path, "/repos/owner/repo/contents/"):
+			if r.URL.Path == "/repos/owner/repo/contents/"+copyLockMarkerPath {
+				var body struct {
+					Content string `json:"content"`
+				}
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Error(err)
+				}
+				content, err := base64.StdEncoding.DecodeString(body.Content)
+				if err != nil {
+					t.Error(err)
+				}
+				lockMarker = string(content)
+			}
 			_, _ = fmt.Fprint(w, `{}`)
 		case r.Method == "PATCH" && r.URL.Path == "/repos/owner/repo":
 			var body github.Repository

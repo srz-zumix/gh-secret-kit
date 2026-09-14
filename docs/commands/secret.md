@@ -136,9 +136,11 @@ After the copy, the command restores the original default branch, closes associa
 
 Copies are serialized per source repository with the temporary lock branch
 `gh-secret-kit-dependabot-copy-lock`. Ctrl-C and SIGTERM request cancellation and
-allow cleanup to remove the lock. A process crash or forced termination such as
-SIGKILL cannot perform cleanup automatically. If no copy operation is active,
-remove a stale lock with:
+allow cleanup to remove the lock when cleanup and default-branch restoration are
+safe. Unsafe cleanup retains the lock to prevent another copy from modifying
+preserved state. A process crash or forced termination such as SIGKILL cannot
+perform cleanup automatically. After recovering preserved resources and
+confirming that no copy operation is active, remove a stale lock with:
 
 ```sh
 gh api -X DELETE repos/OWNER/REPO/git/refs/heads/gh-secret-kit-dependabot-copy-lock
