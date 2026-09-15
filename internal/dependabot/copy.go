@@ -202,8 +202,13 @@ func RunCopy(ctx context.Context, config *CopyConfig) (result error) {
 	}()
 
 	files := map[string]string{workflowPath: workflow, baitWorkflowPath: bait}
-	restore, err := prepareCopyBranch(ctx, client, sourceRepo, branch, files, config.KeepWorkflow)
+	restore, setupUnsafe, err := prepareCopyBranch(ctx, client, sourceRepo, branch, files, config.KeepWorkflow)
 	if err != nil {
+		if setupUnsafe {
+			// The default branch may still point at the temporary branch, so
+			// keep the lock to block another copy until an operator recovers.
+			lockSafeToRelease = false
+		}
 		return err
 	}
 	defer func() {
@@ -369,7 +374,7 @@ func acquireCopyLock(ctx context.Context, client *gh.GitHubClient, repo reposito
 			return fmt.Errorf("failed to verify ownership of Dependabot copy lock branch %s; preserving it: %w", copyLockBranch, err)
 		}
 		if string(marker) != invocationID {
-			return fmt.Errorf("Dependabot copy lock branch %s belongs to another invocation; preserving it", copyLockBranch)
+			return fmt.Errorf("lock branch %s belongs to another Dependabot copy invocation; preserving it", copyLockBranch)
 		}
 		if err := gh.DeleteBranchIfExists(cleanupCtx, client, repo, copyLockBranch); err != nil {
 			return fmt.Errorf("failed to release Dependabot copy lock branch %s: %w", copyLockBranch, err)
@@ -380,32 +385,38 @@ func acquireCopyLock(ctx context.Context, client *gh.GitHubClient, repo reposito
 
 // prepareCopyBranch installs workflows before switching the default branch.
 // Its cleanup always restores the default, even when artifacts are preserved.
-func prepareCopyBranch(ctx context.Context, client *gh.GitHubClient, repo repository.Repository, branch string, files map[string]string, keep bool) (cleanup func(context.Context, bool) error, err error) {
+// On an error return, defaultBranchUnsafe reports whether the default branch may
+// still point at the temporary branch (or could not be verified), so the caller
+// can keep the copy lock instead of allowing another copy to start.
+func prepareCopyBranch(ctx context.Context, client *gh.GitHubClient, repo repository.Repository, branch string, files map[string]string, keep bool) (cleanup func(context.Context, bool) error, defaultBranchUnsafe bool, err error) {
 	repoInfo, err := gh.GetRepository(ctx, client, repo)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get the source repository: %w", err)
+		return nil, false, fmt.Errorf("failed to get the source repository: %w", err)
 	}
 	originalDefault := repoInfo.GetDefaultBranch()
 	baseBranch, err := gh.GetBranch(ctx, client, repo, originalDefault)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get the default branch %s: %w", originalDefault, err)
+		return nil, false, fmt.Errorf("failed to get the default branch %s: %w", originalDefault, err)
 	}
 	if _, err := gh.GetBranch(ctx, client, repo, branch); err == nil {
-		return nil, fmt.Errorf("branch %s already exists: specify a different --branch", branch)
+		return nil, false, fmt.Errorf("branch %s already exists: specify a different --branch", branch)
 	} else if !gh.IsHTTPNotFound(err) {
-		return nil, fmt.Errorf("failed to check branch %s: %w", branch, err)
+		return nil, false, fmt.Errorf("failed to check branch %s: %w", branch, err)
 	}
 	switched := false
 	created := false
+	unsafe := false
 	cleanup = func(cleanupCtx context.Context, preserve bool) error {
 		if switched {
 			current, err := gh.GetRepository(cleanupCtx, client, repo)
 			if err != nil {
+				unsafe = true
 				return fmt.Errorf("failed to verify the current default branch before restoring %s; preserving branch %s: %w", originalDefault, branch, err)
 			}
 			if current.GetDefaultBranch() == branch {
 				logger.Info(fmt.Sprintf("Restoring the default branch to %s...", originalDefault))
 				if _, err := gh.EditRepository(cleanupCtx, client, repo, &github.Repository{DefaultBranch: github.Ptr(originalDefault)}); err != nil {
+					unsafe = true
 					return fmt.Errorf("failed to restore the default branch to %s; preserving branch %s: %w", originalDefault, branch, err)
 				}
 			} else {
@@ -429,6 +440,7 @@ func prepareCopyBranch(ctx context.Context, client *gh.GitHubClient, repo reposi
 			defer cancel()
 			err = errors.Join(err, cleanup(cleanupCtx, keep))
 			cleanup = nil
+			defaultBranchUnsafe = unsafe
 		}
 	}()
 	if _, err = gh.CreateBranch(ctx, client, repo, branch, baseBranch.GetCommit().GetSHA()); err != nil {
@@ -767,6 +779,13 @@ func (o *observedCopy) cleanup(ctx context.Context, client *gh.GitHubClient, rep
 			}
 		}
 		if !owned {
+			// A verified-unowned open pull request still based on the temporary
+			// branch belongs to another invocation but would still be orphaned
+			// if this cleanup removed that base, so preserve the base branch.
+			if pr.GetState() == "open" && pr.GetBase().GetRef() == base {
+				safe = false
+				result = errors.Join(result, fmt.Errorf("open pull request #%d owned by another invocation targets temporary base %s; preserving the base branch", pr.GetNumber(), base))
+			}
 			return
 		}
 		if pr.GetState() == "open" {

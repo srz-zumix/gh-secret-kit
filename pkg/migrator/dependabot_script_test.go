@@ -104,6 +104,50 @@ exit 1
 	}
 }
 
+func TestDependabotCopyScriptFailsWhenDestinationListingFails(t *testing.T) {
+	config := dependabotCopyFixture()
+	config.Secrets = []string{"FOO"}
+	config.Overwrite = false
+	script, err := GenerateDependabotCopyScript(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	called := filepath.Join(dir, "set-called")
+	fakeGH := filepath.Join(dir, "gh")
+	// "gh secret list" fails; the script must not fall through to "gh secret
+	// set" and must not silently overwrite an existing destination secret.
+	fake := `#!/bin/sh
+if [ "$1 $2" = "secret list" ]; then
+  echo "boom" >&2
+  exit 1
+fi
+if [ "$1 $2" = "secret set" ]; then
+  cat >/dev/null
+  : >"$SET_CALLED"
+  exit 0
+fi
+exit 1
+`
+	if err := os.WriteFile(fakeGH, []byte(fake), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	command := exec.Command("bash", "-c", script)
+	command.Env = append(os.Environ(),
+		"PATH="+dir+string(os.PathListSeparator)+os.Getenv("PATH"),
+		"FOO=value",
+		"COPY_TOKEN_GITHUB_COM=token",
+		"SET_CALLED="+called,
+	)
+	output, err := command.CombinedOutput()
+	if err == nil {
+		t.Fatalf("script succeeded despite a failed destination listing:\n%s", output)
+	}
+	if _, statErr := os.Stat(called); statErr == nil {
+		t.Fatalf("gh secret set ran despite a failed destination listing:\n%s", output)
+	}
+}
+
 func TestDependabotCopyScriptScopeAndStore(t *testing.T) {
 	for _, scope := range []SecretScope{SecretScopeRepo, SecretScopeOrg} {
 		for _, app := range []SecretApp{SecretAppActions, SecretAppAgents, SecretAppCodespaces, SecretAppDependabot} {

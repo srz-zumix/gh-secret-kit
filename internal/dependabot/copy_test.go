@@ -444,6 +444,39 @@ func TestCleanupUnsafeWhenOwnershipCheckFailsForOpenBasePullRequest(t *check.T) 
 	}
 }
 
+func TestCleanupPreservesBaseForOpenPullRequestOwnedByAnotherInvocation(t *check.T) {
+	observed := newObservedCopy()
+	client := newAPIClient(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "GET" && r.URL.Path == workflowRunsPath:
+			_ = json.NewEncoder(w).Encode(github.WorkflowRuns{})
+		case r.Method == "GET" && r.URL.Path == "/repos/owner/repo/pulls":
+			if r.URL.Query().Get("base") == "copy-base" {
+				pr := pullRequest(migrator.DependabotActor, "owner/repo", "dependabot/foreign", "copy-base")
+				pr.Number = github.Ptr(77)
+				_ = json.NewEncoder(w).Encode([]*github.PullRequest{pr})
+				return
+			}
+			_, _ = fmt.Fprint(w, `[]`)
+		case r.Method == "GET" && r.URL.Path == "/repos/owner/repo/contents/.github/workflows/copy.yml":
+			_ = json.NewEncoder(w).Encode(github.RepositoryContent{
+				Type: github.Ptr("file"), Encoding: github.Ptr("base64"),
+				Content: github.Ptr(base64.StdEncoding.EncodeToString([]byte("run-name: previous-invocation\n"))),
+			})
+		case r.Method == "DELETE" && strings.HasPrefix(r.URL.Path, "/repos/owner/repo/git/refs/heads/"):
+			t.Errorf("deleted a branch owned by another invocation: %s", r.URL.Path)
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			http.Error(w, "unexpected", http.StatusInternalServerError)
+		}
+	})
+	safe, err := observed.cleanup(context.Background(), client, sourceRepo, "copy-base", false)
+	if safe || err == nil || !strings.Contains(err.Error(), "owned by another invocation") {
+		t.Fatalf("safe=%v error=%v", safe, err)
+	}
+}
+
 func TestCleanupPreservesHeadsWhenPullRequestListingFails(t *check.T) {
 	observed := newObservedCopy()
 	run := ownedRun(1)
@@ -910,7 +943,7 @@ func TestPrepareBranchRestoresDefaultWithKeep(t *check.T) {
 			})
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			restore, err := prepareCopyBranch(ctx, client, sourceRepo, "copy-base", nil, keep)
+			restore, _, err := prepareCopyBranch(ctx, client, sourceRepo, "copy-base", nil, keep)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -949,7 +982,7 @@ func TestPrepareBranchPreservesAmbiguousCreateFailure(t *check.T) {
 			http.Error(w, "unexpected", http.StatusInternalServerError)
 		}
 	})
-	restore, err := prepareCopyBranch(context.Background(), client, sourceRepo, "copy-base", nil, false)
+	restore, _, err := prepareCopyBranch(context.Background(), client, sourceRepo, "copy-base", nil, false)
 	if restore != nil || err == nil || deleted {
 		t.Fatalf("restore is nil=%v deleted=%v error=%v", restore == nil, deleted, err)
 	}
@@ -985,7 +1018,7 @@ func TestPrepareBranchDoesNotOverwriteChangedDefault(t *check.T) {
 			http.Error(w, "unexpected", http.StatusInternalServerError)
 		}
 	})
-	restore, err := prepareCopyBranch(context.Background(), client, sourceRepo, "copy-base", nil, false)
+	restore, _, err := prepareCopyBranch(context.Background(), client, sourceRepo, "copy-base", nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -995,6 +1028,48 @@ func TestPrepareBranchDoesNotOverwriteChangedDefault(t *check.T) {
 	}
 	if restorePatches != 0 || currentDefault != "release" {
 		t.Fatalf("restore patches=%d default=%s", restorePatches, currentDefault)
+	}
+}
+
+func TestPrepareBranchKeepsStateUnsafeWhenRestoreFailsAfterAmbiguousSwitch(t *check.T) {
+	currentDefault := "main"
+	patches := 0
+	client := newAPIClient(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method + " " + r.URL.Path {
+		case "GET /repos/owner/repo":
+			_, _ = fmt.Fprintf(w, `{"default_branch":%q}`, currentDefault)
+		case "GET /repos/owner/repo/branches/main":
+			_, _ = fmt.Fprint(w, `{"name":"main","commit":{"sha":"base-sha"}}`)
+		case "GET /repos/owner/repo/branches/copy-base":
+			http.Error(w, `{"message":"Not Found"}`, http.StatusNotFound)
+		case "POST /repos/owner/repo/git/refs":
+			_, _ = fmt.Fprint(w, `{"ref":"refs/heads/copy-base"}`)
+		case "PATCH /repos/owner/repo":
+			patches++
+			var body github.Repository
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Error(err)
+			}
+			// The switch applies server-side but returns an error (ambiguous),
+			// while the later restore attempt fails without taking effect.
+			if patches == 1 {
+				currentDefault = body.GetDefaultBranch()
+			}
+			http.Error(w, `{"message":"boom"}`, http.StatusInternalServerError)
+		default:
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+			http.Error(w, "unexpected", http.StatusInternalServerError)
+		}
+	})
+	restore, unsafe, err := prepareCopyBranch(context.Background(), client, sourceRepo, "copy-base", nil, false)
+	if err == nil || !unsafe || restore != nil {
+		t.Fatalf("restore=%v unsafe=%v err=%v", restore != nil, unsafe, err)
+	}
+	if currentDefault != "copy-base" {
+		t.Fatalf("expected the default branch left at copy-base, got %s", currentDefault)
+	}
+	if patches != 2 {
+		t.Fatalf("expected a switch and a restore attempt, got %d PATCH calls", patches)
 	}
 }
 

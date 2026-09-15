@@ -295,13 +295,21 @@ func generateSecretMigrationScript(config secretScriptConfig, srcName, destName 
 	script.WriteString("fi\n\n")
 
 	if !config.Overwrite {
-		// Check if destination secret already exists
+		// Check if destination secret already exists. Capture the full listing
+		// first so a failed "gh secret list" cannot be misread as "absent" and
+		// then overwrite the destination despite --overwrite=false.
 		script.WriteString("# Check if secret already exists at destination\n")
 		if config.DestinationEnv != "" {
-			fmt.Fprintf(&script, "if gh secret list --env \"${DEST_ENV}\" -R \"${DESTINATION}\" | grep -qE \"^%s([[:space:]]|$)\"; then\n", destName)
+			script.WriteString("if ! _existing_secrets=\"$(gh secret list --env \"${DEST_ENV}\" -R \"${DESTINATION}\")\"; then\n")
 		} else {
-			fmt.Fprintf(&script, "if gh secret list %s%s | grep -qE \"^%s([[:space:]]|$)\"; then\n", listScopeFlag, appFlag, destName)
+			fmt.Fprintf(&script, "if ! _existing_secrets=\"$(gh secret list %s%s)\"; then\n", listScopeFlag, appFlag)
 		}
+		fmt.Fprintf(&script, "  echo \"Failed to list destination secrets while checking %s\" >&2\n", destName)
+		script.WriteString("  exit 1\n")
+		script.WriteString("fi\n")
+		// Match without "grep -q" so grep consumes the whole listing; an early
+		// exit would make "gh secret list" fail with SIGPIPE under pipefail.
+		fmt.Fprintf(&script, "if printf '%%s\\n' \"${_existing_secrets}\" | grep -E \"^%s([[:space:]]|$)\" >/dev/null; then\n", destName)
 		fmt.Fprintf(&script, "  echo \"Secret %s already exists at destination, skipping...\"\n", destName)
 		script.WriteString("  exit 0\n")
 		script.WriteString("fi\n\n")
