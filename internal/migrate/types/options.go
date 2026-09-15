@@ -42,6 +42,18 @@ const (
 	// DefaultAgentsCopyTimeout bounds how long the copy waits for the Copilot
 	// coding agent environment to run the setup steps.
 	DefaultAgentsCopyTimeout = "30m"
+	// DefaultDependabotCopyTokenSecretName is the base name of the temporary
+	// Dependabot secret holding the destination token.
+	DefaultDependabotCopyTokenSecretName = "GH_SECRET_KIT_COPY_TOKEN"
+	// DefaultDependabotCopyBranch is the prefix of the temporary branch made
+	// the default branch during a "secret dependabot copy" run.
+	DefaultDependabotCopyBranch = "gh-secret-kit-dependabot-copy"
+	// DefaultDependabotCopyWorkflowName is the generated copy workflow file
+	// name without its extension.
+	DefaultDependabotCopyWorkflowName = "gh-secret-kit-dependabot-copy"
+	// DefaultDependabotCopyTimeout bounds the wait for Dependabot and the
+	// completed copy workflow run.
+	DefaultDependabotCopyTimeout = "30m"
 )
 
 // CommonOptions holds common options for migrate commands

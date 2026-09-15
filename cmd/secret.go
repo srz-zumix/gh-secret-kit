@@ -16,6 +16,7 @@ func NewSecretCmd() *cobra.Command {
 	cmd.AddCommand(secret.NewAgentsCmd())
 	cmd.AddCommand(secret.NewCodespacesCmd())
 	cmd.AddCommand(secret.NewCopyCmd())
+	cmd.AddCommand(secret.NewDependabotCmd())
 	cmd.AddCommand(secret.NewHistoryCmd())
 
 	return cmd

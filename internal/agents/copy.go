@@ -13,6 +13,7 @@ import (
 	"github.com/google/go-github/v90/github"
 	"github.com/srz-zumix/gh-secret-kit/internal/destination"
 	"github.com/srz-zumix/gh-secret-kit/internal/migrate/types"
+	"github.com/srz-zumix/gh-secret-kit/internal/runlog"
 	"github.com/srz-zumix/gh-secret-kit/pkg/migrator"
 	"github.com/srz-zumix/go-gh-extension/pkg/actions"
 	"github.com/srz-zumix/go-gh-extension/pkg/gh"
@@ -431,14 +432,14 @@ func waitForCopy(ctx context.Context, client *gh.GitHubClient, repo repository.R
 			if lerr != nil {
 				// The log is not served until the Actions run has started.
 				logger.Debug(fmt.Sprintf("the setup steps log is not available yet: %v", lerr))
-			} else if strings.Contains(log, migrator.AgentsCopyDoneMarker) {
-				logCopyResults(log)
+			} else if runlog.Contains(log, migrator.AgentsCopyDoneMarker) {
+				runlog.ReportCopyResults(log)
 				return nil
 			}
 		}
 
 		if terr == nil && task.isFinished() {
-			return fmt.Errorf("the agent session %s finished with state %q before the copy completed%s", id, task.State, copyFailureDetail(log))
+			return fmt.Errorf("the agent session %s finished with state %q before the copy completed%s", id, task.State, runlog.FailureDetail(log))
 		}
 
 		if time.Now().After(deadline) {
@@ -495,46 +496,6 @@ func setupStepsLog(ctx context.Context, client *gh.GitHubClient, repo repository
 		content.Write(data)
 	}
 	return content.String(), nil
-}
-
-// logCopyResults reports the progress lines the copy script printed.
-func logCopyResults(log string) {
-	for _, line := range logLines(log) {
-		if strings.HasPrefix(line, "Successfully migrated secret:") || strings.HasPrefix(line, "Copying secrets to ") {
-			logger.Info(line)
-		}
-	}
-}
-
-// copyFailureDetail collects the errors GitHub Actions reported, so that a
-// failure of the copy script is visible without opening the run.
-func copyFailureDetail(log string) string {
-	var details []string
-	for _, line := range logLines(log) {
-		if after, ok := strings.CutPrefix(line, "##[error]"); ok {
-			details = append(details, strings.TrimSpace(after))
-		}
-	}
-	if len(details) == 0 {
-		return ""
-	}
-	return ": " + strings.Join(details, "; ")
-}
-
-// logLines splits an Actions job log into lines, dropping the timestamp prefix
-// and the echoed step script, which is colored and would match the markers.
-func logLines(log string) []string {
-	raw := strings.Split(log, "\n")
-	lines := make([]string, 0, len(raw))
-	for _, line := range raw {
-		if strings.Contains(line, "\x1b[") {
-			continue
-		}
-		if _, rest, ok := strings.Cut(strings.TrimRight(line, "\r"), " "); ok {
-			lines = append(lines, rest)
-		}
-	}
-	return lines
 }
 
 // collectSecrets resolves the Agents secret names to copy and applies the
