@@ -399,8 +399,8 @@ func TestGenerateDependabotBaitWorkflowYAML(t *testing.T) {
 		if job.RunsOn != "ubuntu-latest" {
 			t.Errorf("unexpected bait runner: %v", job.RunsOn)
 		}
-		if len(job.Steps) != 1 || job.Steps[0].Uses != "actions/checkout@v1" {
-			t.Errorf("bait must reference only checkout@v1: %v", job.Steps)
+		if len(job.Steps) != 1 || job.Steps[0].Uses != DependabotBaitDependency+"@"+DependabotBaitVersion {
+			t.Errorf("bait must reference only the bait dependency: %v", job.Steps)
 		}
 	}
 }
@@ -441,13 +441,23 @@ func TestGenerateDependabotConfigYAML(t *testing.T) {
 	if update.Ecosystem != "github-actions" || update.Directory != "/" || update.Schedule.Interval != "daily" || update.Limit != 1 {
 		t.Errorf("unexpected update configuration: %+v", update)
 	}
-	if len(update.Allow) != 1 || update.Allow[0].Name != "actions/checkout" {
-		t.Errorf("only checkout should be eligible for updates: %v", update.Allow)
+	if len(update.Allow) != 1 || update.Allow[0].Name != DependabotBaitDependency {
+		t.Errorf("only the bait dependency should be eligible for updates: %v", update.Allow)
 	}
 	for _, branch := range []string{"", "copy\nbranch", "copy\rbranch"} {
 		if _, err := GenerateDependabotConfigYAML(branch); err == nil {
 			t.Errorf("accepted invalid configuration branch %q", branch)
 		}
+	}
+	withExisting, err := GenerateDependabotConfigYAMLForOpenPullRequests("copy-run-3", 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(withExisting, "open-pull-requests-limit: 3") {
+		t.Errorf("configuration did not reserve an update slot: %s", withExisting)
+	}
+	if _, err := GenerateDependabotConfigYAMLForOpenPullRequests("copy-run-4", -1); err == nil {
+		t.Error("accepted a negative open pull request count")
 	}
 }
 

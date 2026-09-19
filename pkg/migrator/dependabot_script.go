@@ -25,7 +25,9 @@ const DependabotBranchPrefix = "dependabot/"
 const DependabotConfigPath = ".github/dependabot.yml"
 
 // DependabotBaitDependency is the action the disabled bait workflow references.
-const DependabotBaitDependency = "actions/checkout"
+// A rarely used action is chosen because an already open Dependabot pull request
+// for the same dependency suppresses the update push the copy waits for.
+const DependabotBaitDependency = "actions/first-interaction"
 
 // DependabotBaitVersion ensures Dependabot has an outdated reference to update.
 const DependabotBaitVersion = "v1"
@@ -144,12 +146,22 @@ func GenerateDependabotBaitWorkflowYAML() (string, error) {
 	return marshalWorkflow(&workflow)
 }
 
-// GenerateDependabotConfigYAML restricts updates to checkout. The branch comment
-// changes the configuration on each new temporary branch to trigger a check.
+// GenerateDependabotConfigYAML restricts updates to the bait dependency. The
+// branch comment changes on each new temporary branch to trigger a check.
 func GenerateDependabotConfigYAML(branch string) (string, error) {
+	return GenerateDependabotConfigYAMLForOpenPullRequests(branch, 0)
+}
+
+// GenerateDependabotConfigYAMLForOpenPullRequests leaves one update slot in
+// addition to the Dependabot pull requests that are already open.
+func GenerateDependabotConfigYAMLForOpenPullRequests(branch string, openPullRequestCount int) (string, error) {
 	if branch == "" || strings.ContainsAny(branch, "\r\n") {
 		return "", fmt.Errorf("invalid branch name %q", branch)
 	}
+	if openPullRequestCount < 0 {
+		return "", fmt.Errorf("invalid open Dependabot pull request count %d", openPullRequestCount)
+	}
+	limitLine := fmt.Sprintf("    open-pull-requests-limit: %d", openPullRequestCount+1)
 	const tmpl = `# Temporary configuration written by gh-secret-kit for %s.
 # It is removed together with the temporary branch once the copy finishes.
 version: 2
@@ -158,9 +170,9 @@ updates:
     directory: /
     schedule:
       interval: daily
-    open-pull-requests-limit: 1
+%s
     allow:
       - dependency-name: %s
 `
-	return fmt.Sprintf(tmpl, branch, DependabotBaitDependency), nil
+	return fmt.Sprintf(tmpl, branch, limitLine, DependabotBaitDependency), nil
 }

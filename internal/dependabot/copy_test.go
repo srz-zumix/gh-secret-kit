@@ -1174,6 +1174,18 @@ func TestRunCopyCleanupOrder(t *check.T) {
 			}
 		case r.Method == "GET" && r.URL.Path == "/repos/owner/repo/dependabot/secrets/public-key":
 			_, _ = fmt.Fprintf(w, `{"key_id":"key","key":%q}`, publicKey)
+		case r.Method == "GET" && r.URL.Path == "/repos/owner/repo/rulesets":
+			_, _ = fmt.Fprint(w, `[{"id":7,"name":"main","target":"branch","enforcement":"active"}]`)
+		case r.Method == "GET" && r.URL.Path == "/repos/owner/repo/rulesets/7":
+			_, _ = fmt.Fprint(w, `{"id":7,"name":"main","target":"branch","enforcement":"active",`+
+				`"conditions":{"ref_name":{"include":["~DEFAULT_BRANCH"],"exclude":[]}},"rules":[{"type":"deletion"}]}`)
+		case r.Method == "PUT" && r.URL.Path == "/repos/owner/repo/rulesets/7":
+			var body github.RepositoryRuleset
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Error(err)
+			}
+			events = append(events, "ruleset-"+string(body.Enforcement))
+			_, _ = fmt.Fprint(w, `{}`)
 		case r.Method == "PUT" && strings.HasPrefix(r.URL.Path, "/repos/owner/repo/dependabot/secrets/"):
 			name := r.URL.Path[strings.LastIndex(r.URL.Path, "/")+1:]
 			invocationID := strings.TrimSuffix(
@@ -1293,6 +1305,7 @@ func TestRunCopyCleanupOrder(t *check.T) {
 	}
 	wantOrder := []string{
 		"lock-create",
+		"ruleset-disabled",
 		"token-create",
 		"branch-create",
 		"default-copy-base",
@@ -1301,6 +1314,7 @@ func TestRunCopyCleanupOrder(t *check.T) {
 		"default-main",
 		"branch-delete",
 		"token-delete",
+		"ruleset-active",
 		"lock-delete",
 	}
 	if !reflect.DeepEqual(events, wantOrder) {

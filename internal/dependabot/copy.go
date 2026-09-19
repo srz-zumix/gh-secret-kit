@@ -173,10 +173,6 @@ func RunCopy(ctx context.Context, config *CopyConfig) (result error) {
 	if err != nil {
 		return fmt.Errorf("failed to generate the trigger workflow: %w", err)
 	}
-	dependabotConfig, err := migrator.GenerateDependabotConfigYAML(branch)
-	if err != nil {
-		return err
-	}
 
 	logger.Info(fmt.Sprintf("Copying %d Dependabot secrets to %d destinations", len(secrets), len(destinations)))
 	releaseLock, err := acquireCopyLock(ctx, client, sourceRepo, invocationID)
@@ -193,6 +189,20 @@ func RunCopy(ctx context.Context, config *CopyConfig) (result error) {
 		defer cancel()
 		result = errors.Join(result, releaseLock(cleanupCtx))
 	}()
+	// Suspend before the default branch moves, and restore after it is put
+	// back, so the rulesets never guard the temporary branch.
+	restoreRulesets, err := suspendDefaultBranchRulesets(ctx, client, sourceRepo)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cleanupTimeout)
+		defer cancel()
+		if err := restoreRulesets(cleanupCtx); err != nil {
+			lockSafeToRelease = false
+			result = errors.Join(result, err)
+		}
+	}()
 	if err := registerTokenSecrets(ctx, client, sourceRepo, tokenSecretNames, hostTokens); err != nil {
 		return err
 	}
@@ -202,6 +212,16 @@ func RunCopy(ctx context.Context, config *CopyConfig) (result error) {
 	}()
 
 	files := map[string]string{workflowPath: workflow, baitWorkflowPath: bait}
+	// Dependabot moves its own open pull requests onto the new default branch,
+	// so record their bases while the repository is still untouched.
+	retargeted, err := snapshotDependabotPullRequests(ctx, client, sourceRepo)
+	if err != nil {
+		return err
+	}
+	dependabotConfig, err := migrator.GenerateDependabotConfigYAMLForOpenPullRequests(branch, len(retargeted))
+	if err != nil {
+		return err
+	}
 	restore, setupUnsafe, err := prepareCopyBranch(ctx, client, sourceRepo, branch, files, config.KeepWorkflow)
 	if err != nil {
 		if setupUnsafe {
@@ -220,9 +240,21 @@ func RunCopy(ctx context.Context, config *CopyConfig) (result error) {
 		}
 		result = errors.Join(result, restoreErr)
 	}()
-	observed := &observedCopy{workflowPath: workflowPath, runName: runName}
-	// LIFO: stop runs, delete histories and update branches, restore the
-	// default branch, remove the temporary branch, then remove token secrets.
+	// Runs before the temporary branch is deleted so the retargeted pull
+	// requests are not closed together with their base.
+	defer func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cleanupTimeout)
+		defer cancel()
+		if err := retargeted.restore(cleanupCtx, client, sourceRepo, branch); err != nil {
+			safeToRemove = false
+			lockSafeToRelease = false
+			result = errors.Join(result, err)
+		}
+	}()
+	observed := &observedCopy{workflowPath: workflowPath, runName: runName, retargeted: retargeted}
+	// LIFO: stop runs, delete histories and update branches, restore the base
+	// branch of the retargeted pull requests, restore the default branch,
+	// remove the temporary branch, then remove token secrets.
 	defer func() {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cleanupTimeout)
 		defer cancel()
@@ -497,6 +529,9 @@ type observedCopy struct {
 	runName      string
 	runs         map[int64]*github.WorkflowRun
 	branches     map[string]bool
+	// retargeted holds the pull requests that already existed when the copy
+	// started, so cleanup never treats them as another invocation's work.
+	retargeted retargetedPullRequests
 }
 
 func (o *observedCopy) owns(run *github.WorkflowRun) bool {
@@ -761,6 +796,11 @@ func (o *observedCopy) cleanup(ctx context.Context, client *gh.GitHubClient, rep
 	blockedHeads := make(map[string]bool)
 	handle := func(pr *github.PullRequest) {
 		head := pr.GetHead().GetRef()
+		if _, preexisting := o.retargeted[pr.GetNumber()]; preexisting {
+			// Dependabot retargeted this pull request when the default branch
+			// moved. Its base is restored separately, so leave it alone.
+			return
+		}
 		owned := o.branches[head]
 		if !owned {
 			var err error

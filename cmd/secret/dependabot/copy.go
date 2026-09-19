@@ -38,7 +38,9 @@ print the generated copy workflow YAML to stdout without making changes.
 
 The source requires admin permission, Dependabot version updates, and GitHub
 Actions. The runner needs Bash, gh CLI, and network access to destination hosts.
-The source default branch is temporarily changed and always restored.
+The source default branch is temporarily changed and always restored. Repository
+rulesets that follow the default branch are disabled while the copy runs and
+restored afterwards; organization rulesets are not changed.
 --keep-workflow preserves temporary resources for inspection. Dependabot update
 checks may take several minutes; adjust --timeout if needed.`,
 		RunE: func(cmd *cobra.Command, args []string) error {

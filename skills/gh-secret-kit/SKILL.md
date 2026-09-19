@@ -282,9 +282,12 @@ gh secret-kit secret codespaces copy -R owner/source-repo --dst-app actions owne
 ### Copy Dependabot Secrets
 
 Dependabot secrets cannot be read through the API. The command creates a temporary
-branch with a copy workflow and a separate outdated `actions/checkout@v1` reference
-as update bait, temporarily makes that branch the default, registers destination
-tokens as Dependabot secrets, and commits a temporary Dependabot configuration.
+branch with a copy workflow and a separate outdated `actions/first-interaction@v1`
+reference as update bait, temporarily makes that branch the default, registers
+destination tokens as Dependabot secrets, and commits a temporary Dependabot
+configuration whose open pull request limit leaves one slot beyond the repository's
+existing open Dependabot pull requests. A rarely used action is the bait because
+Dependabot pushes no update when a pull request for the same dependency is already open.
 Repository and organization scopes are supported; environment scope is not.
 Dependabot's push triggers the copy workflow; a user-triggered or pull request
 workflow is not used. The bait action is not executed by the copy job.
@@ -309,6 +312,18 @@ remove it with:
 ```bash
 gh api -X DELETE repos/OWNER/REPO/git/refs/heads/gh-secret-kit-dependabot-copy-lock
 ```
+
+Repository rulesets whose branch conditions include `~DEFAULT_BRANCH` would reject
+the direct commits made while the temporary branch is the default, so they are
+disabled for the duration of the copy and restored to their original enforcement
+afterwards. Rulesets pinned to a fixed branch name are untouched. Organization
+rulesets cannot be changed from the repository, so a copy blocked by one requires
+an organization owner.
+
+Dependabot moves the base branch of its own open pull requests to whichever branch
+becomes the default. The command records those base branches before the switch and
+retargets the affected pull requests back before the temporary branch is deleted,
+so pre-existing pull requests are never closed by the cleanup.
 
 Temporary destination-token secret names include invocation-specific and host
 suffixes. `--dryrun` makes no mutations, but it still performs read-only source
