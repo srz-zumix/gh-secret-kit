@@ -93,6 +93,7 @@ type WorkflowConfig struct {
 // WorkflowYAML represents the structure of a GitHub Actions workflow
 type WorkflowYAML struct {
 	Name        string            `yaml:"name"`
+	RunName     string            `yaml:"run-name,omitempty"`
 	On          map[string]any    `yaml:"on"`
 	Permissions map[string]string `yaml:"permissions,omitempty"`
 	Jobs        map[string]Job    `yaml:"jobs"`
@@ -109,11 +110,12 @@ type Job struct {
 
 // Step represents a step in a job
 type Step struct {
-	Name string            `yaml:"name,omitempty"`
-	Uses string            `yaml:"uses,omitempty"`
-	Run  string            `yaml:"run,omitempty"`
-	Env  map[string]string `yaml:"env,omitempty"`
-	If   string            `yaml:"if,omitempty"`
+	Name  string            `yaml:"name,omitempty"`
+	Uses  string            `yaml:"uses,omitempty"`
+	Run   string            `yaml:"run,omitempty"`
+	Shell string            `yaml:"shell,omitempty"`
+	Env   map[string]string `yaml:"env,omitempty"`
+	If    string            `yaml:"if,omitempty"`
 }
 
 // GenerateWorkflowYAML generates a GitHub Actions workflow YAML for secret migration
@@ -293,13 +295,21 @@ func generateSecretMigrationScript(config secretScriptConfig, srcName, destName 
 	script.WriteString("fi\n\n")
 
 	if !config.Overwrite {
-		// Check if destination secret already exists
+		// Check if destination secret already exists. Capture the full listing
+		// first so a failed "gh secret list" cannot be misread as "absent" and
+		// then overwrite the destination despite --overwrite=false.
 		script.WriteString("# Check if secret already exists at destination\n")
 		if config.DestinationEnv != "" {
-			fmt.Fprintf(&script, "if gh secret list --env \"${DEST_ENV}\" -R \"${DESTINATION}\" | grep -q \"^%s\"; then\n", destName)
+			script.WriteString("if ! _existing_secrets=\"$(gh secret list --env \"${DEST_ENV}\" -R \"${DESTINATION}\")\"; then\n")
 		} else {
-			fmt.Fprintf(&script, "if gh secret list %s%s | grep -q \"^%s\"; then\n", listScopeFlag, appFlag, destName)
+			fmt.Fprintf(&script, "if ! _existing_secrets=\"$(gh secret list %s%s)\"; then\n", listScopeFlag, appFlag)
 		}
+		fmt.Fprintf(&script, "  echo \"Failed to list destination secrets while checking %s\" >&2\n", destName)
+		script.WriteString("  exit 1\n")
+		script.WriteString("fi\n")
+		// Match without "grep -q" so grep consumes the whole listing; an early
+		// exit would make "gh secret list" fail with SIGPIPE under pipefail.
+		fmt.Fprintf(&script, "if printf '%%s\\n' \"${_existing_secrets}\" | grep -E \"^%s([[:space:]]|$)\" >/dev/null; then\n", destName)
 		fmt.Fprintf(&script, "  echo \"Secret %s already exists at destination, skipping...\"\n", destName)
 		script.WriteString("  exit 0\n")
 		script.WriteString("fi\n\n")
@@ -307,7 +317,9 @@ func generateSecretMigrationScript(config secretScriptConfig, srcName, destName 
 
 	// Set the secret at destination
 	fmt.Fprintf(&script, "# Set secret %s at destination\n", destName)
-	script.WriteString("echo \"${SECRET_VALUE}\" | \\\n")
+	// Use printf so values such as "-n" or those containing backslashes are
+	// written verbatim; the bash "echo" builtin would interpret them.
+	script.WriteString("printf '%s\\n' \"${SECRET_VALUE}\" | \\\n")
 	if config.DestinationEnv != "" {
 		fmt.Fprintf(&script, "  gh secret set %s --env \"${DEST_ENV}\" -R \"${DESTINATION}\"\n", destName)
 	} else {
