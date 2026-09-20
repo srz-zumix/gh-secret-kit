@@ -31,10 +31,15 @@ type Source struct {
 // each named organization secret from the source. The source secret values and
 // names are always read from the Actions store (the only store whose secret
 // values a generated copy workflow can read), so access metadata is likewise
-// read from the Actions store regardless of the destination store. Secrets that
-// cannot be found, or that the token cannot inspect (403/404), are silently
-// omitted from the result; callers should treat a missing entry the same as
-// "unknown" and fall back to gh's own default.
+// read from the Actions store regardless of the destination store.
+//
+// When the organization secrets cannot be listed at all, the visibility of
+// every requested secret is unknown, so each is marked Skip: a "selected"
+// secret copied with gh's default ("private") would be broadened to every
+// private repository, and the failure cannot tell "selected" secrets apart from
+// safe ones. Individual secrets that are absent from the listing, or whose
+// "selected" repositories cannot be inspected, are likewise skipped rather than
+// copied with broadened access.
 func Collect(ctx context.Context, client *gh.GitHubClient, srcRepo repository.Repository, secrets []string) (map[string]Source, error) {
 	wanted := make(map[string]struct{}, len(secrets))
 	for _, name := range secrets {
@@ -43,8 +48,10 @@ func Collect(ctx context.Context, client *gh.GitHubClient, srcRepo repository.Re
 
 	orgSecrets, err := gh.ListOrgSecrets(ctx, client, srcRepo)
 	if err != nil {
-		logger.Warn("failed to list organization secrets to copy repository access, skipping", "org", srcRepo.Owner, "error", err)
-		return map[string]Source{}, nil
+		// The visibility of every requested secret is unknown, so skip them all
+		// to avoid broadening a "selected" secret to "private".
+		logger.Warn("failed to list organization secrets to copy repository access, skipping affected secrets to avoid broadening access", "org", srcRepo.Owner, "error", err)
+		return skipAll(secrets), nil
 	}
 
 	result := make(map[string]Source, len(wanted))
@@ -71,7 +78,25 @@ func Collect(ctx context.Context, client *gh.GitHubClient, srcRepo repository.Re
 		}
 		result[secret.Name] = src
 	}
+	// A requested secret missing from the listing has an unknown visibility, so
+	// skip it rather than let the generator fall back to a broadening "private".
+	for name := range wanted {
+		if _, ok := result[name]; !ok {
+			logger.Warn("organization secret not found while collecting repository access, skipping it to avoid broadening access", "org", srcRepo.Owner, "secret", name)
+			result[name] = Source{Skip: true}
+		}
+	}
 	return result, nil
+}
+
+// skipAll marks every requested secret as Skip, used when no per-secret
+// visibility information could be determined.
+func skipAll(secrets []string) map[string]Source {
+	result := make(map[string]Source, len(secrets))
+	for _, name := range secrets {
+		result[name] = Source{Skip: true}
+	}
+	return result
 }
 
 // SkipUnresolved maps source access without a destination client, for when the

@@ -89,9 +89,10 @@ func TestCollect(t *testing.T) {
 	}
 }
 
-func TestCollectListFailureReturnsEmpty(t *testing.T) {
-	// When the org secrets cannot be listed at all, Collect degrades to an
-	// empty result without error; callers then fall back to gh's default.
+func TestCollectListFailureSkipsAll(t *testing.T) {
+	// When the org secrets cannot be listed at all, the visibility of every
+	// requested secret is unknown. Collect must mark them all Skip so a
+	// "selected" secret is never broadened to "private" via gh's default.
 	client := newAPIClient(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/orgs/owner/actions/secrets" {
 			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
@@ -99,12 +100,34 @@ func TestCollectListFailureReturnsEmpty(t *testing.T) {
 		http.Error(w, `{"message":"Forbidden"}`, http.StatusForbidden)
 	})
 
-	got, err := Collect(context.Background(), client, srcRepo, []string{"FOO"})
+	got, err := Collect(context.Background(), client, srcRepo, []string{"FOO", "BAR"})
 	if err != nil {
 		t.Fatalf("Collect returned error: %v", err)
 	}
-	if len(got) != 0 {
-		t.Errorf("expected an empty result on list failure, got %+v", got)
+	if len(got) != 2 || !got["FOO"].Skip || !got["BAR"].Skip {
+		t.Errorf("expected every requested secret to be skipped, got %+v", got)
+	}
+}
+
+func TestCollectMissingSecretSkipped(t *testing.T) {
+	// A requested secret absent from the listing has an unknown visibility, so
+	// it must be skipped rather than fall back to a broadening "private".
+	client := newAPIClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/orgs/owner/actions/secrets" {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		_, _ = fmt.Fprint(w, `{"total_count":1,"secrets":[{"name":"PRESENT","visibility":"all"}]}`)
+	})
+
+	got, err := Collect(context.Background(), client, srcRepo, []string{"PRESENT", "MISSING"})
+	if err != nil {
+		t.Fatalf("Collect returned error: %v", err)
+	}
+	if got["PRESENT"].Visibility != "all" || got["PRESENT"].Skip {
+		t.Errorf("unexpected PRESENT: %+v", got["PRESENT"])
+	}
+	if !got["MISSING"].Skip {
+		t.Errorf("expected MISSING to be skipped, got %+v", got["MISSING"])
 	}
 }
 
