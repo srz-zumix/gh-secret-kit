@@ -15,6 +15,10 @@ type CopyDestination struct {
 	// TokenSecret is the name of the source repository secret holding the token
 	// for Host.
 	TokenSecret string
+	// OrgAccess carries each source secret's visibility/repos for org-scoped
+	// copies, keyed by source secret name. Nil or missing entries emit no
+	// --visibility flag, falling back to gh's default (private).
+	OrgAccess map[string]OrgSecretAccess
 }
 
 // CopyWorkflowConfig holds configuration for generating a secret copy workflow.
@@ -49,6 +53,13 @@ func GenerateCopyWorkflowYAML(config CopyWorkflowConfig) (string, error) {
 	}
 	if err := validateSecretNames(config.Secrets, config.Rename); err != nil {
 		return "", err
+	}
+	for _, dest := range config.Destinations {
+		for name, access := range dest.OrgAccess {
+			if err := ValidateOrgSecretAccess(access); err != nil {
+				return "", fmt.Errorf("invalid org access for secret %q at destination %q: %w", name, dest.Target, err)
+			}
+		}
 	}
 
 	workflow := WorkflowYAML{
@@ -97,6 +108,7 @@ func GenerateCopyWorkflowYAML(config CopyWorkflowConfig) (string, error) {
 					DestinationApp: config.DestinationApp,
 					DestinationEnv: dest.Env,
 					Overwrite:      config.Overwrite,
+					Access:         dest.OrgAccess[secretName],
 				}, secretName, destSecretName),
 				Env: stepEnv,
 			})

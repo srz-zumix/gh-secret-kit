@@ -17,6 +17,10 @@ type EnvCopyDestination struct {
 	// TokenEnv is the name of the environment variable that holds the token
 	// for Host.
 	TokenEnv string
+	// OrgAccess carries each source secret's visibility/repos for org-scoped
+	// copies, keyed by source secret name. Nil or missing entries emit no
+	// --visibility flag, falling back to gh's default (private).
+	OrgAccess map[string]OrgSecretAccess
 }
 
 // envCopyConfig holds the settings shared by the copy scripts that read secret
@@ -118,6 +122,11 @@ func validateEnvCopyConfig(config envCopyConfig) error {
 			return fmt.Errorf("destination token variable %q is shared by hosts %q and %q", dest.TokenEnv, host, dest.Host)
 		}
 		tokenEnvHosts[dest.TokenEnv] = dest.Host
+		for name, access := range dest.OrgAccess {
+			if err := ValidateOrgSecretAccess(access); err != nil {
+				return fmt.Errorf("invalid org access for secret %q at destination %q: %w", name, dest.Target, err)
+			}
+		}
 	}
 	// A source secret whose name matches a script variable, a Bash special
 	// variable, or a destination token variable would be clobbered before it is
@@ -189,6 +198,7 @@ func writeEnvCopyBlocks(script *strings.Builder, config envCopyConfig) {
 				Scope:          config.Scope,
 				DestinationApp: config.DestinationApp,
 				Overwrite:      config.Overwrite,
+				Access:         dest.OrgAccess[secretName],
 			}, secretName, destSecretName))
 			script.WriteString(")\n")
 		}

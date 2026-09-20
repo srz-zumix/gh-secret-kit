@@ -6,6 +6,7 @@ import (
 
 	"github.com/cli/go-gh/v2/pkg/repository"
 	"github.com/srz-zumix/gh-secret-kit/internal/destination"
+	"github.com/srz-zumix/gh-secret-kit/internal/orgaccess"
 	"github.com/srz-zumix/gh-secret-kit/pkg/migrator"
 	"github.com/srz-zumix/go-gh-extension/pkg/gh"
 	"github.com/srz-zumix/go-gh-extension/pkg/logger"
@@ -108,7 +109,7 @@ func RunCopy(ctx context.Context, config *CopyConfig) error {
 		Secrets:        secrets,
 		Rename:         renameMap,
 		Overwrite:      config.Overwrite,
-		Destinations:   buildWorkflowDestinations(config, scope, app, destinations),
+		Destinations:   buildWorkflowDestinations(ctx, client, sourceRepo, config, scope, app, secrets, destinations, hostTokens),
 	}
 	logger.Info("Generating copy workflow YAML...")
 	workflowYAML, err := migrator.GenerateCopyWorkflowYAML(workflowConfig)
@@ -237,8 +238,10 @@ func collectCopySecrets(ctx context.Context, client *gh.GitHubClient, sourceRepo
 }
 
 // buildWorkflowDestinations converts the resolved destinations into the form
-// expected by the workflow generator.
-func buildWorkflowDestinations(config *CopyConfig, scope migrator.SecretScope, app migrator.SecretApp, destinations []*copyDestination) []migrator.CopyDestination {
+// expected by the workflow generator. When copying org-scoped secrets with
+// CopyRepositoryAccess enabled, it also collects each secret's source
+// visibility/repos and maps them onto the destination organization.
+func buildWorkflowDestinations(ctx context.Context, client *gh.GitHubClient, sourceRepo repository.Repository, config *CopyConfig, scope migrator.SecretScope, app migrator.SecretApp, secrets []string, destinations []*copyDestination, hostTokens map[string]string) []migrator.CopyDestination {
 	destEnv := config.DestinationEnv
 	if scope == migrator.SecretScopeEnv && destEnv == "" {
 		destEnv = config.SourceEnv
@@ -248,13 +251,35 @@ func buildWorkflowDestinations(config *CopyConfig, scope migrator.SecretScope, a
 	if app != migrator.SecretAppActions {
 		destEnv = ""
 	}
+
+	var srcAccess map[string]orgaccess.Source
+	copyAccess := scope == migrator.SecretScopeOrg && config.CopyRepositoryAccess
+	if copyAccess {
+		var err error
+		srcAccess, err = orgaccess.Collect(ctx, client, sourceRepo, app, secrets)
+		if err != nil {
+			logger.Warn("failed to collect source organization secret access, skipping repository access copy", "error", err)
+			copyAccess = false
+		}
+	}
+
 	result := make([]migrator.CopyDestination, 0, len(destinations))
 	for _, dest := range destinations {
+		var destAccess map[string]migrator.OrgSecretAccess
+		if copyAccess {
+			destClient, err := gh.NewGitHubClientWithToken(dest.Repo, hostTokens[dest.Host])
+			if err != nil {
+				logger.Warn("failed to create destination client, skipping repository access copy", "destination", dest.Target, "error", err)
+			} else {
+				destAccess = orgaccess.MapForDestination(ctx, destClient, dest.Host, dest.Target, srcAccess)
+			}
+		}
 		result = append(result, migrator.CopyDestination{
 			Target:      dest.Target,
 			Host:        dest.Host,
 			Env:         destEnv,
 			TokenSecret: dest.tokenSecret,
+			OrgAccess:   destAccess,
 		})
 	}
 	return result

@@ -243,4 +243,10 @@ type CopyConfig struct {
 	// Unarchive, when true, temporarily unarchives the source repository if it
 	// is archived, then re-archives it after the copy completes.
 	Unarchive bool
+	// CopyRepositoryAccess, when true (the default) and Scope is
+	// SecretScopeOrg, reproduces each org secret's visibility and selected
+	// repositories at the destination. Access that cannot be determined, or
+	// selected repositories missing at the destination, are skipped with a
+	// warning instead of failing the copy.
+	CopyRepositoryAccess bool
 }
