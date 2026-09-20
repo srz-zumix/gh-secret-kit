@@ -200,3 +200,101 @@ func TestGenerateCopyWorkflowYAMLValidation(t *testing.T) {
 		t.Errorf("unsafe renamed name must not reach the generated workflow, got:\n%s", out)
 	}
 }
+
+func TestGenerateCopyWorkflowYAMLOrgAccessSkip(t *testing.T) {
+	// A secret whose selected repository access could not be reproduced is
+	// marked Skip, and must never be copied with a broadening "private"
+	// default, so no step is generated for it.
+	config := CopyWorkflowConfig{
+		WorkflowName: "gh-secret-kit-copy",
+		RunsOn:       "ubuntu-latest",
+		Scope:        SecretScopeOrg,
+		Secrets:      []string{"KEEP", "DROP"},
+		Destinations: []CopyDestination{
+			{
+				Target:      "dest-org",
+				Host:        "github.com",
+				TokenSecret: "COPY_TOKEN_GITHUB_COM",
+				OrgAccess: map[string]OrgSecretAccess{
+					"KEEP": {Visibility: "all"},
+					"DROP": {Skip: true},
+				},
+			},
+		},
+	}
+
+	out, err := GenerateCopyWorkflowYAML(config)
+	if err != nil {
+		t.Fatalf("GenerateCopyWorkflowYAML returned error: %v", err)
+	}
+	if !strings.Contains(out, "gh secret set KEEP --org \"${DESTINATION}\" --visibility all") {
+		t.Errorf("expected the non-skipped secret to be copied with its visibility, got:\n%s", out)
+	}
+	if strings.Contains(out, "gh secret set DROP") {
+		t.Errorf("a skipped secret must not be copied at all, got:\n%s", out)
+	}
+}
+
+func TestGenerateCopyWorkflowYAMLAllSkipped(t *testing.T) {
+	// When every secret/destination pair is skipped, generation must fail
+	// rather than emit a job with no steps that looks successful.
+	config := CopyWorkflowConfig{
+		WorkflowName: "gh-secret-kit-copy",
+		RunsOn:       "ubuntu-latest",
+		Scope:        SecretScopeOrg,
+		Secrets:      []string{"DROP"},
+		Destinations: []CopyDestination{
+			{
+				Target:      "dest-org",
+				Host:        "github.com",
+				TokenSecret: "COPY_TOKEN_GITHUB_COM",
+				OrgAccess:   map[string]OrgSecretAccess{"DROP": {Skip: true}},
+			},
+		},
+	}
+
+	if _, err := GenerateCopyWorkflowYAML(config); err == nil {
+		t.Error("expected an error when every secret is skipped")
+	}
+}
+
+func TestValidateOrgSecretAccessSkip(t *testing.T) {
+	// A skipped access is always valid; it is never turned into a command.
+	if err := ValidateOrgSecretAccess(OrgSecretAccess{Skip: true}); err != nil {
+		t.Errorf("expected a skipped access to be valid, got: %v", err)
+	}
+}
+
+func TestValidateOrgSecretAccessSelectedRequiresRepos(t *testing.T) {
+	// gh secret set rejects "--visibility selected" without "--repos", so a
+	// selected access with no repositories must be rejected before rendering.
+	if err := ValidateOrgSecretAccess(OrgSecretAccess{Visibility: "selected"}); err == nil {
+		t.Error("expected an error for selected visibility with no repositories")
+	}
+	// A selected access with at least one repository stays valid.
+	if err := ValidateOrgSecretAccess(OrgSecretAccess{Visibility: "selected", Repos: []string{"repo-a"}}); err != nil {
+		t.Errorf("expected a selected access with repositories to be valid, got: %v", err)
+	}
+}
+
+func TestGenerateCopyWorkflowYAMLSelectedWithoutReposRejected(t *testing.T) {
+	// The generator must not emit "--visibility selected" without "--repos",
+	// which gh secret set rejects. Such input is rejected up front.
+	config := CopyWorkflowConfig{
+		WorkflowName: "gh-secret-kit-copy",
+		RunsOn:       "ubuntu-latest",
+		Scope:        SecretScopeOrg,
+		Secrets:      []string{"FOO"},
+		Destinations: []CopyDestination{
+			{
+				Target:      "dest-org",
+				Host:        "github.com",
+				TokenSecret: "COPY_TOKEN_GITHUB_COM",
+				OrgAccess:   map[string]OrgSecretAccess{"FOO": {Visibility: "selected"}},
+			},
+		},
+	}
+	if _, err := GenerateCopyWorkflowYAML(config); err == nil {
+		t.Error("expected an error for selected visibility without repositories")
+	}
+}

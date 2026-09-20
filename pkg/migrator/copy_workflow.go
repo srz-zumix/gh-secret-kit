@@ -78,6 +78,12 @@ func GenerateCopyWorkflowYAML(config CopyWorkflowConfig) (string, error) {
 			host = "github.com"
 		}
 		for _, secretName := range config.Secrets {
+			// Skip a secret whose selected repository access could not be
+			// reproduced at this destination without broadening it, rather
+			// than copy it as private.
+			if dest.OrgAccess[secretName].Skip {
+				continue
+			}
 			destSecretName := secretName
 			if newName, ok := config.Rename[secretName]; ok {
 				destSecretName = newName
@@ -120,6 +126,13 @@ func GenerateCopyWorkflowYAML(config CopyWorkflowConfig) (string, error) {
 		// Environment secrets are only exposed to a job bound to that environment.
 		Environment: config.SourceEnv,
 		Steps:       steps,
+	}
+
+	// Every secret/destination pair was skipped to avoid broadening access, so
+	// there is nothing to copy. Fail instead of emitting a job with no steps
+	// that would look like a successful copy.
+	if len(steps) == 0 {
+		return "", fmt.Errorf("no secrets to copy: every secret was skipped to avoid broadening organization secret access")
 	}
 
 	return marshalWorkflow(&workflow)

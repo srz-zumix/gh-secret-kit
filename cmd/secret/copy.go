@@ -50,11 +50,12 @@ destination store only; the source is always read as Actions secrets.
 
 When --scope is org, --copy-repository-access (on by default) reproduces each
 source secret's visibility (all/private/selected) and, for selected, the
-granted repositories at the destination organization. Selected repositories
-that cannot be found are skipped with a warning, falling back to private if
-none remain; when the visibility itself cannot be determined (e.g. missing org
-admin permission), the copy proceeds without it and gh's own default (private)
-applies.
+granted repositories at the destination organization. A selected secret whose
+granted repositories cannot be determined at the source, or none of which exist
+at the destination, is skipped rather than copied, because falling back to gh's
+default (private) would broaden its access to every private repository. When the
+visibility itself cannot be determined (e.g. missing org admin permission), the
+copy proceeds without it and gh's own default (private) applies.
 
 Once the workflow run finishes, the temporary branch, the temporary token secrets,
 and the workflow run history are deleted.`,

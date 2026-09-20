@@ -184,6 +184,11 @@ func writeEnvCopyBlocks(script *strings.Builder, config envCopyConfig) {
 		fmt.Fprintf(script, "export DESTINATION='%s'\n", dest.Target)
 
 		for _, secretName := range config.Secrets {
+			// Skip a secret whose selected repository access could not be
+			// reproduced without broadening it, rather than copy it as private.
+			if dest.OrgAccess[secretName].Skip {
+				continue
+			}
 			destSecretName := secretName
 			if newName, ok := config.Rename[secretName]; ok {
 				destSecretName = newName

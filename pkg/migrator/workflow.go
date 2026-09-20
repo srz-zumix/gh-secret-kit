@@ -176,11 +176,15 @@ func GenerateWorkflowYAML(config WorkflowConfig) (string, error) {
 		}
 	}
 	for _, secretName := range config.Secrets {
+		// Skip a secret whose selected repository access could not be
+		// reproduced without broadening it, rather than copy it as private.
+		if config.OrgAccess[secretName].Skip {
+			continue
+		}
 		destSecretName := secretName
 		if newName, ok := config.Rename[secretName]; ok {
 			destSecretName = newName
 		}
-
 		// Build the step that migrates each secret
 		stepEnv := map[string]string{
 			"SECRET_VALUE": fmt.Sprintf("${{ secrets.%s }}", secretName),
@@ -281,6 +285,13 @@ type OrgSecretAccess struct {
 	// Repos lists destination repository names to grant access to when
 	// Visibility is "selected".
 	Repos []string
+	// Skip marks a secret whose "selected" repository access could not be
+	// reproduced at the destination without broadening it (for example the
+	// selected repositories could not be listed, or none of them exist at the
+	// destination). Because gh secret set defaults an org secret to "private"
+	// (which grants it to every private repository), such a secret is skipped
+	// entirely rather than copied with broadened access.
+	Skip bool
 }
 
 // validOrgSecretVisibilities are the values gh secret set --visibility accepts.
@@ -291,14 +302,24 @@ var validOrgSecretVisibilities = map[string]bool{
 }
 
 // ValidateOrgSecretAccess validates the visibility value and, for "selected",
-// that each repository name is safe to embed in a generated shell command. An
-// empty Visibility (meaning "unknown, use gh's default") is always valid.
+// that at least one repository is present and each repository name is safe to
+// embed in a generated shell command. An empty Visibility (meaning "unknown,
+// use gh's default") and a Skip access are always valid.
 func ValidateOrgSecretAccess(access OrgSecretAccess) error {
+	if access.Skip {
+		return nil
+	}
 	if access.Visibility == "" {
 		return nil
 	}
 	if !validOrgSecretVisibilities[access.Visibility] {
 		return fmt.Errorf("invalid org secret visibility %q: expected all, private, or selected", access.Visibility)
+	}
+	// gh secret set rejects "--visibility selected" without "--repos", so a
+	// selected access must carry at least one repository. A secret whose
+	// selected repositories cannot be represented is marked Skip instead.
+	if access.Visibility == "selected" && len(access.Repos) == 0 {
+		return fmt.Errorf("org secret visibility %q requires at least one repository", access.Visibility)
 	}
 	for _, repo := range access.Repos {
 		if !shellLiteralPattern.MatchString(repo) {
