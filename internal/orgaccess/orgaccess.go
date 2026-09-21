@@ -21,9 +21,10 @@ type Source struct {
 	// Repos lists source repository names granted access when Visibility is
 	// "selected".
 	Repos []string
-	// Skip marks a "selected" secret whose granted repositories could not be
-	// listed at the source. Its access cannot be reproduced without broadening
-	// it, so the secret is skipped by MapForDestination and the generators.
+	// Skip marks a secret whose access cannot be reproduced at the destination
+	// without broadening it: a "selected" secret whose granted repositories
+	// could not be listed, or a secret with an empty/unsupported visibility.
+	// Such secrets are skipped by MapForDestination and the generators.
 	Skip bool
 }
 
@@ -37,9 +38,9 @@ type Source struct {
 // every requested secret is unknown, so each is marked Skip: a "selected"
 // secret copied with gh's default ("private") would be broadened to every
 // private repository, and the failure cannot tell "selected" secrets apart from
-// safe ones. Individual secrets that are absent from the listing, or whose
-// "selected" repositories cannot be inspected, are likewise skipped rather than
-// copied with broadened access.
+// safe ones. Individual secrets that are absent from the listing, whose
+// visibility is empty or unsupported, or whose "selected" repositories cannot
+// be inspected, are likewise skipped rather than copied with broadened access.
 func Collect(ctx context.Context, client *gh.GitHubClient, srcRepo repository.Repository, secrets []string) (map[string]Source, error) {
 	wanted := make(map[string]struct{}, len(secrets))
 	for _, name := range secrets {
@@ -60,6 +61,15 @@ func Collect(ctx context.Context, client *gh.GitHubClient, srcRepo repository.Re
 			continue
 		}
 		src := Source{Visibility: secret.Visibility}
+		// An empty or unsupported visibility cannot be reproduced safely: the
+		// generator would omit --visibility and gh would default to "private",
+		// broadening an unknown secret. Skip it to stay fail-closed.
+		if !migrator.IsValidOrgSecretVisibility(secret.Visibility) {
+			logger.Warn("organization secret has an unknown visibility, skipping it to avoid broadening access", "secret", secret.Name, "visibility", secret.Visibility)
+			src.Skip = true
+			result[secret.Name] = src
+			continue
+		}
 		if secret.Visibility == "selected" {
 			repos, err := gh.ListSelectedReposForOrgSecret(ctx, client, srcRepo, secret.Name)
 			if err != nil {

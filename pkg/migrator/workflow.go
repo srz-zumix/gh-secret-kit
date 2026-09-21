@@ -301,6 +301,12 @@ var validOrgSecretVisibilities = map[string]bool{
 	"selected": true,
 }
 
+// IsValidOrgSecretVisibility reports whether v is a visibility that gh secret
+// set --visibility accepts ("all", "private", or "selected").
+func IsValidOrgSecretVisibility(v string) bool {
+	return validOrgSecretVisibilities[v]
+}
+
 // ValidateOrgSecretAccess validates the visibility value and, for "selected",
 // that at least one repository is present and each repository name is safe to
 // embed in a generated shell command. An empty Visibility (meaning "unknown,

@@ -109,6 +109,32 @@ func TestCollectListFailureSkipsAll(t *testing.T) {
 	}
 }
 
+func TestCollectUnknownVisibilitySkipped(t *testing.T) {
+	// A secret with an empty or unsupported visibility cannot be reproduced
+	// safely, because the generator would omit --visibility and gh would
+	// default to "private". Such secrets must be skipped, not passed through.
+	client := newAPIClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/orgs/owner/actions/secrets" {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		_, _ = fmt.Fprint(w, `{"total_count":2,"secrets":[
+			{"name":"EMPTY","visibility":""},
+			{"name":"FUTURE","visibility":"organization"}
+		]}`)
+	})
+
+	got, err := Collect(context.Background(), client, srcRepo, []string{"EMPTY", "FUTURE"})
+	if err != nil {
+		t.Fatalf("Collect returned error: %v", err)
+	}
+	if !got["EMPTY"].Skip {
+		t.Errorf("expected EMPTY visibility to be skipped, got %+v", got["EMPTY"])
+	}
+	if !got["FUTURE"].Skip {
+		t.Errorf("expected unsupported visibility to be skipped, got %+v", got["FUTURE"])
+	}
+}
+
 func TestCollectMissingSecretSkipped(t *testing.T) {
 	// A requested secret absent from the listing has an unknown visibility, so
 	// it must be skipped rather than fall back to a broadening "private".
