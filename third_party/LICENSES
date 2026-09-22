@@ -3633,7 +3633,7 @@ SOFTWARE.
 ================================================================================
 Package: github.com/srz-zumix/go-gh-extension/pkg
 License: MIT
-URL: https://github.com/srz-zumix/go-gh-extension/blob/v0.6.15/LICENSE
+URL: https://github.com/srz-zumix/go-gh-extension/blob/v0.6.16/LICENSE
 ================================================================================
 MIT License
 
@@ -3797,7 +3797,7 @@ SOFTWARE.
 ================================================================================
 Package: golang.org/x/crypto
 License: BSD-3-Clause
-URL: https://cs.opensource.google/go/x/crypto/+/v0.56.0:LICENSE
+URL: https://cs.opensource.google/go/x/crypto/+/v0.57.0:LICENSE
 ================================================================================
 Copyright 2009 The Go Authors.
 
@@ -3830,7 +3830,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ================================================================================
 Package: golang.org/x/mod/semver
 License: BSD-3-Clause
-URL: https://cs.opensource.google/go/x/mod/+/v0.38.0:LICENSE
+URL: https://cs.opensource.google/go/x/mod/+/v0.41.0:LICENSE
 ================================================================================
 Copyright 2009 The Go Authors.
 
@@ -3863,7 +3863,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ================================================================================
 Package: golang.org/x/sync/errgroup
 License: BSD-3-Clause
-URL: https://cs.opensource.google/go/x/sync/+/v0.22.0:LICENSE
+URL: https://cs.opensource.google/go/x/sync/+/v0.23.0:LICENSE
 ================================================================================
 Copyright 2009 The Go Authors.
 
@@ -3896,7 +3896,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ================================================================================
 Package: golang.org/x/sys
 License: BSD-3-Clause
-URL: https://cs.opensource.google/go/x/sys/+/v0.47.0:LICENSE
+URL: https://cs.opensource.google/go/x/sys/+/v0.48.0:LICENSE
 ================================================================================
 Copyright 2009 The Go Authors.
 
@@ -3929,7 +3929,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ================================================================================
 Package: golang.org/x/term
 License: BSD-3-Clause
-URL: https://cs.opensource.google/go/x/term/+/v0.45.0:LICENSE
+URL: https://cs.opensource.google/go/x/term/+/v0.46.0:LICENSE
 ================================================================================
 Copyright 2009 The Go Authors.
 
@@ -3962,7 +3962,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ================================================================================
 Package: golang.org/x/text
 License: BSD-3-Clause
-URL: https://cs.opensource.google/go/x/text/+/v0.41.0:LICENSE
+URL: https://cs.opensource.google/go/x/text/+/v0.42.0:LICENSE
 ================================================================================
 Copyright 2009 The Go Authors.
 
