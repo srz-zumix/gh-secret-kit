@@ -78,6 +78,7 @@ checks may take several minutes; adjust --timeout if needed.`,
 	f.StringVar(&config.RunnerLabel, "runner-label", types.DefaultCopyRunnerLabel, "Runner label for runs-on of the generated copy workflow")
 	f.StringVar(&timeout, "timeout", types.DefaultDependabotCopyTimeout, "How long to wait for Dependabot and the copy workflow to finish (e.g., 30m, 1h)")
 	f.BoolVar(&config.KeepWorkflow, "keep-workflow", false, "Keep temporary branches, Dependabot secrets, pull requests, and run history; still restore the default branch")
+	f.BoolVar(&config.CopyRepositoryAccess, "copy-repository-access", true, "With --scope org, also copy each secret's visibility and selected repositories to the destination")
 
 	return cmd
 }

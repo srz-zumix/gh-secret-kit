@@ -96,6 +96,7 @@ Requirements:
 	f.StringVar(&config.Prompt, "prompt", types.DefaultAgentsCopyPrompt, "Task description passed to the Copilot coding agent")
 	f.StringVar(&timeout, "timeout", types.DefaultAgentsCopyTimeout, "How long to wait for the agent environment to run the copy (e.g., 30m, 1h)")
 	f.BoolVar(&config.KeepWorkflow, "keep-workflow", false, "Keep the temporary branch and Agents secrets after the copy instead of removing them")
+	f.BoolVar(&config.CopyRepositoryAccess, "copy-repository-access", true, "With --scope org, also copy each secret's visibility and selected repositories to the destination")
 
 	return cmd
 }

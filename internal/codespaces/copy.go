@@ -12,6 +12,7 @@ import (
 	"github.com/cli/go-gh/v2/pkg/repository"
 	"github.com/google/go-github/v90/github"
 	"github.com/srz-zumix/gh-secret-kit/internal/destination"
+	"github.com/srz-zumix/gh-secret-kit/internal/orgaccess"
 	"github.com/srz-zumix/gh-secret-kit/pkg/migrator"
 	"github.com/srz-zumix/go-gh-extension/pkg/gh"
 	"github.com/srz-zumix/go-gh-extension/pkg/logger"
@@ -68,6 +69,12 @@ type CopyConfig struct {
 	RetentionPeriod  string
 	// KeepCodespace leaves the codespace running after the copy, for debugging.
 	KeepCodespace bool
+	// CopyRepositoryAccess, when true (the default) and Scope is
+	// SecretScopeOrg, reproduces each org secret's visibility and selected
+	// repositories at the destination. Access that cannot be determined, or
+	// selected repositories missing at the destination, are skipped with a
+	// warning instead of failing the copy.
+	CopyRepositoryAccess bool
 }
 
 // RunCopy copies the Codespaces secrets available to the source repository to
@@ -146,7 +153,7 @@ func RunCopy(ctx context.Context, config *CopyConfig) error {
 		Rename:         renameMap,
 		Overwrite:      config.Overwrite,
 		TokenEnvFile:   remoteTokenFile,
-		Destinations:   buildScriptDestinations(destinations, tokenEnvNames),
+		Destinations:   buildScriptDestinations(ctx, client, sourceRepo, app, secrets, hostTokens, orgLevel && config.CopyRepositoryAccess, destinations, tokenEnvNames),
 	}
 	script, err := migrator.GenerateCodespacesCopyScript(scriptConfig)
 	if err != nil {
@@ -229,14 +236,36 @@ func remoteCommand(script string) string {
 }
 
 // buildScriptDestinations converts the resolved destinations into the form
-// expected by the script generator.
-func buildScriptDestinations(destinations []*destination.Destination, tokenEnvNames map[string]string) []migrator.CodespacesCopyDestination {
+// expected by the script generator. When copying org-scoped secrets with
+// CopyRepositoryAccess enabled, it also collects each secret's source
+// visibility/repos and maps them onto the destination organization.
+func buildScriptDestinations(ctx context.Context, client *gh.GitHubClient, sourceRepo repository.Repository, app migrator.SecretApp, secrets []string, hostTokens map[string]string, copyAccess bool, destinations []*destination.Destination, tokenEnvNames map[string]string) []migrator.CodespacesCopyDestination {
+	var srcAccess map[string]orgaccess.Source
+	if copyAccess {
+		var err error
+		srcAccess, err = orgaccess.Collect(ctx, client, sourceRepo, app, secrets)
+		if err != nil {
+			logger.Warn("failed to collect source organization secret access, skipping repository access copy", "error", err)
+			copyAccess = false
+		}
+	}
+
 	result := make([]migrator.CodespacesCopyDestination, 0, len(destinations))
 	for _, dest := range destinations {
+		var destAccess map[string]migrator.OrgSecretAccess
+		if copyAccess {
+			destClient, err := gh.NewGitHubClientWithToken(dest.Repo, hostTokens[dest.Host])
+			if err != nil {
+				logger.Warn("failed to create destination client, skipping repository access copy", "destination", dest.Target, "error", err)
+			} else {
+				destAccess = orgaccess.MapForDestination(ctx, destClient, dest.Host, dest.Target, srcAccess)
+			}
+		}
 		result = append(result, migrator.CodespacesCopyDestination{
-			Target:   dest.Target,
-			Host:     dest.Host,
-			TokenEnv: tokenEnvNames[dest.Host],
+			Target:    dest.Target,
+			Host:      dest.Host,
+			TokenEnv:  tokenEnvNames[dest.Host],
+			OrgAccess: destAccess,
 		})
 	}
 	return result
