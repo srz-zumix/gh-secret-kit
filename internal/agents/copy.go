@@ -166,7 +166,7 @@ func RunCopy(ctx context.Context, config *CopyConfig) error {
 		Secrets:        secrets,
 		Rename:         renameMap,
 		Overwrite:      config.Overwrite,
-		Destinations:   buildScriptDestinations(ctx, client, sourceRepo, app, secrets, hostTokens, orgLevel && config.CopyRepositoryAccess, destinations, tokenSecretNames),
+		Destinations:   buildScriptDestinations(ctx, client, sourceRepo, migrator.SecretAppAgents, secrets, hostTokens, orgLevel && config.CopyRepositoryAccess, destinations, tokenSecretNames),
 	}
 	script, err := migrator.GenerateAgentsCopyScript(scriptConfig)
 	if err != nil {
@@ -239,12 +239,13 @@ func resolveBranch(branch string) (string, error) {
 // buildScriptDestinations converts the resolved destinations into the form
 // expected by the script generator. When copying org-scoped secrets with
 // CopyRepositoryAccess enabled, it also collects each secret's source
-// visibility/repos and maps them onto the destination organization.
-func buildScriptDestinations(ctx context.Context, client *gh.GitHubClient, sourceRepo repository.Repository, app migrator.SecretApp, secrets []string, hostTokens map[string]string, copyAccess bool, destinations []*destination.Destination, tokenSecretNames map[string]string) []migrator.AgentsCopyDestination {
+// visibility/repos and maps them onto the destination organization. sourceApp
+// is the source secret store the access metadata is read from.
+func buildScriptDestinations(ctx context.Context, client *gh.GitHubClient, sourceRepo repository.Repository, sourceApp migrator.SecretApp, secrets []string, hostTokens map[string]string, copyAccess bool, destinations []*destination.Destination, tokenSecretNames map[string]string) []migrator.AgentsCopyDestination {
 	var srcAccess map[string]orgaccess.Source
 	if copyAccess {
 		var err error
-		srcAccess, err = orgaccess.Collect(ctx, client, sourceRepo, app, secrets)
+		srcAccess, err = orgaccess.Collect(ctx, client, sourceRepo, sourceApp, secrets)
 		if err != nil {
 			logger.Warn("failed to collect source organization secret access, skipping repository access copy", "error", err)
 			copyAccess = false
@@ -257,7 +258,11 @@ func buildScriptDestinations(ctx context.Context, client *gh.GitHubClient, sourc
 		if copyAccess {
 			destClient, err := gh.NewGitHubClientWithToken(dest.Repo, hostTokens[dest.Host])
 			if err != nil {
-				logger.Warn("failed to create destination client, skipping repository access copy", "destination", dest.Target, "error", err)
+				// The destination cannot be inspected, so "selected" access
+				// cannot be verified. Skip those secrets instead of letting
+				// them fall back to a broadening "private" default.
+				logger.Warn("failed to create destination client, skipping secrets whose selected access cannot be verified", "destination", dest.Target, "error", err)
+				destAccess = orgaccess.SkipUnresolved(srcAccess)
 			} else {
 				destAccess = orgaccess.MapForDestination(ctx, destClient, dest.Host, dest.Target, srcAccess)
 			}
