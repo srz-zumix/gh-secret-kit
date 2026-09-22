@@ -88,6 +88,10 @@ type WorkflowConfig struct {
 	// CleanupBranch, when set in DispatchMode, makes the generated workflow
 	// delete the given branch on the source repository after a successful run.
 	CleanupBranch string
+	// OrgAccess carries each source secret's visibility/repos for org-scoped
+	// migrations, keyed by source secret name. Nil or missing entries emit no
+	// --visibility flag, falling back to gh's default (private).
+	OrgAccess map[string]OrgSecretAccess
 }
 
 // WorkflowYAML represents the structure of a GitHub Actions workflow
@@ -166,12 +170,21 @@ func GenerateWorkflowYAML(config WorkflowConfig) (string, error) {
 	if err := validateSecretNames(config.Secrets, config.Rename); err != nil {
 		return "", err
 	}
+	for name, access := range config.OrgAccess {
+		if err := ValidateOrgSecretAccess(access); err != nil {
+			return "", fmt.Errorf("invalid org access for secret %q: %w", name, err)
+		}
+	}
 	for _, secretName := range config.Secrets {
+		// Skip a secret whose selected repository access could not be
+		// reproduced without broadening it, rather than copy it as private.
+		if config.OrgAccess[secretName].Skip {
+			continue
+		}
 		destSecretName := secretName
 		if newName, ok := config.Rename[secretName]; ok {
 			destSecretName = newName
 		}
-
 		// Build the step that migrates each secret
 		stepEnv := map[string]string{
 			"SECRET_VALUE": fmt.Sprintf("${{ secrets.%s }}", secretName),
@@ -196,6 +209,7 @@ func GenerateWorkflowYAML(config WorkflowConfig) (string, error) {
 			Scope:          config.Scope,
 			DestinationEnv: config.DestinationEnv,
 			Overwrite:      config.Overwrite,
+			Access:         config.OrgAccess[secretName],
 		}, secretName, destSecretName)
 
 		step := Step{
@@ -259,6 +273,68 @@ func marshalWorkflow(workflow *WorkflowYAML) (string, error) {
 	return strings.Replace(buf.String(), "\"on\":", "on:", 1), nil
 }
 
+// OrgSecretAccess describes how an organization secret's repository access
+// should be reproduced at the destination. It is only meaningful when the
+// secret scope is SecretScopeOrg; repo and env scoped secrets ignore it.
+type OrgSecretAccess struct {
+	// Visibility is the gh CLI --visibility value: "all", "private", or
+	// "selected". An empty string means the access could not be determined,
+	// so no --visibility flag is emitted and gh secret set falls back to its
+	// own default (private).
+	Visibility string
+	// Repos lists destination repository names to grant access to when
+	// Visibility is "selected".
+	Repos []string
+	// Skip marks a secret whose "selected" repository access could not be
+	// reproduced at the destination without broadening it (for example the
+	// selected repositories could not be listed, or none of them exist at the
+	// destination). Because gh secret set defaults an org secret to "private"
+	// (which grants it to every private repository), such a secret is skipped
+	// entirely rather than copied with broadened access.
+	Skip bool
+}
+
+// validOrgSecretVisibilities are the values gh secret set --visibility accepts.
+var validOrgSecretVisibilities = map[string]bool{
+	"all":      true,
+	"private":  true,
+	"selected": true,
+}
+
+// IsValidOrgSecretVisibility reports whether v is a visibility that gh secret
+// set --visibility accepts ("all", "private", or "selected").
+func IsValidOrgSecretVisibility(v string) bool {
+	return validOrgSecretVisibilities[v]
+}
+
+// ValidateOrgSecretAccess validates the visibility value and, for "selected",
+// that at least one repository is present and each repository name is safe to
+// embed in a generated shell command. An empty Visibility (meaning "unknown,
+// use gh's default") and a Skip access are always valid.
+func ValidateOrgSecretAccess(access OrgSecretAccess) error {
+	if access.Skip {
+		return nil
+	}
+	if access.Visibility == "" {
+		return nil
+	}
+	if !validOrgSecretVisibilities[access.Visibility] {
+		return fmt.Errorf("invalid org secret visibility %q: expected all, private, or selected", access.Visibility)
+	}
+	// gh secret set rejects "--visibility selected" without "--repos", so a
+	// selected access must carry at least one repository. A secret whose
+	// selected repositories cannot be represented is marked Skip instead.
+	if access.Visibility == "selected" && len(access.Repos) == 0 {
+		return fmt.Errorf("org secret visibility %q requires at least one repository", access.Visibility)
+	}
+	for _, repo := range access.Repos {
+		if !shellLiteralPattern.MatchString(repo) {
+			return fmt.Errorf("invalid repository name %q for org secret access", repo)
+		}
+	}
+	return nil
+}
+
 // secretScriptConfig holds the subset of settings that the per-secret script
 // depends on, so the migration and copy workflow generators can share it.
 type secretScriptConfig struct {
@@ -266,6 +342,9 @@ type secretScriptConfig struct {
 	DestinationApp SecretApp
 	DestinationEnv string
 	Overwrite      bool
+	// Access carries the org secret's visibility/repos, if known. Only used
+	// when Scope == SecretScopeOrg.
+	Access OrgSecretAccess
 }
 
 // generateSecretMigrationScript generates the script to migrate a single secret
@@ -286,6 +365,16 @@ func generateSecretMigrationScript(config secretScriptConfig, srcName, destName 
 	appFlag := ""
 	if config.DestinationApp != "" && config.DestinationApp != SecretAppActions {
 		appFlag = fmt.Sprintf(" --app %s", config.DestinationApp)
+	}
+
+	// Reproduce the source org secret's repository access at the destination.
+	// Only meaningful for org-scoped secrets; repo/env scope never emit this.
+	accessFlag := ""
+	if config.Scope == SecretScopeOrg && config.Access.Visibility != "" {
+		accessFlag = fmt.Sprintf(" --visibility %s", config.Access.Visibility)
+		if config.Access.Visibility == "selected" && len(config.Access.Repos) > 0 {
+			accessFlag += fmt.Sprintf(" --repos %q", strings.Join(config.Access.Repos, ","))
+		}
 	}
 
 	// Check if secret value is empty
@@ -323,7 +412,7 @@ func generateSecretMigrationScript(config secretScriptConfig, srcName, destName 
 	if config.DestinationEnv != "" {
 		fmt.Fprintf(&script, "  gh secret set %s --env \"${DEST_ENV}\" -R \"${DESTINATION}\"\n", destName)
 	} else {
-		fmt.Fprintf(&script, "  gh secret set %s %s%s\n", destName, scopeFlag, appFlag)
+		fmt.Fprintf(&script, "  gh secret set %s %s%s%s\n", destName, scopeFlag, appFlag, accessFlag)
 	}
 
 	fmt.Fprintf(&script, "echo \"Successfully migrated secret: %s -> %s\"\n", srcName, destName)

@@ -93,6 +93,8 @@ Each destination argument is `[host/]owner/repo`, or `[host/]org` when `--scope`
 
 The `--dst-app` flag selects which secret store the destination secrets are written to: `actions` for GitHub Actions secrets, `agents` for Copilot cloud agent (Agents) secrets, `codespaces` for Codespaces secrets, and `dependabot` for Dependabot secrets. Since only Actions secrets are readable from a workflow, `--dst-app` changes the destination store only; the source is always read as Actions secrets. `--dst-env` cannot be combined with a `--dst-app` other than `actions` because those stores have no environment level.
 
+When `--scope` is `org`, `--copy-repository-access` (enabled by default) reproduces each source secret's visibility (`all`, `private`, or `selected`) and, for `selected`, the granted repositories at the destination organization. A `selected` secret whose granted repositories cannot be determined at the source, or none of which exist at the destination, is skipped rather than copied, because falling back to gh's default (`private`) would broaden its access to every private repository. The same applies when the visibility itself cannot be determined (for example without organization admin permission): the affected secrets are skipped. Pass `--copy-repository-access=false` to skip copying access settings and copy every secret with gh's default visibility instead.
+
 The command waits for the generated workflow run to finish, then deletes the temporary branch, the temporary token secrets, and the workflow run history.
 
 **Arguments:**
@@ -102,6 +104,7 @@ The command waits for the generated workflow run to finish, then deletes the tem
 **Options:**
 
 - `--branch string`: Temporary branch name (defaults to a unique name derived from the workflow run ID, or a timestamp outside GitHub Actions)
+- `--copy-repository-access`: With `--scope org`, also copy each secret's visibility and selected repositories to the destination (default: `true`)
 - `--dst-app string`: Destination secret store: `actions`, `agents`, `codespaces`, or `dependabot` (default: `actions`)
 - `--dst-env string`: Destination environment name (defaults to `--src-env` when `--scope` is `env`; cannot be used with a non-`actions` `--dst-app`)
 - `--dst-token string`: PAT or token for the destination host (defaults to the local `gh` authentication; cannot be used when the destinations span multiple hosts)

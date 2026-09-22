@@ -31,19 +31,7 @@ func listDependabotRepoSecrets(ctx context.Context, g *gh.GitHubClient, repo rep
 }
 
 func listDependabotOrgSecrets(ctx context.Context, g *gh.GitHubClient, repo repository.Repository) ([]*github.Secret, error) {
-	opts := &github.ListOptions{PerPage: 100}
-	var all []*github.Secret
-	for {
-		secrets, resp, err := g.GetClient().Dependabot.ListOrgSecrets(ctx, repo.Owner, opts)
-		if err != nil {
-			return nil, err
-		}
-		all = append(all, secrets.Secrets...)
-		if resp.NextPage == 0 {
-			return all, nil
-		}
-		opts.Page = resp.NextPage
-	}
+	return gh.ListDependabotOrgSecrets(ctx, g, repo)
 }
 
 func setDependabotRepoSecret(ctx context.Context, g *gh.GitHubClient, repo repository.Repository, name, value string) error {
