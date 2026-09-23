@@ -93,17 +93,18 @@ func TestCollectAppDispatch(t *testing.T) {
 	// Each app must read its own organization secret store, so Collect has to
 	// dispatch to the matching listing and selected-repository endpoints.
 	cases := []struct {
+		name string
 		app  migrator.SecretApp
 		path string
 	}{
-		{migrator.SecretAppActions, "actions"},
-		{"", "actions"},
-		{migrator.SecretAppAgents, "agents"},
-		{migrator.SecretAppCodespaces, "codespaces"},
-		{migrator.SecretAppDependabot, "dependabot"},
+		{"actions", migrator.SecretAppActions, "actions"},
+		{"default", "", "actions"},
+		{"agents", migrator.SecretAppAgents, "agents"},
+		{"codespaces", migrator.SecretAppCodespaces, "codespaces"},
+		{"dependabot", migrator.SecretAppDependabot, "dependabot"},
 	}
 	for _, tc := range cases {
-		t.Run(string(tc.app), func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			listPath := "/orgs/owner/" + tc.path + "/secrets"
 			reposPath := listPath + "/PICKED/repositories"
 			var listed, reposListed bool

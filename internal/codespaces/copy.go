@@ -69,11 +69,12 @@ type CopyConfig struct {
 	RetentionPeriod  string
 	// KeepCodespace leaves the codespace running after the copy, for debugging.
 	KeepCodespace bool
-	// CopyRepositoryAccess, when true (the default) and Scope is
-	// SecretScopeOrg, reproduces each org secret's visibility and selected
-	// repositories at the destination. Access that cannot be determined, or
-	// selected repositories missing at the destination, are skipped with a
-	// warning instead of failing the copy.
+	// CopyRepositoryAccess, when true and Scope is SecretScopeOrg, reproduces
+	// each org secret's visibility and selected repositories at the
+	// destination. Access that cannot be determined, or selected repositories
+	// missing at the destination, are skipped with a warning instead of
+	// failing the copy. The CLI enables this by default; the struct zero value
+	// is false.
 	CopyRepositoryAccess bool
 }
 
@@ -252,15 +253,26 @@ func buildScriptDestinations(ctx context.Context, client *gh.GitHubClient, sourc
 	}
 
 	result := make([]migrator.CodespacesCopyDestination, 0, len(destinations))
+	destClients := make(map[string]*gh.GitHubClient)
 	for _, dest := range destinations {
 		var destAccess map[string]migrator.OrgSecretAccess
 		if copyAccess {
-			destClient, err := gh.NewGitHubClientWithToken(dest.Repo, hostTokens[dest.Host])
-			if err != nil {
-				// The destination cannot be inspected, so "selected" access
-				// cannot be verified. Skip those secrets instead of letting
-				// them fall back to a broadening "private" default.
-				logger.Warn("failed to create destination client, skipping secrets whose selected access cannot be verified", "destination", dest.Target, "error", err)
+			// Reuse the destination client across destinations that share a
+			// host, since each host resolves to a single token.
+			destClient, ok := destClients[dest.Host]
+			if !ok {
+				var err error
+				destClient, err = gh.NewGitHubClientWithToken(dest.Repo, hostTokens[dest.Host])
+				if err != nil {
+					// The destination cannot be inspected, so "selected" access
+					// cannot be verified. Skip those secrets instead of letting
+					// them fall back to a broadening "private" default.
+					logger.Warn("failed to create destination client, skipping secrets whose selected access cannot be verified", "destination", dest.Target, "error", err)
+				} else {
+					destClients[dest.Host] = destClient
+				}
+			}
+			if destClient == nil {
 				destAccess = orgaccess.SkipUnresolved(srcAccess)
 			} else {
 				destAccess = orgaccess.MapForDestination(ctx, destClient, dest.Host, dest.Target, srcAccess)
