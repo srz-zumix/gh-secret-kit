@@ -27,11 +27,11 @@ Each destination argument is `[host/]owner/repo`, or `[host/]org` when `--scope`
 **Options:**
 
 - `--branch string`: Temporary branch made the default branch while the copy runs (defaults to a unique name derived from the workflow run ID, or a timestamp outside GitHub Actions)
-- `--copy-repository-access`: With `--scope org`, also copy each secret's visibility and selected repositories to the destination (default: `true`)
 - `--dst-app string`: Destination secret store: `actions`, `agents`, `codespaces`, or `dependabot` (default: `agents`)
 - `--dst-token string`: PAT or token for the destination host (defaults to the local `gh` authentication; cannot be used when the destinations span multiple hosts)
 - `--exclude-secrets strings`: Secret names to exclude from the copy (comma-separated or repeated flag)
 - `--keep-workflow`: Keep the temporary branch and Agents secrets after the copy instead of removing them (default: false)
+- `--no-copy-repository-access`: With `--scope org`, skip copying each secret's visibility and selected repositories to the destination (default: false)
 - `--overwrite`: Overwrite existing secrets at destination (default: false)
 - `--prompt string`: Task description passed to the Copilot coding agent (defaults to a prompt that tells the agent there is nothing to do)
 - `--rename strings`: Rename mapping in `OLD_NAME=NEW_NAME` format (repeatable)
@@ -62,7 +62,6 @@ Each destination argument is `[host/]owner/repo`, or `[host/]org` when `--scope`
 **Options:**
 
 - `--branch string`: Source repository branch the codespace is created from (defaults to the default branch)
-- `--copy-repository-access`: With `--scope org`, also copy each secret's visibility and selected repositories to the destination (default: `true`)
 - `--devcontainer-path string`: Path to the `devcontainer.json` used for the codespace (defaults to the repository default)
 - `--dst-app string`: Destination secret store: `actions`, `agents`, `codespaces`, or `dependabot` (default: `codespaces`)
 - `--dst-token string`: PAT or token for the destination host (defaults to the local `gh` authentication; cannot be used when the destinations span multiple hosts)
@@ -71,6 +70,7 @@ Each destination argument is `[host/]owner/repo`, or `[host/]org` when `--scope`
 - `--include-user-secrets`: Also copy the Codespaces secrets of the authenticated user (default: false)
 - `--keep-codespace`: Keep the codespace after the copy instead of deleting it (default: false)
 - `--machine string`: Machine type of the codespace (defaults to the smallest machine type available for the source repository)
+- `--no-copy-repository-access`: With `--scope org`, skip copying each secret's visibility and selected repositories to the destination (default: false)
 - `--overwrite`: Overwrite existing secrets at destination (default: false)
 - `--rename strings`: Rename mapping in `OLD_NAME=NEW_NAME` format (repeatable)
 - `--repo string` / `-R`: Source repository (e.g., `owner/repo`; defaults to current repository)
@@ -95,7 +95,7 @@ Each destination argument is `[host/]owner/repo`, or `[host/]org` when `--scope`
 
 The `--dst-app` flag selects which secret store the destination secrets are written to: `actions` for GitHub Actions secrets, `agents` for Copilot cloud agent (Agents) secrets, `codespaces` for Codespaces secrets, and `dependabot` for Dependabot secrets. Since only Actions secrets are readable from a workflow, `--dst-app` changes the destination store only; the source is always read as Actions secrets. `--dst-env` cannot be combined with a `--dst-app` other than `actions` because those stores have no environment level.
 
-When `--scope` is `org`, `--copy-repository-access` (enabled by default) reproduces each source secret's visibility (`all`, `private`, or `selected`) and, for `selected`, the granted repositories at the destination organization. A `selected` secret whose granted repositories cannot be determined at the source, or none of which exist at the destination, is skipped rather than copied, because falling back to gh's default (`private`) would broaden its access to every private repository. The same applies when the visibility itself cannot be determined (for example without organization admin permission): the affected secrets are skipped. Pass `--copy-repository-access=false` to skip copying access settings and copy every secret with gh's default visibility instead.
+When `--scope` is `org`, repository access is copied by default: each source secret's visibility (`all`, `private`, or `selected`) and, for `selected`, the granted repositories at the destination organization. A `selected` secret whose granted repositories cannot be determined at the source, or none of which exist at the destination, is skipped rather than copied, because falling back to gh's default (`private`) would broaden its access to every private repository. The same applies when the visibility itself cannot be determined (for example without organization admin permission): the affected secrets are skipped. Pass `--no-copy-repository-access` to skip copying access settings and copy every secret with gh's default visibility instead.
 
 The command waits for the generated workflow run to finish, then deletes the temporary branch, the temporary token secrets, and the workflow run history.
 
@@ -106,11 +106,11 @@ The command waits for the generated workflow run to finish, then deletes the tem
 **Options:**
 
 - `--branch string`: Temporary branch name (defaults to a unique name derived from the workflow run ID, or a timestamp outside GitHub Actions)
-- `--copy-repository-access`: With `--scope org`, also copy each secret's visibility and selected repositories to the destination (default: `true`)
 - `--dst-app string`: Destination secret store: `actions`, `agents`, `codespaces`, or `dependabot` (default: `actions`)
 - `--dst-env string`: Destination environment name (defaults to `--src-env` when `--scope` is `env`; cannot be used with a non-`actions` `--dst-app`)
 - `--dst-token string`: PAT or token for the destination host (defaults to the local `gh` authentication; cannot be used when the destinations span multiple hosts)
 - `--exclude-secrets strings`: Secret names to exclude from the copy (comma-separated or repeated flag)
+- `--no-copy-repository-access`: With `--scope org`, skip copying each secret's visibility and selected repositories to the destination (default: false)
 - `--overwrite`: Overwrite existing secrets at destination (default: false)
 - `--rename strings`: Rename mapping in `OLD_NAME=NEW_NAME` format (repeatable)
 - `--repo string` / `-R`: Source repository (e.g., `owner/repo`; defaults to current repository)
@@ -183,12 +183,12 @@ gh secret-kit secret dependabot copy -R owner/source-repo \
 **Options (all optional):**
 
 - `--branch string`: Temporary branch made the default branch while copying (defaults to a unique generated name prefixed with `gh-secret-kit-dependabot-copy`)
-- `--copy-repository-access`: With `--scope org`, also copy each secret's visibility and selected repositories to the destination (default: `true`)
 - `--dryrun` / `-n`: Print the generated copy workflow YAML to stdout without making changes (default: false)
 - `--dst-app string`: Destination secret store: `actions`, `agents`, `codespaces`, or `dependabot` (default: `dependabot`)
 - `--dst-token string`: PAT or token for the destination host (defaults to local `gh` authentication; cannot be used when destinations span multiple hosts)
 - `--exclude-secrets strings`: Secret names to exclude (comma-separated or repeated flag; default: none)
 - `--keep-workflow`: Keep temporary branches, Dependabot secrets, associated pull requests, and run history; still restore the default branch (default: false)
+- `--no-copy-repository-access`: With `--scope org`, skip copying each secret's visibility and selected repositories to the destination (default: false)
 - `--overwrite`: Overwrite existing secrets at destinations (default: false)
 - `--rename strings`: Rename mapping in `OLD_NAME=NEW_NAME` format (repeatable; default: no renaming)
 - `--repo string` / `-R`: Source repository (e.g., `owner/repo`; defaults to current repository)

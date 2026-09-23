@@ -17,6 +17,7 @@ func NewCopyCmd() *cobra.Command {
 	var config codespaces.CopyConfig
 	var scope string
 	var dstApp string
+	var noCopyRepositoryAccess bool
 
 	cmd := &cobra.Command{
 		Use:   "copy <dst> [dst...]",
@@ -62,6 +63,7 @@ Requirements:
 			if err := parser.ValidateTokenSecretName(config.TokenEnvName); err != nil {
 				return err
 			}
+			config.CopyRepositoryAccess = !noCopyRepositoryAccess
 			config.Destinations = args
 			return codespaces.RunCopy(context.Background(), &config)
 		},
@@ -85,7 +87,7 @@ Requirements:
 	f.StringVar(&config.IdleTimeout, "idle-timeout", types.DefaultCodespacesCopyIdleTimeout, "Allowed inactivity before the codespace is stopped (e.g., 5m, 1h)")
 	f.StringVar(&config.RetentionPeriod, "retention-period", types.DefaultCodespacesCopyRetentionPeriod, "Allowed time after shutting down before the codespace is deleted (e.g., 1h, 72h)")
 	f.BoolVar(&config.KeepCodespace, "keep-codespace", false, "Keep the codespace after the copy instead of deleting it")
-	f.BoolVar(&config.CopyRepositoryAccess, "copy-repository-access", true, "With --scope org, also copy each secret's visibility and selected repositories to the destination")
+	f.BoolVar(&noCopyRepositoryAccess, "no-copy-repository-access", false, "With --scope org, skip copying each secret's visibility and selected repositories to the destination")
 
 	return cmd
 }
