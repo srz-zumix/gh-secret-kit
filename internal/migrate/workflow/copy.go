@@ -269,7 +269,11 @@ func buildWorkflowDestinations(ctx context.Context, client *gh.GitHubClient, sou
 		if copyAccess {
 			destClient, err := gh.NewGitHubClientWithToken(dest.Repo, hostTokens[dest.Host])
 			if err != nil {
-				logger.Warn("failed to create destination client, skipping repository access copy", "destination", dest.Target, "error", err)
+				// The destination cannot be inspected, so "selected" access
+				// cannot be verified. Skip those secrets instead of letting
+				// them fall back to a broadening "private" default.
+				logger.Warn("failed to create destination client, skipping secrets whose selected access cannot be verified", "destination", dest.Target, "error", err)
+				destAccess = orgaccess.SkipUnresolved(srcAccess)
 			} else {
 				destAccess = orgaccess.MapForDestination(ctx, destClient, dest.Host, dest.Target, srcAccess)
 			}

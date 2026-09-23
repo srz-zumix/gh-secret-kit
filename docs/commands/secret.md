@@ -27,6 +27,7 @@ Each destination argument is `[host/]owner/repo`, or `[host/]org` when `--scope`
 **Options:**
 
 - `--branch string`: Temporary branch made the default branch while the copy runs (defaults to a unique name derived from the workflow run ID, or a timestamp outside GitHub Actions)
+- `--copy-repository-access`: With `--scope org`, also copy each secret's visibility and selected repositories to the destination (default: `true`)
 - `--dst-app string`: Destination secret store: `actions`, `agents`, `codespaces`, or `dependabot` (default: `agents`)
 - `--dst-token string`: PAT or token for the destination host (defaults to the local `gh` authentication; cannot be used when the destinations span multiple hosts)
 - `--exclude-secrets strings`: Secret names to exclude from the copy (comma-separated or repeated flag)
@@ -61,6 +62,7 @@ Each destination argument is `[host/]owner/repo`, or `[host/]org` when `--scope`
 **Options:**
 
 - `--branch string`: Source repository branch the codespace is created from (defaults to the default branch)
+- `--copy-repository-access`: With `--scope org`, also copy each secret's visibility and selected repositories to the destination (default: `true`)
 - `--devcontainer-path string`: Path to the `devcontainer.json` used for the codespace (defaults to the repository default)
 - `--dst-app string`: Destination secret store: `actions`, `agents`, `codespaces`, or `dependabot` (default: `codespaces`)
 - `--dst-token string`: PAT or token for the destination host (defaults to the local `gh` authentication; cannot be used when the destinations span multiple hosts)
@@ -181,6 +183,7 @@ gh secret-kit secret dependabot copy -R owner/source-repo \
 **Options (all optional):**
 
 - `--branch string`: Temporary branch made the default branch while copying (defaults to a unique generated name prefixed with `gh-secret-kit-dependabot-copy`)
+- `--copy-repository-access`: With `--scope org`, also copy each secret's visibility and selected repositories to the destination (default: `true`)
 - `--dryrun` / `-n`: Print the generated copy workflow YAML to stdout without making changes (default: false)
 - `--dst-app string`: Destination secret store: `actions`, `agents`, `codespaces`, or `dependabot` (default: `dependabot`)
 - `--dst-token string`: PAT or token for the destination host (defaults to local `gh` authentication; cannot be used when destinations span multiple hosts)

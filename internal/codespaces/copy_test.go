@@ -1,12 +1,22 @@
 package codespaces
 
 import (
+	"context"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
+	"github.com/cli/go-gh/v2/pkg/repository"
+	"github.com/google/go-github/v90/github"
 	"github.com/srz-zumix/gh-secret-kit/internal/destination"
+	"github.com/srz-zumix/gh-secret-kit/pkg/migrator"
+	"github.com/srz-zumix/go-gh-extension/pkg/gh"
+	ghclient "github.com/srz-zumix/go-gh-extension/pkg/gh/client"
 )
 
 func TestRemoteCommand(t *testing.T) {
@@ -121,5 +131,93 @@ func TestWriteTokenFileRejectsUnsafeToken(t *testing.T) {
 	}
 	if len(entries) != 0 {
 		t.Errorf("no token file should be left behind on error, found %d entries", len(entries))
+	}
+}
+
+// newAPIClient wires a GitHubClient to an in-process HTTP server so
+// collectSecrets can be exercised without network access.
+func newAPIClient(t *testing.T, handler http.HandlerFunc) *gh.GitHubClient {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		r.URL.Path = strings.TrimPrefix(r.URL.Path, "/api/v3")
+		handler(w, r)
+	}))
+	t.Cleanup(server.Close)
+	api, err := github.NewClient(github.WithHTTPClient(server.Client()), github.WithEnterpriseURLs(server.URL, server.URL))
+	if err != nil {
+		t.Fatal(err)
+	}
+	client, err := ghclient.NewClient(api)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return client
+}
+
+func TestCollectSecretsOrgAccessExcludesUserSecrets(t *testing.T) {
+	sourceRepo := repository.Repository{Host: "github.com", Owner: "owner", Name: "repo"}
+
+	cases := []struct {
+		name            string
+		config          *CopyConfig
+		wantNames       []string
+		wantAccessNames []string
+	}{
+		{
+			// --include-user-secrets merges user names into the copy, but they
+			// are not organization secrets, so they must be excluded from
+			// organization access (otherwise Collect marks them Skip and the
+			// generator drops them).
+			name: "auto include user secrets",
+			config: &CopyConfig{
+				Scope:                migrator.SecretScopeOrg,
+				IncludeUserSecrets:   true,
+				CopyRepositoryAccess: true,
+			},
+			wantNames:       []string{"ORGSEC", "USERSEC"},
+			wantAccessNames: []string{"ORGSEC"},
+		},
+		{
+			// An explicitly named user secret is likewise not an organization
+			// secret and must not receive organization access.
+			name: "explicit names mix org and user",
+			config: &CopyConfig{
+				Scope:                migrator.SecretScopeOrg,
+				Secrets:              []string{"ORGSEC", "USERSEC"},
+				CopyRepositoryAccess: true,
+			},
+			wantNames:       []string{"ORGSEC", "USERSEC"},
+			wantAccessNames: []string{"ORGSEC"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := newAPIClient(t, func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case "/orgs/owner/codespaces/secrets":
+					_, _ = fmt.Fprint(w, `{"total_count":1,"secrets":[{"name":"ORGSEC","visibility":"all"}]}`)
+				case "/user/codespaces/secrets":
+					_, _ = fmt.Fprint(w, `{"total_count":1,"secrets":[{"name":"USERSEC"}]}`)
+				default:
+					t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+					http.Error(w, "unexpected", http.StatusInternalServerError)
+				}
+			})
+
+			names, accessNames, err := collectSecrets(context.Background(), client, sourceRepo, tc.config, tc.config.Scope)
+			if err != nil {
+				t.Fatalf("collectSecrets returned error: %v", err)
+			}
+			slices.Sort(names)
+			slices.Sort(accessNames)
+			if !slices.Equal(names, tc.wantNames) {
+				t.Errorf("names = %v, want %v", names, tc.wantNames)
+			}
+			if !slices.Equal(accessNames, tc.wantAccessNames) {
+				t.Errorf("accessNames = %v, want %v", accessNames, tc.wantAccessNames)
+			}
+		})
 	}
 }
