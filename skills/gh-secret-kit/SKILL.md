@@ -146,6 +146,7 @@ gh secret-kit secret copy -R owner/source-repo --dst-app agents owner/dest-repo
 | `--dst-env string` | Destination environment name (not allowed with a non-`actions` `--dst-app`) | `--src-env` when `--scope env` |
 | `--dst-token string` | Token for the destination host (single host only) | local `gh` authentication |
 | `--exclude-secrets strings` | Secret names to exclude | |
+| `--no-copy-repository-access` | With `--scope org`, skip copying each secret's visibility and selected repositories | false |
 | `--overwrite` | Overwrite existing secrets at destination | false |
 | `--rename strings` | Rename mapping in `OLD_NAME=NEW_NAME` format | |
 | `--repo string` / `-R` | Source repository | current repo |
