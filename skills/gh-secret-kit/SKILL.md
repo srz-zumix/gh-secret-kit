@@ -203,6 +203,7 @@ gh secret-kit secret agents copy -R owner/source-repo --dst-app actions owner/de
 | `--dst-token string` | Token for the destination host (single host only) | local `gh` authentication |
 | `--exclude-secrets strings` | Secret names to exclude | |
 | `--keep-workflow` | Keep the temporary branch and Agents secrets after the copy | false |
+| `--no-copy-repository-access` | With `--scope org`, skip copying each secret's visibility and selected repositories | false |
 | `--overwrite` | Overwrite existing secrets at destination | false |
 | `--prompt string` | Task description passed to the Copilot coding agent | a prompt that tells the agent there is nothing to do |
 | `--rename strings` | Rename mapping in `OLD_NAME=NEW_NAME` format | |
@@ -264,6 +265,7 @@ gh secret-kit secret codespaces copy -R owner/source-repo --dst-app actions owne
 | `--include-user-secrets` | Also copy the Codespaces secrets of the authenticated user | false |
 | `--keep-codespace` | Keep the codespace after the copy | false |
 | `--machine string` | Machine type of the codespace | smallest available |
+| `--no-copy-repository-access` | With `--scope org`, skip copying each secret's visibility and selected repositories | false |
 | `--overwrite` | Overwrite existing secrets at destination | false |
 | `--rename strings` | Rename mapping in `OLD_NAME=NEW_NAME` format | |
 | `--repo string` / `-R` | Source repository | current repo |
@@ -362,6 +364,7 @@ host uses the source host. All flags below are optional.
 | `--dst-token string` | Destination token override; single destination host only | local `gh` authentication |
 | `--exclude-secrets strings` | Names to exclude, comma-separated or repeatable | none |
 | `--keep-workflow` | Keep temporary branches, secrets, pull requests, and run history; still restore the default branch | false |
+| `--no-copy-repository-access` | With `--scope org`, skip copying each secret's visibility and selected repositories | false |
 | `--overwrite` | Overwrite existing destination secrets | false |
 | `--rename strings` | Repeatable `OLD_NAME=NEW_NAME` mapping | no renaming |
 | `--repo string` / `-R` | Source repository | current repo |
