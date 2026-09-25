@@ -317,6 +317,7 @@ Generate a GitHub Actions workflow that migrates organization secrets from the s
 **Options:**
 
 - `--branch string`: Branch to push the workflow to (default: "gh-secret-kit-migrate")
+- `--copy-repository-access`: Also copy each organization secret's visibility and selected repositories to the destination (default: true). Access that cannot be determined, or selected repositories missing at the destination, are skipped with a warning.
 - `--dst string` / `-d`: Destination organization (e.g., org or HOST/org)
 - `--dst-token-secret string`: Secret variable name that holds the PAT for the destination (e.g. `DST_PAT`; referenced as `${{ secrets.<name> }}` in the generated workflow)
 - `--label string`: Label name for triggering the migration workflow (default: "gh-secret-kit-migrate")

@@ -43,7 +43,7 @@ The workflow is pushed to the source repository on a topic branch.`,
 	f.StringVar(&config.Branch, "branch", types.DefaultBranch, "Branch to push the workflow to")
 	f.StringVar(&config.Label, "label", types.DefaultLabel, "Label name for triggering the migration workflow")
 	f.BoolVar(&config.Unarchive, "unarchive", false, "Temporarily unarchive the repository if it is archived, then re-archive after completion")
-	f.BoolVar(&config.CopyRepositoryAccess, "copy-repository-access", true, "With --scope org, also copy each secret's visibility and selected repositories to the destination")
+	f.BoolVar(&config.CopyRepositoryAccess, "copy-repository-access", true, "Also copy each organization secret's visibility and selected repositories to the destination")
 
 	_ = cmd.MarkFlagRequired("dst")
 

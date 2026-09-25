@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/cli/go-gh/v2/pkg/repository"
+	"github.com/srz-zumix/gh-secret-kit/internal/orgaccess"
 	"github.com/srz-zumix/gh-secret-kit/pkg/migrator"
 	"github.com/srz-zumix/go-gh-extension/pkg/gh"
 	"github.com/srz-zumix/go-gh-extension/pkg/logger"
@@ -148,6 +149,36 @@ func RunCreate(ctx context.Context, config *CreateConfig) error {
 		normalizedDst = destRepo.Owner + "/" + destRepo.Name
 	}
 
+	// Collect and map organization secret repository access when requested. This
+	// mirrors the copy path: the source secret's visibility/selected repositories
+	// are read and mapped onto the destination organization. Access that cannot
+	// be reproduced without broadening it is skipped (fail-closed) rather than
+	// falling back to gh's default "private" visibility.
+	var orgAccess map[string]migrator.OrgSecretAccess
+	if scope == migrator.SecretScopeOrg && config.CopyRepositoryAccess {
+		srcAccess, aerr := orgaccess.Collect(ctx, client, sourceRepo, migrator.SecretAppActions, secrets)
+		if aerr != nil {
+			logger.Warn("failed to collect source organization secret access, skipping repository access copy", "error", aerr)
+		} else if config.DestinationTokenSecret == "" || destHost == sourceRepo.Host {
+			// The destination can be inspected locally, so "selected" access can
+			// be verified against the destination organization's repositories.
+			destAccessRepo := repository.Repository{Host: destHost, Owner: destRepo.Owner, Name: destRepo.Name}
+			destClient, derr := gh.NewGitHubClientWithRepo(destAccessRepo)
+			if derr != nil {
+				logger.Warn("failed to create destination client, skipping secrets whose selected access cannot be verified", "error", derr)
+				orgAccess = orgaccess.SkipUnresolved(srcAccess)
+			} else {
+				orgAccess = orgaccess.MapForDestination(ctx, destClient, destHost, destRepo.Owner, srcAccess)
+			}
+		} else {
+			// Only the destination token secret name is available locally (the
+			// token value lives at workflow runtime), so the destination cannot be
+			// inspected. Skip "selected" secrets to avoid broadening their access.
+			logger.Warn("destination token is only available at workflow runtime, skipping secrets whose selected access cannot be verified", "destination", config.Destination)
+			orgAccess = orgaccess.SkipUnresolved(srcAccess)
+		}
+	}
+
 	// Build workflow configuration
 	workflowConfig := migrator.WorkflowConfig{
 		WorkflowName:           config.WorkflowName,
@@ -163,6 +194,7 @@ func RunCreate(ctx context.Context, config *CreateConfig) error {
 		Overwrite:              config.Overwrite,
 		DestinationTokenSecret: config.DestinationTokenSecret,
 		Scope:                  scope,
+		OrgAccess:              orgAccess,
 	}
 
 	// Generate workflow YAML
