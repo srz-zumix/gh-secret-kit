@@ -63,7 +63,7 @@ func TestCollect(t *testing.T) {
 		}
 	})
 
-	got, err := Collect(context.Background(), client, srcRepo, []string{"ALLVIS", "PRIVATEVIS", "PICKED", "UNLISTABLE"})
+	got, err := Collect(context.Background(), client, srcRepo, migrator.SecretAppActions, []string{"ALLVIS", "PRIVATEVIS", "PICKED", "UNLISTABLE"})
 	if err != nil {
 		t.Fatalf("Collect returned error: %v", err)
 	}
@@ -89,6 +89,62 @@ func TestCollect(t *testing.T) {
 	}
 }
 
+func TestCollectAppDispatch(t *testing.T) {
+	// Each app must read its own organization secret store, so Collect has to
+	// dispatch to the matching listing and selected-repository endpoints.
+	cases := []struct {
+		name string
+		app  migrator.SecretApp
+		path string
+	}{
+		{"actions", migrator.SecretAppActions, "actions"},
+		{"default", "", "actions"},
+		{"agents", migrator.SecretAppAgents, "agents"},
+		{"codespaces", migrator.SecretAppCodespaces, "codespaces"},
+		{"dependabot", migrator.SecretAppDependabot, "dependabot"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			listPath := "/orgs/owner/" + tc.path + "/secrets"
+			reposPath := listPath + "/PICKED/repositories"
+			var listed, reposListed bool
+			client := newAPIClient(t, func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case listPath:
+					listed = true
+					_, _ = fmt.Fprint(w, `{"total_count":2,"secrets":[
+						{"name":"ALLVIS","visibility":"all"},
+						{"name":"PICKED","visibility":"selected"}
+					]}`)
+				case reposPath:
+					reposListed = true
+					_, _ = fmt.Fprint(w, `{"total_count":1,"repositories":[{"name":"repo-a"}]}`)
+				default:
+					t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+					http.Error(w, "unexpected", http.StatusInternalServerError)
+				}
+			})
+
+			got, err := Collect(context.Background(), client, srcRepo, tc.app, []string{"ALLVIS", "PICKED"})
+			if err != nil {
+				t.Fatalf("Collect returned error: %v", err)
+			}
+			if !listed {
+				t.Errorf("expected the %q secrets to be listed", tc.path)
+			}
+			if !reposListed {
+				t.Errorf("expected the %q selected repositories to be listed", tc.path)
+			}
+			if got["ALLVIS"].Visibility != "all" || got["ALLVIS"].Skip {
+				t.Errorf("unexpected ALLVIS: %+v", got["ALLVIS"])
+			}
+			if got["PICKED"].Visibility != "selected" || got["PICKED"].Skip || !slices.Equal(got["PICKED"].Repos, []string{"repo-a"}) {
+				t.Errorf("unexpected PICKED: %+v", got["PICKED"])
+			}
+		})
+	}
+}
+
 func TestCollectListFailureSkipsAll(t *testing.T) {
 	// When the org secrets cannot be listed at all, the visibility of every
 	// requested secret is unknown. Collect must mark them all Skip so a
@@ -100,7 +156,7 @@ func TestCollectListFailureSkipsAll(t *testing.T) {
 		http.Error(w, `{"message":"Forbidden"}`, http.StatusForbidden)
 	})
 
-	got, err := Collect(context.Background(), client, srcRepo, []string{"FOO", "BAR"})
+	got, err := Collect(context.Background(), client, srcRepo, migrator.SecretAppActions, []string{"FOO", "BAR"})
 	if err != nil {
 		t.Fatalf("Collect returned error: %v", err)
 	}
@@ -123,7 +179,7 @@ func TestCollectUnknownVisibilitySkipped(t *testing.T) {
 		]}`)
 	})
 
-	got, err := Collect(context.Background(), client, srcRepo, []string{"EMPTY", "FUTURE"})
+	got, err := Collect(context.Background(), client, srcRepo, migrator.SecretAppActions, []string{"EMPTY", "FUTURE"})
 	if err != nil {
 		t.Fatalf("Collect returned error: %v", err)
 	}
@@ -145,7 +201,7 @@ func TestCollectMissingSecretSkipped(t *testing.T) {
 		_, _ = fmt.Fprint(w, `{"total_count":1,"secrets":[{"name":"PRESENT","visibility":"all"}]}`)
 	})
 
-	got, err := Collect(context.Background(), client, srcRepo, []string{"PRESENT", "MISSING"})
+	got, err := Collect(context.Background(), client, srcRepo, migrator.SecretAppActions, []string{"PRESENT", "MISSING"})
 	if err != nil {
 		t.Fatalf("Collect returned error: %v", err)
 	}
@@ -154,6 +210,18 @@ func TestCollectMissingSecretSkipped(t *testing.T) {
 	}
 	if !got["MISSING"].Skip {
 		t.Errorf("expected MISSING to be skipped, got %+v", got["MISSING"])
+	}
+}
+
+func TestCollectUnsupportedApp(t *testing.T) {
+	// An unsupported app must surface a validation error rather than silently
+	// producing an empty result.
+	client := newAPIClient(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+	})
+
+	if _, err := Collect(context.Background(), client, srcRepo, migrator.SecretApp("bogus"), []string{"FOO"}); err == nil {
+		t.Error("expected Collect to return an error for an unsupported app")
 	}
 }
 

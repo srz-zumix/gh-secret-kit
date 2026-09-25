@@ -12,6 +12,7 @@ import (
 	"github.com/cli/go-gh/v2/pkg/repository"
 	"github.com/google/go-github/v90/github"
 	"github.com/srz-zumix/gh-secret-kit/internal/destination"
+	"github.com/srz-zumix/gh-secret-kit/internal/orgaccess"
 	"github.com/srz-zumix/gh-secret-kit/pkg/migrator"
 	"github.com/srz-zumix/go-gh-extension/pkg/gh"
 	"github.com/srz-zumix/go-gh-extension/pkg/logger"
@@ -68,6 +69,13 @@ type CopyConfig struct {
 	RetentionPeriod  string
 	// KeepCodespace leaves the codespace running after the copy, for debugging.
 	KeepCodespace bool
+	// CopyRepositoryAccess, when true and Scope is SecretScopeOrg, reproduces
+	// each org secret's visibility and selected repositories at the
+	// destination. Access that cannot be determined, or selected repositories
+	// missing at the destination, are skipped with a warning instead of
+	// failing the copy. The CLI enables this by default; the struct zero value
+	// is false.
+	CopyRepositoryAccess bool
 }
 
 // RunCopy copies the Codespaces secrets available to the source repository to
@@ -107,7 +115,7 @@ func RunCopy(ctx context.Context, config *CopyConfig) error {
 		return fmt.Errorf("failed to create GitHub client: %w", err)
 	}
 
-	secrets, err := collectSecrets(ctx, client, sourceRepo, config, scope)
+	secrets, accessSecrets, err := collectSecrets(ctx, client, sourceRepo, config, scope)
 	if err != nil {
 		return err
 	}
@@ -146,7 +154,7 @@ func RunCopy(ctx context.Context, config *CopyConfig) error {
 		Rename:         renameMap,
 		Overwrite:      config.Overwrite,
 		TokenEnvFile:   remoteTokenFile,
-		Destinations:   buildScriptDestinations(destinations, tokenEnvNames),
+		Destinations:   buildScriptDestinations(ctx, client, sourceRepo, migrator.SecretAppCodespaces, accessSecrets, hostTokens, orgLevel && config.CopyRepositoryAccess, destinations, tokenEnvNames),
 	}
 	script, err := migrator.GenerateCodespacesCopyScript(scriptConfig)
 	if err != nil {
@@ -229,14 +237,52 @@ func remoteCommand(script string) string {
 }
 
 // buildScriptDestinations converts the resolved destinations into the form
-// expected by the script generator.
-func buildScriptDestinations(destinations []*destination.Destination, tokenEnvNames map[string]string) []migrator.CodespacesCopyDestination {
+// expected by the script generator. When copying org-scoped secrets with
+// CopyRepositoryAccess enabled, it also collects each secret's source
+// visibility/repos and maps them onto the destination organization. sourceApp
+// is the source secret store the access metadata is read from.
+func buildScriptDestinations(ctx context.Context, client *gh.GitHubClient, sourceRepo repository.Repository, sourceApp migrator.SecretApp, secrets []string, hostTokens map[string]string, copyAccess bool, destinations []*destination.Destination, tokenEnvNames map[string]string) []migrator.CodespacesCopyDestination {
+	var srcAccess map[string]orgaccess.Source
+	if copyAccess {
+		var err error
+		srcAccess, err = orgaccess.Collect(ctx, client, sourceRepo, sourceApp, secrets)
+		if err != nil {
+			logger.Warn("failed to collect source organization secret access, skipping repository access copy", "error", err)
+			copyAccess = false
+		}
+	}
+
 	result := make([]migrator.CodespacesCopyDestination, 0, len(destinations))
+	destClients := make(map[string]*gh.GitHubClient)
 	for _, dest := range destinations {
+		var destAccess map[string]migrator.OrgSecretAccess
+		if copyAccess {
+			// Reuse the destination client across destinations that share a
+			// host, since each host resolves to a single token.
+			destClient, ok := destClients[dest.Host]
+			if !ok {
+				var err error
+				destClient, err = gh.NewGitHubClientWithToken(dest.Repo, hostTokens[dest.Host])
+				if err != nil {
+					// The destination cannot be inspected, so "selected" access
+					// cannot be verified. Skip those secrets instead of letting
+					// them fall back to a broadening "private" default.
+					logger.Warn("failed to create destination client, skipping secrets whose selected access cannot be verified", "destination", dest.Target, "error", err)
+				} else {
+					destClients[dest.Host] = destClient
+				}
+			}
+			if destClient == nil {
+				destAccess = orgaccess.SkipUnresolved(srcAccess)
+			} else {
+				destAccess = orgaccess.MapForDestination(ctx, destClient, dest.Host, dest.Target, srcAccess)
+			}
+		}
 		result = append(result, migrator.CodespacesCopyDestination{
-			Target:   dest.Target,
-			Host:     dest.Host,
-			TokenEnv: tokenEnvNames[dest.Host],
+			Target:    dest.Target,
+			Host:      dest.Host,
+			TokenEnv:  tokenEnvNames[dest.Host],
+			OrgAccess: destAccess,
 		})
 	}
 	return result
@@ -277,12 +323,22 @@ func writeTokenFile(destinations []*destination.Destination, tokenEnvNames, host
 }
 
 // collectSecrets resolves the Codespaces secret names to copy and applies the
-// include and exclude filters.
-func collectSecrets(ctx context.Context, client *gh.GitHubClient, sourceRepo repository.Repository, config *CopyConfig, scope migrator.SecretScope) ([]string, error) {
-	names := config.Secrets
+// include and exclude filters. It also returns the subset of the resolved names
+// that are organization Codespaces secrets ("access names"). Only those names
+// carry organization repository-access metadata: user-level secrets (whether
+// merged in by --include-user-secrets or named explicitly) are not organization
+// secrets, so applying organization access to them would wrongly mark them Skip
+// and drop them from the copy. The access-name subset is only meaningful when
+// organization access is being copied; otherwise it equals the full name list.
+func collectSecrets(ctx context.Context, client *gh.GitHubClient, sourceRepo repository.Repository, config *CopyConfig, scope migrator.SecretScope) (names []string, accessNames []string, err error) {
+	copyAccess := scope == migrator.SecretScopeOrg && config.CopyRepositoryAccess
+
+	names = config.Secrets
+	// orgSecretNames holds the organization Codespaces secret names known at the
+	// source, used to identify which resolved names carry organization access.
+	var orgSecretNames []string
 	if len(names) == 0 {
 		var secrets []*github.Secret
-		var err error
 		if scope == migrator.SecretScopeOrg {
 			logger.Info("No specific secrets specified, fetching org Codespaces secrets from source...")
 			secrets, err = gh.ListCodespacesOrgSecrets(ctx, client, sourceRepo)
@@ -291,20 +347,47 @@ func collectSecrets(ctx context.Context, client *gh.GitHubClient, sourceRepo rep
 			secrets, err = gh.ListCodespacesRepoSecrets(ctx, client, sourceRepo)
 		}
 		if err != nil {
-			return nil, fmt.Errorf("failed to fetch Codespaces secrets from source: %w", err)
+			return nil, nil, fmt.Errorf("failed to fetch Codespaces secrets from source: %w", err)
 		}
 		names = secretNames(secrets)
+		if scope == migrator.SecretScopeOrg {
+			orgSecretNames = names
+		}
 
 		if config.IncludeUserSecrets {
 			logger.Info("Fetching the Codespaces secrets of the authenticated user...")
 			userSecrets, err := gh.ListCodespacesUserSecrets(ctx, client)
 			if err != nil {
-				return nil, fmt.Errorf("failed to fetch the Codespaces secrets of the authenticated user: %w", err)
+				return nil, nil, fmt.Errorf("failed to fetch the Codespaces secrets of the authenticated user: %w", err)
 			}
 			names = mergeNames(names, secretNames(userSecrets))
 		}
+	} else if copyAccess {
+		// Explicit names may include user-level secrets, so list the
+		// organization secrets to tell which of them carry organization access.
+		orgSecrets, err := gh.ListCodespacesOrgSecrets(ctx, client, sourceRepo)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to fetch org Codespaces secrets from source: %w", err)
+		}
+		orgSecretNames = secretNames(orgSecrets)
 	}
-	return migrator.ExcludeSecrets(names, config.ExcludeSecrets), nil
+
+	names = migrator.ExcludeSecrets(names, config.ExcludeSecrets)
+	if !copyAccess {
+		return names, names, nil
+	}
+
+	orgSet := make(map[string]struct{}, len(orgSecretNames))
+	for _, name := range orgSecretNames {
+		orgSet[name] = struct{}{}
+	}
+	accessNames = make([]string, 0, len(names))
+	for _, name := range names {
+		if _, ok := orgSet[name]; ok {
+			accessNames = append(accessNames, name)
+		}
+	}
+	return names, accessNames, nil
 }
 
 // resolveMachine picks the smallest machine type available for the repository,

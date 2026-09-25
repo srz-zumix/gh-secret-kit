@@ -8,6 +8,7 @@ import (
 	"context"
 
 	"github.com/cli/go-gh/v2/pkg/repository"
+	"github.com/google/go-github/v90/github"
 	"github.com/srz-zumix/gh-secret-kit/pkg/migrator"
 	"github.com/srz-zumix/go-gh-extension/pkg/gh"
 	"github.com/srz-zumix/go-gh-extension/pkg/logger"
@@ -29,10 +30,9 @@ type Source struct {
 }
 
 // Collect fetches the visibility (and, for "selected", the repository list) of
-// each named organization secret from the source. The source secret values and
-// names are always read from the Actions store (the only store whose secret
-// values a generated copy workflow can read), so access metadata is likewise
-// read from the Actions store regardless of the destination store.
+// each named organization secret from the source. The app selects which secret
+// store the metadata is read from, so it must be the source store the copy
+// reads secret values from (never the destination store).
 //
 // When the organization secrets cannot be listed at all, the visibility of
 // every requested secret is unknown, so each is marked Skip: a "selected"
@@ -41,17 +41,36 @@ type Source struct {
 // safe ones. Individual secrets that are absent from the listing, whose
 // visibility is empty or unsupported, or whose "selected" repositories cannot
 // be inspected, are likewise skipped rather than copied with broadened access.
-func Collect(ctx context.Context, client *gh.GitHubClient, srcRepo repository.Repository, secrets []string) (map[string]Source, error) {
+func Collect(ctx context.Context, client *gh.GitHubClient, srcRepo repository.Repository, app migrator.SecretApp, secrets []string) (map[string]Source, error) {
 	wanted := make(map[string]struct{}, len(secrets))
 	for _, name := range secrets {
 		wanted[name] = struct{}{}
 	}
 
-	orgSecrets, err := gh.ListOrgSecrets(ctx, client, srcRepo)
+	var orgSecrets []*github.Secret
+	var listSelectedRepos func(context.Context, *gh.GitHubClient, repository.Repository, string) ([]*github.Repository, error)
+	var err error
+
+	switch app {
+	case "", migrator.SecretAppActions:
+		orgSecrets, err = gh.ListOrgSecrets(ctx, client, srcRepo)
+		listSelectedRepos = gh.ListSelectedReposForOrgSecret
+	case migrator.SecretAppAgents:
+		orgSecrets, err = gh.ListAgentsOrgSecrets(ctx, client, srcRepo)
+		listSelectedRepos = gh.ListSelectedReposForAgentsOrgSecret
+	case migrator.SecretAppCodespaces:
+		orgSecrets, err = gh.ListCodespacesOrgSecrets(ctx, client, srcRepo)
+		listSelectedRepos = gh.ListSelectedReposForCodespacesOrgSecret
+	case migrator.SecretAppDependabot:
+		orgSecrets, err = gh.ListDependabotOrgSecrets(ctx, client, srcRepo)
+		listSelectedRepos = gh.ListSelectedReposForDependabotOrgSecret
+	default:
+		return nil, migrator.ValidateSecretApp(app)
+	}
 	if err != nil {
 		// The visibility of every requested secret is unknown, so skip them all
 		// to avoid broadening a "selected" secret to "private".
-		logger.Warn("failed to list organization secrets to copy repository access, skipping affected secrets to avoid broadening access", "org", srcRepo.Owner, "error", err)
+		logger.Warn("failed to list organization secrets to copy repository access, skipping affected secrets to avoid broadening access", "app", app, "org", srcRepo.Owner, "error", err)
 		return skipAll(secrets), nil
 	}
 
@@ -65,19 +84,19 @@ func Collect(ctx context.Context, client *gh.GitHubClient, srcRepo repository.Re
 		// generator would omit --visibility and gh would default to "private",
 		// broadening an unknown secret. Skip it to stay fail-closed.
 		if !migrator.IsValidOrgSecretVisibility(secret.Visibility) {
-			logger.Warn("organization secret has an unknown visibility, skipping it to avoid broadening access", "secret", secret.Name, "visibility", secret.Visibility)
+			logger.Warn("organization secret has an unknown visibility, skipping it to avoid broadening access", "app", app, "secret", secret.Name, "visibility", secret.Visibility)
 			src.Skip = true
 			result[secret.Name] = src
 			continue
 		}
 		if secret.Visibility == "selected" {
-			repos, err := gh.ListSelectedReposForOrgSecret(ctx, client, srcRepo, secret.Name)
+			repos, err := listSelectedRepos(ctx, client, srcRepo, secret.Name)
 			if err != nil {
 				// The secret is restricted to selected repositories, but the
 				// list could not be retrieved. Copying it with gh's default
 				// ("private") would broaden access to every private repository,
 				// so mark it to be skipped instead.
-				logger.Warn("failed to list selected repositories for organization secret, skipping this secret to avoid broadening access", "secret", secret.Name, "error", err)
+				logger.Warn("failed to list selected repositories for organization secret, skipping this secret to avoid broadening access", "app", app, "secret", secret.Name, "error", err)
 				src.Skip = true
 				result[secret.Name] = src
 				continue
@@ -92,7 +111,7 @@ func Collect(ctx context.Context, client *gh.GitHubClient, srcRepo repository.Re
 	// skip it rather than let the generator fall back to a broadening "private".
 	for name := range wanted {
 		if _, ok := result[name]; !ok {
-			logger.Warn("organization secret not found while collecting repository access, skipping it to avoid broadening access", "org", srcRepo.Owner, "secret", name)
+			logger.Warn("organization secret not found while collecting repository access, skipping it to avoid broadening access", "app", app, "org", srcRepo.Owner, "secret", name)
 			result[name] = Source{Skip: true}
 		}
 	}

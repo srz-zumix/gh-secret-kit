@@ -256,7 +256,7 @@ func buildWorkflowDestinations(ctx context.Context, client *gh.GitHubClient, sou
 	copyAccess := scope == migrator.SecretScopeOrg && config.CopyRepositoryAccess
 	if copyAccess {
 		var err error
-		srcAccess, err = orgaccess.Collect(ctx, client, sourceRepo, secrets)
+		srcAccess, err = orgaccess.Collect(ctx, client, sourceRepo, migrator.SecretAppActions, secrets)
 		if err != nil {
 			logger.Warn("failed to collect source organization secret access, skipping repository access copy", "error", err)
 			copyAccess = false
@@ -264,15 +264,26 @@ func buildWorkflowDestinations(ctx context.Context, client *gh.GitHubClient, sou
 	}
 
 	result := make([]migrator.CopyDestination, 0, len(destinations))
+	destClients := make(map[string]*gh.GitHubClient)
 	for _, dest := range destinations {
 		var destAccess map[string]migrator.OrgSecretAccess
 		if copyAccess {
-			destClient, err := gh.NewGitHubClientWithToken(dest.Repo, hostTokens[dest.Host])
-			if err != nil {
-				// The destination cannot be inspected, so "selected" access
-				// cannot be verified. Skip those secrets instead of letting
-				// them fall back to a broadening "private" default.
-				logger.Warn("failed to create destination client, skipping secrets whose selected access cannot be verified", "destination", dest.Target, "error", err)
+			// Reuse the destination client across destinations that share a
+			// host, since each host resolves to a single token.
+			destClient, ok := destClients[dest.Host]
+			if !ok {
+				var err error
+				destClient, err = gh.NewGitHubClientWithToken(dest.Repo, hostTokens[dest.Host])
+				if err != nil {
+					// The destination cannot be inspected, so "selected" access
+					// cannot be verified. Skip those secrets instead of letting
+					// them fall back to a broadening "private" default.
+					logger.Warn("failed to create destination client, skipping secrets whose selected access cannot be verified", "destination", dest.Target, "error", err)
+				} else {
+					destClients[dest.Host] = destClient
+				}
+			}
+			if destClient == nil {
 				destAccess = orgaccess.SkipUnresolved(srcAccess)
 			} else {
 				destAccess = orgaccess.MapForDestination(ctx, destClient, dest.Host, dest.Target, srcAccess)

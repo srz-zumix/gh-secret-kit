@@ -19,6 +19,7 @@ func NewCopyCmd() *cobra.Command {
 	var scope string
 	var dstApp string
 	var timeout string
+	var noCopyRepositoryAccess bool
 
 	cmd := &cobra.Command{
 		Use:   "copy <dst> [dst...]",
@@ -51,6 +52,7 @@ checks may take several minutes; adjust --timeout if needed.`,
 				return err
 			}
 			config.Timeout = duration
+			config.CopyRepositoryAccess = !noCopyRepositoryAccess
 			config.Destinations = args
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
@@ -78,6 +80,7 @@ checks may take several minutes; adjust --timeout if needed.`,
 	f.StringVar(&config.RunnerLabel, "runner-label", types.DefaultCopyRunnerLabel, "Runner label for runs-on of the generated copy workflow")
 	f.StringVar(&timeout, "timeout", types.DefaultDependabotCopyTimeout, "How long to wait for Dependabot and the copy workflow to finish (e.g., 30m, 1h)")
 	f.BoolVar(&config.KeepWorkflow, "keep-workflow", false, "Keep temporary branches, Dependabot secrets, pull requests, and run history; still restore the default branch")
+	f.BoolVar(&noCopyRepositoryAccess, "no-copy-repository-access", false, "With --scope org, skip copying each secret's visibility and selected repositories to the destination")
 
 	return cmd
 }

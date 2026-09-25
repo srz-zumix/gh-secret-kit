@@ -17,6 +17,7 @@ func NewCopyCmd() *cobra.Command {
 	var config workflow.CopyConfig
 	var scope string
 	var dstApp string
+	var noCopyRepositoryAccess bool
 
 	cmd := &cobra.Command{
 		Use:   "copy <dst> [dst...]",
@@ -48,15 +49,15 @@ Use --dst-app to select which secret store the destination secrets are written t
 Since only Actions secrets are readable from a workflow, --dst-app changes the
 destination store only; the source is always read as Actions secrets.
 
-When --scope is org, --copy-repository-access (on by default) reproduces each
-source secret's visibility (all/private/selected) and, for selected, the
-granted repositories at the destination organization. A selected secret whose
-granted repositories cannot be determined at the source, or none of which exist
-at the destination, is skipped rather than copied, because falling back to gh's
-default (private) would broaden its access to every private repository. When the
-visibility itself cannot be determined (e.g. missing org admin permission), the
-affected secrets are skipped for the same reason; pass
---copy-repository-access=false to copy them with gh's default visibility instead.
+When --scope is org, repository access is copied by default: each source
+secret's visibility (all/private/selected) and, for selected, the granted
+repositories are reproduced at the destination organization. A selected secret
+whose granted repositories cannot be determined at the source, or none of which
+exist at the destination, is skipped rather than copied, because falling back to
+gh's default (private) would broaden its access to every private repository.
+When the visibility itself cannot be determined (e.g. missing org admin
+permission), the affected secrets are skipped for the same reason; pass
+--no-copy-repository-access to copy them with gh's default visibility instead.
 
 Once the workflow run finishes, the temporary branch, the temporary token secrets,
 and the workflow run history are deleted.`,
@@ -71,6 +72,7 @@ and the workflow run history are deleted.`,
 			if err := parser.ValidateTokenSecretName(config.TokenSecretName); err != nil {
 				return err
 			}
+			config.CopyRepositoryAccess = !noCopyRepositoryAccess
 			config.Destinations = args
 			return workflow.RunCopy(context.Background(), &config)
 		},
@@ -94,7 +96,7 @@ and the workflow run history are deleted.`,
 	f.StringVar(&config.Branch, "branch", "", "Temporary branch name (defaults to a unique name derived from the workflow run ID, or a timestamp outside GitHub Actions)")
 	f.StringVar(&config.Timeout, "timeout", "10m", "Timeout duration when waiting for workflow completion (e.g., 5m, 1h)")
 	f.BoolVar(&config.Unarchive, "unarchive", false, "Temporarily unarchive the source repository if it is archived, then re-archive after the copy")
-	f.BoolVar(&config.CopyRepositoryAccess, "copy-repository-access", true, "With --scope org, also copy each secret's visibility and selected repositories to the destination")
+	f.BoolVar(&noCopyRepositoryAccess, "no-copy-repository-access", false, "With --scope org, skip copying each secret's visibility and selected repositories to the destination")
 
 	return cmd
 }
