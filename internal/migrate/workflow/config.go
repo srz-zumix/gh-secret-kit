@@ -34,6 +34,12 @@ type CreateConfig struct {
 	Label                  string
 	Unarchive              bool
 	SkipArchiveCheck       bool
+	// CopyRepositoryAccess, when true and Scope is SecretScopeOrg, reproduces
+	// each org secret's visibility and selected repositories at the
+	// destination. Access that cannot be determined, or selected repositories
+	// missing at the destination, are skipped with a warning instead of
+	// broadening access.
+	CopyRepositoryAccess bool
 }
 
 // RunConfig holds configuration for the run operation

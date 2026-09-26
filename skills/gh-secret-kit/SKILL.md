@@ -975,6 +975,7 @@ gh secret-kit migrate org delete -s owner/source-repo
 Same flags as `migrate repo` except:
 - `--dst` / `-d` accepts an organization name instead of a repository
 - `check`: `--src` / `-s` accepts a source organization name instead of a repository
+- `create`: adds `--copy-repository-access` (default: `true`) to also copy each organization secret's visibility and selected repositories to the destination; disable with `--copy-repository-access=false`
 
 ### Migrate Env Secrets
 
