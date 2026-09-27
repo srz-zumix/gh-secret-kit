@@ -4,12 +4,11 @@ import (
 	"context"
 	"fmt"
 	"slices"
-	"sort"
 
-	"github.com/cli/go-gh/v2/pkg/repository"
 	"github.com/google/go-github/v90/github"
 	"github.com/spf13/cobra"
 	"github.com/srz-zumix/gh-secret-kit/internal/orgaccess"
+	"github.com/srz-zumix/gh-secret-kit/internal/varaccess"
 	"github.com/srz-zumix/go-gh-extension/pkg/gh"
 	"github.com/srz-zumix/go-gh-extension/pkg/logger"
 	"github.com/srz-zumix/go-gh-extension/pkg/parser"
@@ -35,7 +34,13 @@ The source scope is determined by --repo (repository variables) or --owner (orga
 variables). When neither is specified, the current repository is used as the source.
 
 Each destination argument can be owner/repo (repository scope) or owner (organization scope).
-Use --dst-host to apply a host to destination arguments that do not include one.`,
+Use --dst-host to apply a host to destination arguments that do not include one.
+
+With org-to-org copy, repository access is copied by default: each variable's visibility
+(all/private/selected) and, for selected, the granted repositories are reproduced at the
+destination organization. A selected variable whose granted repositories cannot be
+determined at the source, or none of which exist at the destination, is skipped rather than
+copied with unverified access. Pass --no-copy-repository-access to skip copying access.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if noCopyRepositoryAccess {
 				copyRepositoryAccess = false
@@ -63,9 +68,11 @@ Use --dst-host to apply a host to destination arguments that do not include one.
 				return fmt.Errorf("failed to list variables from source: %w", err)
 			}
 
+			// srcAccess is only meaningful for an organization source; it stays nil for
+			// repository sources or when access copying is disabled or fails.
 			var srcAccess map[string]orgaccess.Source
 			if src.Name == "" && copyRepositoryAccess {
-				srcAccess, err = collectOrgVariableAccess(ctx, srcClient, src, vars)
+				srcAccess, err = varaccess.Collect(ctx, srcClient, src, vars)
 				if err != nil {
 					logger.Warn("failed to collect source organization variable access, skipping repository access copy", "org", src.Owner, "error", err)
 					srcAccess = nil
@@ -91,20 +98,31 @@ Use --dst-host to apply a host to destination arguments that do not include one.
 					}
 				}
 
+				// access maps each variable to its resolved destination access; it stays
+				// nil unless this is an org-to-org copy with access copying enabled.
+				var access map[string]varaccess.Applied
+				if dst.Name == "" && srcAccess != nil {
+					access = varaccess.Resolve(ctx, dstClient, dst.Host, dst.Owner, srcAccess)
+				}
+
 				for _, v := range vars {
 					if len(variables) > 0 && !slices.Contains(variables, v.Name) {
 						continue
 					}
 
 					copyVar := *v
-					if src.Name == "" && dst.Name == "" && copyRepositoryAccess && srcAccess != nil {
-						if access, ok := srcAccess[v.Name]; ok && access.Visibility != "" && !access.Skip {
-							copyVar.Visibility = github.String(access.Visibility)
+					applied, haveAccess := access[v.Name]
+					if haveAccess {
+						if applied.Skip {
+							logger.Warn("skipping organization variable to avoid reproducing unverified repository access", "org", dst.Owner, "variable", v.Name)
+							continue
+						}
+						if applied.Visibility != "" {
+							copyVar.Visibility = github.String(applied.Visibility)
 						}
 					}
 
-					err := gh.CreateOrUpdateVariable(ctx, dstClient, dst, &copyVar, overwrite)
-					if err != nil {
+					if err := gh.CreateOrUpdateVariable(ctx, dstClient, dst, &copyVar, overwrite); err != nil {
 						if !errorIfExists && gh.IsVariableAlreadyExists(err) {
 							logger.Warn(fmt.Sprintf("variable %q already exists in %q, skipping", v.Name, dstArg))
 							continue
@@ -112,25 +130,9 @@ Use --dst-host to apply a host to destination arguments that do not include one.
 						return fmt.Errorf("failed to copy variable %q to %q: %w", v.Name, dstArg, err)
 					}
 
-					if src.Name == "" && dst.Name == "" && copyRepositoryAccess && srcAccess != nil {
-						if access, ok := srcAccess[v.Name]; ok && !access.Skip && access.Visibility == "selected" {
-							repos, err := resolveDestinationSelectedRepos(ctx, dstClient, dst.Host, dst.Owner, access.Repos)
-							if err != nil {
-								logger.Warn("failed to resolve destination repositories for organization variable access", "org", dst.Owner, "variable", v.Name, "error", err)
-								continue
-							}
-							if len(repos) == 0 {
-								logger.Warn("no destination repositories left for selected organization variable access, skipping selected repository assignment", "org", dst.Owner, "variable", v.Name)
-								continue
-							}
-							ids, err := resolveSelectedRepoIDs(ctx, dstClient, dst.Host, dst.Owner, repos)
-							if err != nil {
-								logger.Warn("failed to resolve selected repository IDs for organization variable access", "org", dst.Owner, "variable", v.Name, "error", err)
-								continue
-							}
-							if err := gh.SetSelectedReposForOrgVariable(ctx, dstClient, dst, v.Name, ids); err != nil {
-								logger.Warn("failed to apply selected repository access to organization variable", "org", dst.Owner, "variable", v.Name, "error", err)
-							}
+					if haveAccess && applied.Visibility == "selected" {
+						if err := gh.SetSelectedReposForOrgVariable(ctx, dstClient, dst, v.Name, applied.RepoIDs); err != nil {
+							logger.Warn("failed to apply selected repository access to organization variable", "org", dst.Owner, "variable", v.Name, "error", err)
 						}
 					}
 					fmt.Printf("Copied variable: %s -> %s\n", v.Name, dstArg)
@@ -154,110 +156,4 @@ Use --dst-host to apply a host to destination arguments that do not include one.
 	cmd.MarkFlagsMutuallyExclusive("repo", "owner")
 
 	return cmd
-}
-
-func collectOrgVariableAccess(ctx context.Context, client *gh.GitHubClient, org repository.Repository, vars []*github.ActionsVariable) (map[string]orgaccess.Source, error) {
-	wanted := make(map[string]struct{}, len(vars))
-	for _, v := range vars {
-		if v != nil {
-			wanted[v.GetName()] = struct{}{}
-		}
-	}
-
-	listed, err := gh.ListOrgVariables(ctx, client, org)
-	if err != nil {
-		return nil, err
-	}
-
-	result := make(map[string]orgaccess.Source, len(wanted))
-	for _, v := range listed {
-		if v == nil {
-			continue
-		}
-		name := v.GetName()
-		if _, ok := wanted[name]; !ok {
-			continue
-		}
-
-		access := orgaccess.Source{Visibility: ""}
-		if v.Visibility != nil {
-			access.Visibility = *v.Visibility
-		}
-		if access.Visibility == "selected" {
-			repos, err := gh.ListSelectedReposForOrgVariable(ctx, client, org, name)
-			if err != nil {
-				logger.Warn("failed to list selected repositories for organization variable, skipping selected access", "org", org.Owner, "variable", name, "error", err)
-				access.Skip = true
-				result[name] = access
-				continue
-			}
-			for _, repo := range repos {
-				if repo != nil && repo.GetName() != "" {
-					access.Repos = append(access.Repos, repo.GetName())
-				}
-			}
-		}
-		result[name] = access
-	}
-
-	for _, v := range vars {
-		if v == nil {
-			continue
-		}
-		name := v.GetName()
-		if _, ok := result[name]; !ok {
-			result[name] = orgaccess.Source{Skip: true}
-		}
-	}
-	return result, nil
-}
-
-func resolveDestinationSelectedRepos(ctx context.Context, client *gh.GitHubClient, host, org string, sourceRepos []string) ([]string, error) {
-	if len(sourceRepos) == 0 {
-		return nil, nil
-	}
-	seen := make(map[string]struct{}, len(sourceRepos))
-	for _, name := range sourceRepos {
-		if name == "" {
-			continue
-		}
-		repo := repository.Repository{Host: host, Owner: org, Name: name}
-		if _, err := gh.GetRepository(ctx, client, repo); err == nil {
-			seen[name] = struct{}{}
-		} else {
-			logger.Warn("destination repository not found for organization variable access, dropping it from selected access", "org", org, "repo", name, "error", err)
-		}
-	}
-	result := make([]string, 0, len(seen))
-	for name := range seen {
-		result = append(result, name)
-	}
-	sort.Strings(result)
-	return result, nil
-}
-
-func resolveSelectedRepoIDs(ctx context.Context, client *gh.GitHubClient, host, org string, repoNames []string) ([]int64, error) {
-	ids := make([]int64, 0, len(repoNames))
-	for _, name := range repoNames {
-		repo := repository.Repository{Host: host, Owner: org, Name: name}
-		obj, err := gh.GetRepository(ctx, client, repo)
-		if err != nil {
-			return nil, err
-		}
-		if obj != nil && obj.ID != nil {
-			ids = append(ids, *obj.ID)
-		}
-	}
-	return ids, nil
-}
-
-func matchSelectedReposForDestination(source []string, existing map[string]struct{}) []string {
-	result := make([]string, 0, len(source))
-	for _, name := range source {
-		if _, ok := existing[name]; ok {
-			result = append(result, name)
-		}
-	}
-	sort.Strings(result)
-	return result
 }

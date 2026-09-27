@@ -20,14 +20,18 @@ Copy all (or specific) GitHub Actions variables from a source repository or orga
 
 Each destination argument can be `owner/repo` (repository scope) or `owner` (organization scope). Use `--dst-host` to apply a host to destination arguments that do not include one.
 
+With org-to-org copy, repository access is copied by default: each variable's visibility (`all`/`private`/`selected`) and, for `selected`, the granted repositories are reproduced at the destination organization. A `selected` variable whose granted repositories cannot be determined at the source, or none of which exist at the destination, is skipped rather than copied with unverified access. Use `--no-copy-repository-access` to skip copying access.
+
 **Arguments:**
 
 - `<dst> [dst...]`: One or more destination repositories or organizations (required)
 
 **Options:**
 
+- `--copy-repository-access`: With org-to-org variable copy, also copy each variable's visibility and selected repositories to the destination (default: true)
 - `--dst-host string`: Host to apply to destination arguments that do not specify one (e.g., `github.com`)
 - `--error-if-exists`: Return an error if a variable already exists at destination instead of skipping (default: false)
+- `--no-copy-repository-access`: With org-to-org variable copy, skip copying each variable's visibility and selected repositories to the destination (default: false)
 - `--owner string`: Source organization/owner for organization-level variables. Mutually exclusive with `--repo`
 - `--overwrite`: Overwrite existing variables at destination (default: false)
 - `--repo string` / `-R`: Source repository (e.g., `owner/repo`; defaults to current repository). Mutually exclusive with `--owner`
