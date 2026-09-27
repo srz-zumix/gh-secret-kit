@@ -6,6 +6,7 @@ package varaccess
 
 import (
 	"context"
+	"fmt"
 	"sort"
 
 	"github.com/cli/go-gh/v2/pkg/repository"
@@ -14,6 +15,11 @@ import (
 	"github.com/srz-zumix/go-gh-extension/pkg/gh"
 	"github.com/srz-zumix/go-gh-extension/pkg/logger"
 )
+
+// defaultOrgVariableVisibility is gh's default visibility for a newly created
+// organization variable when no visibility is specified. It is used when access
+// copying is disabled so the source visibility is not reproduced.
+const defaultOrgVariableVisibility = "private"
 
 // Collect fetches the visibility (and, for "selected", the repository list) of
 // each requested organization variable from the source organization. A
@@ -171,4 +177,68 @@ func uniqueSorted(names []string) []string {
 	}
 	sort.Strings(result)
 	return result
+}
+
+// CopyOutcome describes what happened to a single variable during Copy. It is
+// only meaningful when Copy returns a nil error.
+type CopyOutcome int
+
+const (
+	// CopyWritten means the variable was created or updated at the destination.
+	CopyWritten CopyOutcome = iota
+	// CopySkippedExists means the variable already existed at the destination
+	// and was left untouched because errorIfExists was false.
+	CopySkippedExists
+	// CopySkippedAccess means the variable was skipped to avoid reproducing
+	// unverified organization repository access.
+	CopySkippedAccess
+)
+
+// Copy creates or updates a single variable at the destination, applying the
+// resolved organization repository access when available.
+//
+// access is the per-variable destination access from Resolve, keyed by variable
+// name; it is non-nil only for an organization-to-organization copy with access
+// copying enabled. For an organization destination it governs visibility:
+//   - When access is non-nil (access copying enabled), a missing or skipped
+//     entry means the access could not be verified, so the variable is skipped
+//     rather than copied with unverified access.
+//   - When access is nil (repository source, or access copying disabled), the
+//     source visibility is not reproduced: the variable is written with gh's
+//     default ("private") visibility so disabling access copying does not leak
+//     the source visibility.
+//
+// For a repository destination visibility does not apply and is left to the
+// repository API. The variable value is copied from v without mutating it.
+func Copy(ctx context.Context, client *gh.GitHubClient, dst repository.Repository, v *github.ActionsVariable, access map[string]Applied, overwrite, errorIfExists bool) (CopyOutcome, error) {
+	copyVar := *v
+
+	applied, haveAccess := access[v.GetName()]
+	if dst.Name == "" {
+		if access != nil {
+			if !haveAccess || applied.Skip {
+				return CopySkippedAccess, nil
+			}
+			visibility := applied.Visibility
+			copyVar.Visibility = &visibility
+		} else {
+			visibility := defaultOrgVariableVisibility
+			copyVar.Visibility = &visibility
+		}
+	}
+
+	if err := gh.CreateOrUpdateVariable(ctx, client, dst, &copyVar, overwrite); err != nil {
+		if !errorIfExists && gh.IsVariableAlreadyExists(err) {
+			return CopySkippedExists, nil
+		}
+		return CopyWritten, err
+	}
+
+	if dst.Name == "" && access != nil && applied.Visibility == "selected" {
+		if err := gh.SetSelectedReposForOrgVariable(ctx, client, dst, v.GetName(), applied.RepoIDs); err != nil {
+			return CopyWritten, fmt.Errorf("failed to apply selected repository access: %w", err)
+		}
+	}
+
+	return CopyWritten, nil
 }

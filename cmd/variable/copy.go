@@ -39,7 +39,8 @@ With org-to-org copy, repository access is copied by default: each variable's vi
 (all/private/selected) and, for selected, the granted repositories are reproduced at the
 destination organization. A selected variable whose granted repositories cannot be
 determined at the source, or none of which exist at the destination, is skipped rather than
-copied with unverified access. Pass --no-copy-repository-access to skip copying access.`,
+copied with unverified access. Pass --no-copy-repository-access to skip copying access and
+write every variable with gh's default (private) visibility instead.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if noCopyRepositoryAccess {
 				copyRepositoryAccess = false
@@ -120,32 +121,18 @@ copied with unverified access. Pass --no-copy-repository-access to skip copying 
 				}
 
 				for _, v := range vars {
-					copyVar := *v
-					applied, haveAccess := access[v.Name]
-					if haveAccess {
-						if applied.Skip {
-							logger.Warn("skipping organization variable to avoid reproducing unverified repository access", "org", dst.Owner, "variable", v.Name)
-							continue
-						}
-						if applied.Visibility != "" {
-							copyVar.Visibility = &applied.Visibility
-						}
-					}
-
-					if err := gh.CreateOrUpdateVariable(ctx, dstClient, dst, &copyVar, overwrite); err != nil {
-						if !errorIfExists && gh.IsVariableAlreadyExists(err) {
-							logger.Warn(fmt.Sprintf("variable %q already exists in %q, skipping", v.Name, dstArg))
-							continue
-						}
+					outcome, err := varaccess.Copy(ctx, dstClient, dst, v, access, overwrite, errorIfExists)
+					if err != nil {
 						return fmt.Errorf("failed to copy variable %q to %q: %w", v.Name, dstArg, err)
 					}
-
-					if haveAccess && applied.Visibility == "selected" {
-						if err := gh.SetSelectedReposForOrgVariable(ctx, dstClient, dst, v.Name, applied.RepoIDs); err != nil {
-							return fmt.Errorf("failed to apply selected repository access to variable %q in %q: %w", v.Name, dstArg, err)
-						}
+					switch outcome {
+					case varaccess.CopySkippedAccess:
+						logger.Warn("skipping organization variable to avoid reproducing unverified repository access", "org", dst.Owner, "variable", v.Name)
+					case varaccess.CopySkippedExists:
+						logger.Warn(fmt.Sprintf("variable %q already exists in %q, skipping", v.Name, dstArg))
+					case varaccess.CopyWritten:
+						fmt.Printf("Copied variable: %s -> %s\n", v.Name, dstArg)
 					}
-					fmt.Printf("Copied variable: %s -> %s\n", v.Name, dstArg)
 				}
 			}
 

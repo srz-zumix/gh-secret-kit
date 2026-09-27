@@ -2,6 +2,7 @@ package varaccess
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	fixture "net/http/httptest"
@@ -187,5 +188,163 @@ func TestResolveMapsAndCaches(t *testing.T) {
 	}
 	if calls["/repos/dest/missing"] != 1 {
 		t.Errorf("missing looked up %d times, want 1", calls["/repos/dest/missing"])
+	}
+}
+
+var destOrg = repository.Repository{Host: "github.com", Owner: "dest"}
+var destRepo = repository.Repository{Host: "github.com", Owner: "dest", Name: "repo"}
+
+// captured records the visibility sent to the create endpoint and whether the
+// selected-repositories endpoint was called.
+type captured struct {
+	createVisibility string
+	setRepos         []int64
+}
+
+func newCopyClient(t *testing.T, cap *captured, exists bool) *gh.GitHubClient {
+	t.Helper()
+	return newAPIClient(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/orgs/dest/actions/variables":
+			if exists {
+				http.Error(w, `{"message":"Conflict"}`, http.StatusConflict)
+				return
+			}
+			var body struct {
+				Visibility string `json:"visibility"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			cap.createVisibility = body.Visibility
+			w.WriteHeader(http.StatusCreated)
+		case r.Method == http.MethodPost && r.URL.Path == "/repos/dest/repo/actions/variables":
+			w.WriteHeader(http.StatusCreated)
+		case r.Method == http.MethodPut && r.URL.Path == "/orgs/dest/actions/variables/NAME/repositories":
+			var body struct {
+				IDs []int64 `json:"selected_repository_ids"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			cap.setRepos = body.IDs
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			http.Error(w, "unexpected", http.StatusInternalServerError)
+		}
+	})
+}
+
+// TestCopyDisabledUsesDefaultVisibility verifies that when access copying is
+// disabled (access is nil) the source visibility is not reproduced at an
+// organization destination; gh's default ("private") is written instead.
+func TestCopyDisabledUsesDefaultVisibility(t *testing.T) {
+	cap := &captured{}
+	client := newCopyClient(t, cap, false)
+	v := &github.ActionsVariable{Name: "NAME", Value: "value", Visibility: github.Ptr("all")}
+
+	outcome, err := Copy(context.Background(), client, destOrg, v, nil, false, false)
+	if err != nil {
+		t.Fatalf("Copy returned error: %v", err)
+	}
+	if outcome != CopyWritten {
+		t.Fatalf("outcome = %v, want CopyWritten", outcome)
+	}
+	if cap.createVisibility != "private" {
+		t.Errorf("created visibility = %q, want %q (source visibility must not be reproduced)", cap.createVisibility, "private")
+	}
+	if v.GetVisibility() != "all" {
+		t.Errorf("source variable visibility mutated to %q", v.GetVisibility())
+	}
+}
+
+// TestCopySelectedAppliesAccess verifies that a resolved "selected" variable is
+// created with selected visibility and its repositories are applied.
+func TestCopySelectedAppliesAccess(t *testing.T) {
+	cap := &captured{}
+	client := newCopyClient(t, cap, false)
+	v := &github.ActionsVariable{Name: "NAME", Value: "value", Visibility: github.Ptr("private")}
+	access := map[string]Applied{"NAME": {Visibility: "selected", RepoIDs: []int64{101, 102}}}
+
+	outcome, err := Copy(context.Background(), client, destOrg, v, access, false, false)
+	if err != nil {
+		t.Fatalf("Copy returned error: %v", err)
+	}
+	if outcome != CopyWritten {
+		t.Fatalf("outcome = %v, want CopyWritten", outcome)
+	}
+	if cap.createVisibility != "selected" {
+		t.Errorf("created visibility = %q, want selected", cap.createVisibility)
+	}
+	if !slices.Equal(cap.setRepos, []int64{101, 102}) {
+		t.Errorf("set repos = %v, want [101 102]", cap.setRepos)
+	}
+}
+
+// TestCopyEnabledMissingEntryFailsClosed verifies that with access copying
+// enabled (access non-nil) a variable without a resolved entry is skipped
+// rather than written with the source visibility.
+func TestCopyEnabledMissingEntryFailsClosed(t *testing.T) {
+	client := newAPIClient(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("no request expected, got %s %s", r.Method, r.URL.Path)
+		http.Error(w, "unexpected", http.StatusInternalServerError)
+	})
+	v := &github.ActionsVariable{Name: "NAME", Value: "value", Visibility: github.Ptr("all")}
+	access := map[string]Applied{"OTHER": {Visibility: "all"}}
+
+	outcome, err := Copy(context.Background(), client, destOrg, v, access, false, false)
+	if err != nil {
+		t.Fatalf("Copy returned error: %v", err)
+	}
+	if outcome != CopySkippedAccess {
+		t.Fatalf("outcome = %v, want CopySkippedAccess", outcome)
+	}
+}
+
+// TestCopySkippedEntry verifies that a variable whose resolved access is marked
+// Skip is not written.
+func TestCopySkippedEntry(t *testing.T) {
+	client := newAPIClient(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("no request expected, got %s %s", r.Method, r.URL.Path)
+		http.Error(w, "unexpected", http.StatusInternalServerError)
+	})
+	v := &github.ActionsVariable{Name: "NAME", Value: "value", Visibility: github.Ptr("selected")}
+	access := map[string]Applied{"NAME": {Skip: true}}
+
+	outcome, err := Copy(context.Background(), client, destOrg, v, access, false, false)
+	if err != nil {
+		t.Fatalf("Copy returned error: %v", err)
+	}
+	if outcome != CopySkippedAccess {
+		t.Fatalf("outcome = %v, want CopySkippedAccess", outcome)
+	}
+}
+
+// TestCopyAlreadyExists verifies that a 409 from the destination is reported as
+// CopySkippedExists when errorIfExists is false.
+func TestCopyAlreadyExists(t *testing.T) {
+	cap := &captured{}
+	client := newCopyClient(t, cap, true)
+	v := &github.ActionsVariable{Name: "NAME", Value: "value", Visibility: github.Ptr("all")}
+
+	outcome, err := Copy(context.Background(), client, destOrg, v, nil, false, false)
+	if err != nil {
+		t.Fatalf("Copy returned error: %v", err)
+	}
+	if outcome != CopySkippedExists {
+		t.Fatalf("outcome = %v, want CopySkippedExists", outcome)
+	}
+}
+
+// TestCopyRepositoryDestination verifies that a repository destination is copied
+// without touching organization visibility handling.
+func TestCopyRepositoryDestination(t *testing.T) {
+	cap := &captured{}
+	client := newCopyClient(t, cap, false)
+	v := &github.ActionsVariable{Name: "NAME", Value: "value", Visibility: github.Ptr("all")}
+
+	outcome, err := Copy(context.Background(), client, destRepo, v, nil, false, false)
+	if err != nil {
+		t.Fatalf("Copy returned error: %v", err)
+	}
+	if outcome != CopyWritten {
+		t.Fatalf("outcome = %v, want CopyWritten", outcome)
 	}
 }
