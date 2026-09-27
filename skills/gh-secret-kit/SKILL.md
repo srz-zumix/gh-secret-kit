@@ -466,8 +466,10 @@ gh secret-kit variable copy owner/dest-repo --dst-host enterprise.internal
 
 | Flag | Description | Default |
 | --- | --- | --- |
+| `--copy-repository-access` | With org-to-org copy, also copy each variable's visibility and selected repositories | true |
 | `--dst-host string` | Host to apply to destinations without one | source host |
 | `--error-if-exists` | Return an error if a variable already exists instead of skipping | false |
+| `--no-copy-repository-access` | With org-to-org copy, skip copying each variable's visibility and selected repositories | false |
 | `--owner string` | Source organization (mutually exclusive with `--repo`) | |
 | `--overwrite` | Overwrite existing variables | false |
 | `--repo string` / `-R` | Source repository | current repo |
