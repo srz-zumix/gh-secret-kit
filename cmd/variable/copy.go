@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/google/go-github/v90/github"
 	"github.com/spf13/cobra"
 	"github.com/srz-zumix/gh-secret-kit/internal/orgaccess"
 	"github.com/srz-zumix/gh-secret-kit/internal/varaccess"
@@ -68,14 +67,29 @@ copied with unverified access. Pass --no-copy-repository-access to skip copying 
 				return fmt.Errorf("failed to list variables from source: %w", err)
 			}
 
+			// Apply the --variables filter to the source list once, up front, so
+			// access collection and every destination copy operate on the same
+			// requested subset instead of listing access for variables that are
+			// not being copied.
+			if len(variables) > 0 {
+				filtered := vars[:0]
+				for _, v := range vars {
+					if slices.Contains(variables, v.Name) {
+						filtered = append(filtered, v)
+					}
+				}
+				vars = filtered
+			}
+
 			// srcAccess is only meaningful for an organization source; it stays nil for
-			// repository sources or when access copying is disabled or fails.
+			// repository sources or when access copying is disabled.
 			var srcAccess map[string]orgaccess.Source
 			if src.Name == "" && copyRepositoryAccess {
 				srcAccess, err = varaccess.Collect(ctx, srcClient, src, vars)
 				if err != nil {
-					logger.Warn("failed to collect source organization variable access, skipping repository access copy", "org", src.Owner, "error", err)
-					srcAccess = nil
+					// Access could not be determined, so fail closed rather than
+					// copy selected variables without their verified repositories.
+					return fmt.Errorf("failed to collect source organization variable access: %w", err)
 				}
 			}
 
@@ -106,10 +120,6 @@ copied with unverified access. Pass --no-copy-repository-access to skip copying 
 				}
 
 				for _, v := range vars {
-					if len(variables) > 0 && !slices.Contains(variables, v.Name) {
-						continue
-					}
-
 					copyVar := *v
 					applied, haveAccess := access[v.Name]
 					if haveAccess {
@@ -118,7 +128,7 @@ copied with unverified access. Pass --no-copy-repository-access to skip copying 
 							continue
 						}
 						if applied.Visibility != "" {
-							copyVar.Visibility = github.String(applied.Visibility)
+							copyVar.Visibility = &applied.Visibility
 						}
 					}
 
@@ -132,7 +142,7 @@ copied with unverified access. Pass --no-copy-repository-access to skip copying 
 
 					if haveAccess && applied.Visibility == "selected" {
 						if err := gh.SetSelectedReposForOrgVariable(ctx, dstClient, dst, v.Name, applied.RepoIDs); err != nil {
-							logger.Warn("failed to apply selected repository access to organization variable", "org", dst.Owner, "variable", v.Name, "error", err)
+							return fmt.Errorf("failed to apply selected repository access to variable %q in %q: %w", v.Name, dstArg, err)
 						}
 					}
 					fmt.Printf("Copied variable: %s -> %s\n", v.Name, dstArg)

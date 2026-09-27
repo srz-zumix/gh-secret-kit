@@ -47,7 +47,10 @@ func Collect(ctx context.Context, client *gh.GitHubClient, org repository.Reposi
 		if v.Visibility != nil {
 			src.Visibility = *v.Visibility
 		}
-		if src.Visibility == "selected" {
+		switch src.Visibility {
+		case "all", "private":
+			// Visibility can be reproduced directly without listing repositories.
+		case "selected":
 			repos, err := gh.ListSelectedReposForOrgVariable(ctx, client, org, name)
 			if err != nil {
 				// The variable is restricted to selected repositories but the
@@ -63,6 +66,13 @@ func Collect(ctx context.Context, client *gh.GitHubClient, org repository.Reposi
 					src.Repos = append(src.Repos, repo.GetName())
 				}
 			}
+		default:
+			// An empty or unsupported visibility cannot be reproduced safely, so
+			// skip it to stay fail-closed rather than reproduce unverified access.
+			logger.Warn("organization variable has an unknown visibility, skipping it to avoid reproducing unverified access", "org", org.Owner, "variable", name, "visibility", src.Visibility)
+			src.Skip = true
+			result[name] = src
+			continue
 		}
 		result[name] = src
 	}
