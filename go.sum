@@ -20,8 +20,8 @@ github.com/Masterminds/sprig/v3 v3.3.0 h1:mQh0Yrg1XPo6vjYXgtf5OtijNAKJRNcTdOOGZe
 github.com/Masterminds/sprig/v3 v3.3.0/go.mod h1:Zy1iXRYNqNLUolqCpL4uhk6SHUMAOSCzdgBfDb35Lz0=
 github.com/Netflix/go-expect v0.0.0-20220104043353-73e0943537d2 h1:+vx7roKuyA63nhn5WAunQHLTznkw5W8b1Xc0dNjp83s=
 github.com/Netflix/go-expect v0.0.0-20220104043353-73e0943537d2/go.mod h1:HBCaDeC1lPdgDeDbhX8XFpy1jqjK0IBG8W5K+xYqA0w=
-github.com/Songmu/skillsmith v0.1.0 h1:R7tT94OrdsLuDGpdiBbLEjS+nDIRKjxGHeejwDpdf6w=
-github.com/Songmu/skillsmith v0.1.0/go.mod h1:agwErnb8lLH48nyoDqEZfoVJovtMGOgqUuTnR1M9ORI=
+github.com/Songmu/skillsmith v0.2.0 h1:f6mO2BEULAn3u+pQLqZFXQdCNdg8UxYOZ6ZgC7+MeX0=
+github.com/Songmu/skillsmith v0.2.0/go.mod h1:ZVeN85pWEyhLfS7iT3pBvGYEXLSWtPkLjKuJUMVtg9k=
 github.com/actions/scaleset v0.4.0 h1:691GC2AkHb3ZGjfNvatboYoRS7CLr3+4VcZk/6w9IbM=
 github.com/actions/scaleset v0.4.0/go.mod h1:2L2I6rggFWV+zprDet6y7y7Vkm3HPudaup78eSc79Uo=
 github.com/atotto/clipboard v0.1.4 h1:EH0zSVneZPSuFR11BlR9YppQTVDbh5+16AmcJi4g1z4=
@@ -198,8 +198,8 @@ github.com/spf13/cobra v1.10.2/go.mod h1:7C1pvHqHw5A4vrJfjNwvOdzYu0Gml16OCs2GRiT
 github.com/spf13/pflag v1.0.9/go.mod h1:McXfInJRrz4CZXVZOBLb0bTZqETkiAhM9Iw0y3An2Bg=
 github.com/spf13/pflag v1.0.10 h1:4EBh2KAYBwaONj6b2Ye1GiHfwjqyROoF4RwYO+vPwFk=
 github.com/spf13/pflag v1.0.10/go.mod h1:McXfInJRrz4CZXVZOBLb0bTZqETkiAhM9Iw0y3An2Bg=
-github.com/srz-zumix/go-gh-extension v0.6.16 h1:msoJfh3/AgO5MzcR0EN+MdN9ChZH0dDOuSp/xFyumHk=
-github.com/srz-zumix/go-gh-extension v0.6.16/go.mod h1:BHc5pHjUKOcrHJdJt7DCDG8pCXQUCp+Yi7JqUa3hmhY=
+github.com/srz-zumix/go-gh-extension v0.6.22 h1:26TsVruSBbMIe3qTIirxuBGxRCbCZzMUpnB1bbbEH2Q=
+github.com/srz-zumix/go-gh-extension v0.6.22/go.mod h1:WAwionl36fqL/Jgof709XTYWpQ81e+U9DvUhuNAQjLw=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/objx v0.5.3 h1:jmXUvGomnU1o3W/V5h2VEradbpJDwGrzugQQvL0POH4=
 github.com/stretchr/objx v0.5.3/go.mod h1:rDQraq+vQZU7Fde9LOZLr8Tax6zZvy4kuNKF+QYS+U0=
