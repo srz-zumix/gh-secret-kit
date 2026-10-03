@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/cli/go-gh/v2/pkg/repository"
@@ -404,10 +405,48 @@ func resolveMachine(ctx context.Context, client *gh.GitHubClient, repo repositor
 		}
 	}
 	if selected == nil {
-		return "", fmt.Errorf("no machine type is available for the source repository")
+		return "", noMachineError(ctx, client, repo)
 	}
 	logger.Info(fmt.Sprintf("Using machine type %s (%s)", selected.GetName(), selected.GetDisplayName()))
 	return selected.GetName(), nil
+}
+
+// noMachineError explains an empty machine type list. The API returns an empty
+// list rather than an error when the token or the organization policy does not
+// allow creating a codespace, so the likely cause is reported here.
+func noMachineError(ctx context.Context, client *gh.GitHubClient, repo repository.Repository) error {
+	const prefix = "no machine type is available for the source repository"
+	host := repo.Host
+	if host == "" {
+		host = "github.com"
+	}
+
+	if scopes, ok, err := gh.GetTokenScopes(ctx, client); err == nil && ok && !slices.Contains(scopes, "codespace") {
+		return fmt.Errorf("%s: the gh token for %s does not have the codespace scope; run \"gh auth refresh -h %s -s codespace\" or switch to an account that has it with \"gh auth switch -h %s\"", prefix, host, host, host)
+	}
+
+	r, err := gh.GetRepository(ctx, client, repo)
+	if err == nil && r.GetOwner().GetType() == "Organization" && !isPublicRepository(r) {
+		if access, err := gh.GetCodespacesOrgAccess(ctx, client, repo); err == nil && access != nil {
+			switch access.Visibility {
+			case gh.CodespacesOrgAccessDisabled:
+				return fmt.Errorf("%s: GitHub Codespaces is disabled for the private repositories of organization %s; ask an organization owner to enable it in the organization's Codespaces settings", prefix, repo.Owner)
+			case gh.CodespacesOrgAccessSelectedMembers:
+				return fmt.Errorf("%s: GitHub Codespaces is enabled only for selected members of organization %s; ask an organization owner to check whether the authenticated user is included", prefix, repo.Owner)
+			}
+		}
+	}
+
+	return fmt.Errorf("%s: make sure the authenticated user can create a codespace on %s/%s (Codespaces policy and billing)", prefix, repo.Owner, repo.Name)
+}
+
+// isPublicRepository reports whether r is public. Older responses may omit
+// visibility, in which case the private flag decides.
+func isPublicRepository(r *github.Repository) bool {
+	if v := r.GetVisibility(); v != "" {
+		return v == "public"
+	}
+	return !r.GetPrivate()
 }
 
 // secretNames extracts the names of the given secrets.

@@ -221,3 +221,110 @@ func TestCollectSecretsOrgAccessExcludesUserSecrets(t *testing.T) {
 		})
 	}
 }
+
+func TestResolveMachineDiagnosesEmptyList(t *testing.T) {
+	sourceRepo := repository.Repository{Host: "github.com", Owner: "owner", Name: "repo"}
+
+	cases := []struct {
+		name         string
+		scopes       *string
+		repoJSON     string
+		accessJSON   string
+		accessStatus int
+		want         string
+	}{
+		{
+			name:     "missing codespace scope",
+			scopes:   github.Ptr("repo, admin:org"),
+			repoJSON: `{"visibility":"private","owner":{"type":"Organization"}}`,
+			want:     "does not have the codespace scope",
+		},
+		{
+			name:       "organization disabled",
+			scopes:     github.Ptr("repo, codespace"),
+			repoJSON:   `{"visibility":"private","owner":{"type":"Organization"}}`,
+			accessJSON: `{"visibility":"disabled"}`,
+			want:       "GitHub Codespaces is disabled",
+		},
+		{
+			name:       "selected members with a token that reports no scopes",
+			repoJSON:   `{"visibility":"internal","owner":{"type":"Organization"}}`,
+			accessJSON: `{"visibility":"selected_members"}`,
+			want:       "check whether the authenticated user is included",
+		},
+		{
+			name:         "organization access forbidden",
+			repoJSON:     `{"visibility":"private","owner":{"type":"Organization"}}`,
+			accessStatus: http.StatusForbidden,
+			want:         "make sure the authenticated user can create a codespace",
+		},
+		{
+			name:         "organization access not found",
+			repoJSON:     `{"visibility":"private","owner":{"type":"Organization"}}`,
+			accessStatus: http.StatusNotFound,
+			want:         "make sure the authenticated user can create a codespace",
+		},
+		{
+			name:         "organization access server error",
+			repoJSON:     `{"visibility":"private","owner":{"type":"Organization"}}`,
+			accessStatus: http.StatusInternalServerError,
+			want:         "make sure the authenticated user can create a codespace",
+		},
+		{
+			name:       "organization access unrestricted",
+			repoJSON:   `{"visibility":"private","owner":{"type":"Organization"}}`,
+			accessJSON: `{"visibility":"all_members"}`,
+			want:       "make sure the authenticated user can create a codespace",
+		},
+		{
+			name:       "organization access unknown",
+			repoJSON:   `{"visibility":"private","owner":{"type":"Organization"}}`,
+			accessJSON: `{"visibility":"unknown"}`,
+			want:       "make sure the authenticated user can create a codespace",
+		},
+		{
+			name:     "public repository falls back to generic message",
+			scopes:   github.Ptr("codespace"),
+			repoJSON: `{"visibility":"public","owner":{"type":"Organization"}}`,
+			want:     "make sure the authenticated user can create a codespace",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := newAPIClient(t, func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case "/repos/owner/repo/codespaces/machines":
+					_, _ = fmt.Fprint(w, `{"total_count":0,"machines":[]}`)
+				case "/":
+					if tc.scopes != nil {
+						w.Header().Set("X-OAuth-Scopes", *tc.scopes)
+					}
+					_, _ = fmt.Fprint(w, `{}`)
+				case "/repos/owner/repo":
+					_, _ = fmt.Fprint(w, tc.repoJSON)
+				case "/orgs/owner/codespaces/access":
+					if r.Method != http.MethodGet || (tc.accessJSON == "" && tc.accessStatus == 0) {
+						t.Errorf("unexpected organization access request %s", r.Method)
+					}
+					if tc.accessStatus != 0 {
+						http.Error(w, "access unavailable", tc.accessStatus)
+						return
+					}
+					_, _ = fmt.Fprint(w, tc.accessJSON)
+				default:
+					t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+					http.Error(w, "unexpected", http.StatusInternalServerError)
+				}
+			})
+
+			_, err := resolveMachine(context.Background(), client, sourceRepo, "")
+			if err == nil {
+				t.Fatal("resolveMachine returned no error for an empty machine list")
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("error = %q, want it to contain %q", err, tc.want)
+			}
+		})
+	}
+}
