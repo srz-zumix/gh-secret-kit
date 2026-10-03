@@ -489,7 +489,7 @@ THE SOFTWARE.
 ================================================================================
 Package: github.com/Songmu/skillsmith
 License: MIT
-URL: https://github.com/Songmu/skillsmith/blob/v0.1.0/LICENSE
+URL: https://github.com/Songmu/skillsmith/blob/v0.2.0/LICENSE
 ================================================================================
 Copyright (c) 2026 Songmu
 
@@ -3633,7 +3633,7 @@ SOFTWARE.
 ================================================================================
 Package: github.com/srz-zumix/go-gh-extension/pkg
 License: MIT
-URL: https://github.com/srz-zumix/go-gh-extension/blob/v0.6.16/LICENSE
+URL: https://github.com/srz-zumix/go-gh-extension/blob/v0.6.22/LICENSE
 ================================================================================
 MIT License
 
