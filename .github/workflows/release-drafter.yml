@@ -30,7 +30,7 @@ jobs:
   bump_version_pr:
     needs: draft_release
     if: github.event_name != 'workflow_dispatch'
-    uses: srz-zumix/go-gh-extension/.github/workflows/reusable-bump-version-pr.yml@a6b24648fef653e1dbf01c0c14c4ce40ca0b3147 # v0.6.16
+    uses: srz-zumix/go-gh-extension/.github/workflows/reusable-bump-version-pr.yml@2e4001b954ce6867456c5bcd9d4a8eb4a8f5008d # v0.6.19
     permissions:
       contents: write
       pull-requests: write
