@@ -8,7 +8,7 @@ require (
 	github.com/cli/go-gh/v2 v2.13.0
 	github.com/google/go-github/v90 v90.0.0
 	github.com/spf13/cobra v1.10.2
-	github.com/srz-zumix/go-gh-extension v0.6.22
+	github.com/srz-zumix/go-gh-extension v0.6.26
 	golang.org/x/crypto v0.57.0
 	gopkg.in/yaml.v3 v3.0.1
 )
