@@ -4,7 +4,7 @@ go 1.27.3
 
 require (
 	github.com/actions/scaleset v0.4.0
-	github.com/cli/cli/v2 v2.103.0
+	github.com/cli/cli/v2 v2.103.2
 	github.com/cli/go-gh/v2 v2.17.0
 	github.com/google/go-github/v93 v93.0.0
 	github.com/spf13/cobra v1.10.2
