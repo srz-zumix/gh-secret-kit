@@ -206,9 +206,6 @@ gh secret-kit migrate runner teardown -R owner/source-repo
 
 ## Limitations
 
-- **Organization secrets cannot be migrated** with a repo-level runner. Org
-  secrets require an org-level runner (`migrate runner setup <org>`), which
-  needs org owner permissions.
 - **`migrate plan` and `migrate check <org>` are not usable** without org
   owner permissions, as they scan all repositories in the organization.
 - Each repo requires its own runner setup/teardown cycle when migrating
