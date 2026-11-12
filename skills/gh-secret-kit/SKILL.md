@@ -10,8 +10,6 @@ secret-related operations: managing deploy keys, environment configurations,
 variables, and copying Actions, Agents, Codespaces, and Dependabot secrets between
 repositories and organizations, plus Actions environment secret migration.
 
-Version: 0.8.0
-
 ## Prerequisites
 
 ### Installation
