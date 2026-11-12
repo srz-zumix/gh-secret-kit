@@ -166,8 +166,8 @@ gh secret-kit migrate runner setup source-org
 gh secret-kit migrate org all \
   -s source-org/some-repo \
   -d enterprise.internal/dest-org \
-  --dst-token-secret DST_PAT
-  # add --dst-token "ghp_xxxxx" to verify, or --skip-check to skip
+  --dst-token-secret DST_PAT --skip-check
+  # Replace --skip-check with --dst-token "ghp_xxxxx" to verify in the pipeline
 
 # Verify
 # Note: org check uses -s ORG-NAME (not OWNER/REPO — no runner involved)
