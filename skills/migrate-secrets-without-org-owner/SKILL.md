@@ -198,7 +198,6 @@ gh secret-kit migrate runner teardown -R owner/source-repo
 | `variable copy` | Yes | API-accessible |
 | `env copy/export/import` | Yes | API-accessible |
 | `deploy-key add/delete/get/list/migrate` | Yes | API-accessible |
-| `migrate org all/init/create/run/check/delete` | **No** | Requires org owner |
 | `migrate runner setup <org>` | **No** | Requires org owner |
 | `migrate plan <org>` | **No** | Requires org owner |
 | `migrate check <org>` | **No** | Requires org owner |
