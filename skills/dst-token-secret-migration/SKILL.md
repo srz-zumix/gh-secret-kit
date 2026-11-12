@@ -136,8 +136,8 @@ gh secret-kit migrate env all \
   -d enterprise.internal/owner/dest-repo \
   --src-env production \
   --dst-env production \
-  --dst-token-secret DST_PAT
-  # add --dst-token "ghp_xxxxx" to verify, or --skip-check to skip
+  --dst-token-secret DST_PAT --skip-check
+  # Replace --skip-check with --dst-token "ghp_xxxxx" to verify in the pipeline
 
 # Verify
 # If authenticated: $(gh auth token --hostname enterprise.internal); otherwise pass token value directly
