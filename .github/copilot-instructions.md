@@ -65,7 +65,6 @@
   * pkg/config/: 設定ファイル関連
   * version/: バージョン情報管理
 * importはローカルパッケージをgithub.com/srz-zumix/gh-secret-kit/<path>で記述し、cmd/から直接github/client/やgo-githubをimportしない
-* コマンド追加時はcmd/配下にcobra.Commandを返すNew<Cmd名>Cmd関数を新設し、親コマンドで登録する
 * コメントは英語で記載し、関数・構造体・パッケージの責務が明確になるよう記述する
 * エラーはcmd/では操作内容を含めてラップし、gh/client/ではラップせずそのまま返す
 * テストコードは*_test.goで実装し、各責務ごとに配置する
