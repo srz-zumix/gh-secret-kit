@@ -62,7 +62,7 @@
     * logger/: ロギング関連
     * parser/: 入力値のパース・バリデーション等
     * render/: 表示用の整形・出力処理（テーブル/JSON/hovercard等）
-  * config/: 設定ファイル関連
+  * pkg/config/: 設定ファイル関連
   * version/: バージョン情報管理
 * importはローカルパッケージをgithub.com/srz-zumix/go-gh-extension/pkg/<path>で記述し、cmd/から直接github/client/やgo-githubをimportしない
 * コマンド追加時はcmd/配下にcobra.Commandを返すNew<Cmd名>Cmd関数を新設し、親コマンドで登録する
