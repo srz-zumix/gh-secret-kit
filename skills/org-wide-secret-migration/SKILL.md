@@ -271,7 +271,7 @@ If the runner is interrupted mid-migration:
 
 2. Restart the runner:
    ```bash
-   gh secret-kit migrate runner setup source-org
+   gh secret-kit migrate runner restart
    ```
 
 3. Re-run the remaining commands from the script. Already-migrated secrets are
