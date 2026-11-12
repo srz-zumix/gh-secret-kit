@@ -31,7 +31,6 @@ secrets without org owner access.
 | **Setup command** | `migrate runner setup <org>` | `migrate runner setup -R owner/repo` |
 | **Teardown command** | `migrate runner teardown <org>` | `migrate runner teardown -R owner/repo` |
 | **Required permission** | Organization owner | Repository admin |
-| **Supported scopes** | `repo`, `org`, `env` | `repo`, `env` |
 
 The key difference is the `-R owner/repo` flag on `runner setup` / `runner teardown`,
 which registers the runner at the repository level instead of the organization level.
