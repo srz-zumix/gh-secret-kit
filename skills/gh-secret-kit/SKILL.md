@@ -10,8 +10,6 @@ secret-related operations: managing deploy keys, environment configurations,
 variables, and copying Actions, Agents, Codespaces, and Dependabot secrets between
 repositories and organizations, plus Actions environment secret migration.
 
-Version: 0.8.0
-
 ## Prerequisites
 
 ### Installation
@@ -175,8 +173,7 @@ runs the setup steps workflow from the default branch. The copy therefore create
 a temporary branch carrying `.github/workflows/copilot-setup-steps.yml`, makes it
 the default branch, registers the destination tokens as temporary Agents secrets,
 starts a Copilot coding agent session, and lets the setup steps run
-`gh secret set`. The values never reach the local machine, and every temporary
-change is reverted once the copy finishes.
+`gh secret set`.
 
 ```bash
 # Copy all repository Agents secrets from the current repo to a destination

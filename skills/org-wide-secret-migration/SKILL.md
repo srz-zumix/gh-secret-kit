@@ -53,7 +53,7 @@ gh secret-kit migrate plan source-org -d dest-org > migrate.sh
 
 ### Plan Output Contents
 
-The generated script includes (in order):
+The generated script includes:
 
 1. **Runner setup** instruction (commented out — run manually in another terminal)
 2. **Repository secret migration** commands (`migrate repo all`) for each
@@ -271,7 +271,7 @@ If the runner is interrupted mid-migration:
 
 2. Restart the runner:
    ```bash
-   gh secret-kit migrate runner setup source-org
+   gh secret-kit migrate runner restart
    ```
 
 3. Re-run the remaining commands from the script. Already-migrated secrets are
