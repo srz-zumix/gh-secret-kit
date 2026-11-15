@@ -31,8 +31,6 @@ secrets without org owner access.
 | **Setup command** | `migrate runner setup <org>` | `migrate runner setup -R owner/repo` |
 | **Teardown command** | `migrate runner teardown <org>` | `migrate runner teardown -R owner/repo` |
 | **Required permission** | Organization owner | Repository admin |
-| **Secret access** | Org secrets + all repo secrets | Source repo secrets + env secrets |
-| **Supported scopes** | `repo`, `org`, `env` | `repo`, `env` |
 
 The key difference is the `-R owner/repo` flag on `runner setup` / `runner teardown`,
 which registers the runner at the repository level instead of the organization level.
@@ -200,7 +198,6 @@ gh secret-kit migrate runner teardown -R owner/source-repo
 | `variable copy` | Yes | API-accessible |
 | `env copy/export/import` | Yes | API-accessible |
 | `deploy-key add/delete/get/list/migrate` | Yes | API-accessible |
-| `migrate org all/init/create/run/check/delete` | **No** | Requires org owner |
 | `migrate runner setup <org>` | **No** | Requires org owner |
 | `migrate plan <org>` | **No** | Requires org owner |
 | `migrate check <org>` | **No** | Requires org owner |
@@ -209,9 +206,6 @@ gh secret-kit migrate runner teardown -R owner/source-repo
 
 ## Limitations
 
-- **Organization secrets cannot be migrated** with a repo-level runner. Org
-  secrets require an org-level runner (`migrate runner setup <org>`), which
-  needs org owner permissions.
 - **`migrate plan` and `migrate check <org>` are not usable** without org
   owner permissions, as they scan all repositories in the organization.
 - Each repo requires its own runner setup/teardown cycle when migrating

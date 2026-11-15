@@ -2,8 +2,6 @@
 
 指示が曖昧な場合は編集せずに曖昧な箇所を指摘してください。
 
-ソースコード中のコメントは英語で記載
-
 ## ドキュメント
 
 ### README.md
@@ -37,7 +35,6 @@
 -->
 
 * コマンドの Usage 記載時は、引数やオプションの省略可否・デフォルト値も明記してください
-* Usage例・説明文は日本語・英語の混在を避け、統一した言語で記載してください
 * Usage例のコマンド列は実際に動作する形式で記載してください
 * コマンドの説明文（Long）は簡潔かつ具体的に、何ができるか・どんなオプションがあるかを明記してください
 * コマンドグループのグルーピング順は、README の表・docs/commands/README.md・ファイル構成で一貫性を持たせてください
@@ -65,14 +62,12 @@
     * logger/: ロギング関連
     * parser/: 入力値のパース・バリデーション等
     * render/: 表示用の整形・出力処理（テーブル/JSON/hovercard等）
-  * config/: 設定ファイル関連
+  * pkg/config/: 設定ファイル関連
   * version/: バージョン情報管理
-* importはローカルパッケージをgithub.com/srz-zumix/go-gh-extension/pkg/<path>で記述し、cmd/から直接github/client/やgo-githubをimportしない
-* コマンド追加時はcmd/配下にcobra.Commandを返すNew<Cmd名>Cmd関数を新設し、親コマンドで登録する
+* importはローカルパッケージをgithub.com/srz-zumix/gh-secret-kit/<path>で記述し、cmd/から直接github/client/やgo-githubをimportしない
 * コメントは英語で記載し、関数・構造体・パッケージの責務が明確になるよう記述する
 * エラーはcmd/では操作内容を含めてラップし、gh/client/ではラップせずそのまま返す
 * テストコードは*_test.goで実装し、各責務ごとに配置する
-  * cmd/ 配下にはテストを書きません。フラグのパースや排他制御は cobra/pflag が担保しているため、二重にテストしない
   * cmd/ にテストを書きたくなった場合は責務分割のシグナルです。検証したいロジックを pkg/ もしくは internal/ に切り出し、そちらでテストする
 * コード重複は避け、共通処理は関数化・ユーティリティ化する
 * Lint/Formatter（go fmt, go vet, staticcheck等）を通してからコミットする
