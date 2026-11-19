@@ -666,7 +666,7 @@ gh secret-kit env import environments.yaml --usermap usermap.csv
 | --- | --- | --- |
 | `--dryrun` / `-n` | Preview without applying | false |
 | `--env string` | Filter by environment name | |
-| `--format string` | Input format: `json` or `yaml` | yaml |
+| `--format string` | Output format: `json` or `yaml` | yaml |
 | `--overwrite` | Overwrite existing environments | false |
 | `--repo string` / `-R` | Destination repository | current repo |
 | `--usermap string` | User mapping file for reviewer login conversion | |
