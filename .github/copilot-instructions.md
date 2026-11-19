@@ -95,7 +95,6 @@
 
 #### go-gh-extension/pkg/gh
 
-* gh/client/*.go では API 呼び出しのエラーはフォーマットせずそのまま返します
 * gh/*.go には github/client/*.go の関数のラッパーを記述します
   * owner/repo などの string は使わず repository.Repository 型を引数に取ります
   * ラッパー関数は ctx context.Context を第一、 g *GitHubClient を第二引数に取ります
