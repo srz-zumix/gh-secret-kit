@@ -82,7 +82,6 @@
 * RunE で処理を実装します
 * Args で引数の検証をします
 * gh/*.go のラッパー関数を呼び出し、cmd package では github package を import しなくても良い設計にします
-* エラーの場合はどういう操作をしようとしてエラーになったかメッセージに含めるようにしてください
 * cmd/root.go は変更してはいけません
 * cmd/**/*.go のサブコマンドは cobra.Command を return する関数を定義し、その中でコマンド実装してください
   * コマンドの登録は親コマンドの .go ファイルで行います
@@ -96,7 +95,5 @@
 
 #### go-gh-extension/pkg/gh
 
-* gh/client/*.go では API 呼び出しのエラーはフォーマットせずそのまま返します
 * gh/*.go には github/client/*.go の関数のラッパーを記述します
   * owner/repo などの string は使わず repository.Repository 型を引数に取ります
-  * ラッパー関数は ctx context.Context を第一、 g *GitHubClient を第二引数に取ります
