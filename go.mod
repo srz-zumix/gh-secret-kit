@@ -3,7 +3,7 @@ module github.com/srz-zumix/gh-secret-kit
 go 1.27.3
 
 require (
-	github.com/actions/scaleset v0.4.0
+	github.com/actions/scaleset v0.5.0
 	github.com/cli/cli/v2 v2.103.0
 	github.com/cli/go-gh/v2 v2.17.0
 	github.com/google/go-github/v93 v93.0.0
@@ -50,12 +50,11 @@ require (
 	github.com/goccy/go-json v0.11.2 // indirect
 	github.com/goccy/go-yaml v1.19.2 // indirect
 	github.com/golang-jwt/jwt/v4 v4.5.2 // indirect
+	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
 	github.com/google/go-github/v88 v88.0.0 // indirect
 	github.com/google/go-querystring v1.2.0 // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
-	github.com/hashicorp/go-retryablehttp v0.7.8 // indirect
 	github.com/henvic/httpretty v0.2.0 // indirect
 	github.com/huandu/xstrings v1.6.3 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
